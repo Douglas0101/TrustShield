@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Sistema de Treinamento Ultra-Avançado - Projeto TrustShield
-VERSÃO EMPRESARIAL COM TODAS AS MELHORES PRÁTICAS
+VERSÃO EMPRESARIAL COM INTEGRAÇÃO MLFLOW
 
 🏆 IMPLEMENTA TODAS AS MELHORES PRÁTICAS DOCUMENTADAS:
 ✅ Arquitetura Hexagonal (Domain-Driven Design)
@@ -20,14 +20,14 @@ Performance Target: < 200ms inference, 99.9% availability
 
 Execução:
     # 1. Iniciar MLflow UI (terminal separado):
-    mlflow ui --host 0.0.0.0 --port 5000
+    make mlflow
 
     # 2. Executar treinamento:
-    python src/models/train_advanced.py --config config/config.yaml --model all
+    make train
 
 Autor: TrustShield Team - Enterprise Architecture Version
-Versão: 4.0.0-enterprise
-Data: 2025-07-24
+Versão: 4.1.0-mlflow
+Data: 2025-07-25
 """
 
 import argparse
@@ -46,7 +46,6 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, Tuple, Protocol, runtime_checkable
-import tempfile
 
 import joblib
 import mlflow
@@ -63,6 +62,7 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.neighbors import LocalOutlierFactor
 
 warnings.filterwarnings('ignore')
+
 
 # =====================================================================================
 # 🏗️ DOMAIN LAYER - CORE BUSINESS LOGIC (DDD)
@@ -131,16 +131,22 @@ class TrainingConfig:
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'TrainingConfig':
         """Cria configuração a partir de dicionário."""
+        # Acessando a seção 'training' do dicionário de configuração
+        training_section = config_dict.get('training', {})
+        project_section = config_dict.get('project', {})
+        mlflow_section = config_dict.get('mlflow', {})
+        preprocessing_section = config_dict.get('preprocessing', {})
+
         return cls(
-            model_types=[ModelType(t) for t in config_dict.get('model_types', ['isolation_forest'])],
-            test_size=config_dict.get('test_size', 0.15),
-            random_state=config_dict.get('random_state', 42),
-            cross_validation_folds=config_dict.get('cross_validation_folds', 5),
-            max_training_time=config_dict.get('max_training_time', 3600),
-            target_inference_time_ms=config_dict.get('target_inference_time_ms', 200.0),
-            intel_optimization=config_dict.get('intel_optimization', True),
-            feature_store_version=config_dict.get('feature_store_version', 'v1.0'),
-            experiment_name=config_dict.get('experiment_name', 'TrustShield-Advanced')
+            model_types=[ModelType(t) for t in training_section.get('model_types', ['isolation_forest'])],
+            test_size=training_section.get('test_size', 0.15),
+            random_state=project_section.get('random_state', 42),
+            cross_validation_folds=training_section.get('cross_validation_folds', 5),
+            max_training_time=training_section.get('max_training_time', 3600),
+            target_inference_time_ms=training_section.get('target_inference_time_ms', 200.0),
+            intel_optimization=training_section.get('intel_optimization', True),
+            feature_store_version=preprocessing_section.get('feature_store_version', 'v1.0'),
+            experiment_name=mlflow_section.get('experiment_name', 'TrustShield-Advanced')
         )
 
 
@@ -247,9 +253,9 @@ class ResourceMonitor:
             metrics = {
                 'cpu_usage_percent': round(cpu_percent, 2),
                 'memory_usage_percent': round(memory.percent, 2),
-                'memory_available_gb': round(memory.available / (1024**3), 2),
-                'memory_used_gb': round(memory.used / (1024**3), 2),
-                'process_memory_mb': round(process.memory_info().rss / (1024**2), 2),
+                'memory_available_gb': round(memory.available / (1024 ** 3), 2),
+                'memory_used_gb': round(memory.used / (1024 ** 3), 2),
+                'process_memory_mb': round(process.memory_info().rss / (1024 ** 2), 2),
                 'uptime_seconds': round(time.time() - self.start_time, 2),
                 'disk_usage_percent': round(psutil.disk_usage('/').percent, 2)
             }
@@ -295,7 +301,7 @@ class IntelOptimizer:
     def __init__(self, logger: AdvancedLogger):
         self.logger = logger
         self.cpu_count = psutil.cpu_count()
-        self.memory_gb = psutil.virtual_memory().total / (1024**3)
+        self.memory_gb = psutil.virtual_memory().total / (1024 ** 3)
 
     def optimize_environment(self):
         """Otimiza ambiente para Intel."""
@@ -364,13 +370,14 @@ class IsolationForestTrainer:
 
     def train(self, X: pd.DataFrame, y: Optional[pd.Series] = None) -> BaseEstimator:
         """Treina Isolation Forest otimizado."""
+
         def _train():
             params = self.config.get('models', {}).get('isolation_forest', {}).get('params', {})
 
             # Otimizações Intel
             params.update({
                 'n_jobs': 4,
-                'random_state': self.config.get('random_state', 42),
+                'random_state': self.config.get('project', {}).get('random_state', 42),
                 'warm_start': True
             })
 
@@ -398,7 +405,7 @@ class IsolationForestTrainer:
 
         # Métricas de memória
         process = psutil.Process()
-        memory_mb = process.memory_info().rss / (1024**2)
+        memory_mb = process.memory_info().rss / (1024 ** 2)
 
         return ModelMetrics(
             model_type=ModelType.ISOLATION_FOREST,
@@ -422,13 +429,14 @@ class LOFTrainer:
 
     def train(self, X: pd.DataFrame, y: Optional[pd.Series] = None) -> BaseEstimator:
         """Treina LOF otimizado."""
+
         def _train():
             params = self.config.get('models', {}).get('lof', {}).get('params', {})
             params.update({'n_jobs': 4})
 
             # Para datasets grandes, usar subset
             if len(X) > 10000:
-                X_train = X.sample(n=10000, random_state=42)
+                X_train = X.sample(n=10000, random_state=self.config.get('project', {}).get('random_state', 42))
                 self.logger.info(f"🎯 LOF: Usando subset de {len(X_train)} amostras")
             else:
                 X_train = X
@@ -454,7 +462,7 @@ class LOFTrainer:
         inference_time = (time.time() - inference_start) * 1000
 
         process = psutil.Process()
-        memory_mb = process.memory_info().rss / (1024**2)
+        memory_mb = process.memory_info().rss / (1024 ** 2)
 
         return ModelMetrics(
             model_type=ModelType.LOCAL_OUTLIER_FACTOR,
@@ -478,6 +486,7 @@ class SVMTrainer:
 
     def train(self, X: pd.DataFrame, y: Optional[pd.Series] = None) -> Dict[str, Any]:
         """Treina SVM com aproximação Nystroem."""
+
         def _train():
             # Aproximação para escalabilidade
             n_components = min(500, len(X) // 10)
@@ -514,7 +523,7 @@ class SVMTrainer:
         inference_time = (time.time() - inference_start) * 1000
 
         process = psutil.Process()
-        memory_mb = process.memory_info().rss / (1024**2)
+        memory_mb = process.memory_info().rss / (1024 ** 2)
 
         return ModelMetrics(
             model_type=ModelType.ONE_CLASS_SVM,
@@ -538,6 +547,7 @@ class HierarchicalLOFTrainer:
 
     def train(self, X: pd.DataFrame, y: Optional[pd.Series] = None) -> Dict[str, Any]:
         """Treina LOF hierárquico com clustering."""
+
         def _train():
             n_clusters = min(50, len(X) // 200)
 
@@ -558,7 +568,7 @@ class HierarchicalLOFTrainer:
                 cluster_mask = cluster_labels == cluster_id
                 if np.sum(cluster_mask) > 10:  # Mínimo de amostras
                     X_cluster = X[cluster_mask]
-                    lof = LocalOutlierFactor(n_neighbors=min(20, len(X_cluster)-1))
+                    lof = LocalOutlierFactor(n_neighbors=min(20, len(X_cluster) - 1))
                     lof.fit(X_cluster)
                     lof_models[cluster_id] = lof
 
@@ -590,7 +600,7 @@ class HierarchicalLOFTrainer:
         inference_time = (time.time() - inference_start) * 1000
 
         process = psutil.Process()
-        memory_mb = process.memory_info().rss / (1024**2)
+        memory_mb = process.memory_info().rss / (1024 ** 2)
 
         return ModelMetrics(
             model_type=ModelType.HIERARCHICAL_LOF,
@@ -676,19 +686,25 @@ class AdvancedTrustShieldTrainer:
     def _setup_mlflow(self):
         """Configura MLflow."""
         try:
-            mlflow_dir = self.project_root / 'mlruns'
-            mlflow_dir.mkdir(exist_ok=True)
+            # Pega o URI do arquivo de configuração
+            mlflow_uri = self.config.get('mlflow', {}).get('tracking_uri', 'file://./mlruns')
 
-            mlflow.set_tracking_uri(f"file://{mlflow_dir}")
+            # Garante que o diretório exista se for local
+            if mlflow_uri.startswith('file://'):
+                mlflow_dir = Path(mlflow_uri.replace('file://', ''))
+                mlflow_dir.mkdir(parents=True, exist_ok=True)
+
+            mlflow.set_tracking_uri(mlflow_uri)
             mlflow.set_experiment(self.training_config.experiment_name)
 
             self.logger.info(f"🎯 MLflow configurado: {self.training_config.experiment_name}")
-            self.logger.info(f"📊 UI disponível em: http://localhost:5000")
+            self.logger.info(f"📊 Tracking URI: {mlflow.get_tracking_uri()}")
         except Exception as e:
             self.logger.error(f"❌ Erro ao configurar MLflow: {e}")
 
     def _setup_signal_handlers(self):
         """Configura handlers para sinais."""
+
         def signal_handler(signum, frame):
             self.logger.info(f"🛑 Sinal {signum} recebido. Finalizando graciosamente...")
             sys.exit(0)
@@ -735,7 +751,7 @@ class AdvancedTrustShieldTrainer:
 
     def _optimize_dataframe_memory(self, df: pd.DataFrame) -> pd.DataFrame:
         """Otimiza uso de memória do DataFrame."""
-        initial_memory = df.memory_usage(deep=True).sum() / 1024**2
+        initial_memory = df.memory_usage(deep=True).sum() / 1024 ** 2
 
         # Otimizar tipos numéricos
         for col in df.select_dtypes(include=['int64']).columns:
@@ -744,7 +760,7 @@ class AdvancedTrustShieldTrainer:
         for col in df.select_dtypes(include=['float64']).columns:
             df[col] = pd.to_numeric(df[col], downcast='float')
 
-        final_memory = df.memory_usage(deep=True).sum() / 1024**2
+        final_memory = df.memory_usage(deep=True).sum() / 1024 ** 2
         reduction = (initial_memory - final_memory) / initial_memory * 100
 
         self.logger.info(f"💾 Otimização memória: {reduction:.1f}% redução ({initial_memory:.1f}→{final_memory:.1f}MB)")
@@ -820,11 +836,12 @@ class AdvancedTrustShieldTrainer:
         except Exception as e:
             self.logger.warning(f"⚠️ Erro ao salvar schema: {e}")
 
-    def train_model_with_mlflow(self, model_type: ModelType, X_train: pd.DataFrame, X_test: pd.DataFrame) -> Dict[str, Any]:
+    def train_model_with_mlflow(self, model_type: ModelType, X_train: pd.DataFrame, X_test: pd.DataFrame) -> Dict[
+        str, Any]:
         """Treina modelo com tracking MLflow completo."""
-        self.logger.info(f"\n{'='*80}")
+        self.logger.info(f"\n{'=' * 80}")
         self.logger.info(f"🎯 TREINANDO: {model_type.value.upper()}")
-        self.logger.info(f"{'='*80}")
+        self.logger.info(f"{'=' * 80}")
 
         run_name = f"{model_type.value}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
@@ -870,15 +887,13 @@ class AdvancedTrustShieldTrainer:
                 sla_met = metrics.inference_time < self.training_config.target_inference_time_ms
                 mlflow.log_metric("sla_inference_met", 1 if sla_met else 0)
 
-                # Salvar modelo
+                # Salvar modelo localmente
                 model_path = self._save_model_with_metadata(model, model_type, metrics)
 
                 # Log do modelo no MLflow
                 if isinstance(model, dict):
-                    # Para modelos complexos, salvar como artifact
-                    with tempfile.NamedTemporaryFile(suffix='.joblib', delete=False) as f:
-                        joblib.dump(model, f.name)
-                        mlflow.log_artifact(f.name, "model")
+                    # Para modelos complexos (como o SVM com Nystroem), salvar o joblib como artifact
+                    mlflow.log_artifact(model_path, artifact_path="model")
                 else:
                     mlflow.sklearn.log_model(
                         sk_model=model,
@@ -886,7 +901,7 @@ class AdvancedTrustShieldTrainer:
                         registered_model_name=f"TrustShield-{model_type.value}"
                     )
 
-                # Log artifacts
+                # Log artifacts adicionais
                 mlflow.log_artifact(self.config_path, "config")
 
                 # Tags
@@ -897,7 +912,8 @@ class AdvancedTrustShieldTrainer:
 
                 self.logger.info(f"✅ {model_type.value} treinado com sucesso!")
                 self.logger.info(f"⏱️ Tempo: {training_time:.2f}s | Inferência: {metrics.inference_time:.1f}ms")
-                self.logger.info(f"📊 Anomalias: {metrics.anomaly_rate:.4f} | CV: {np.mean(metrics.cross_val_scores):.3f}")
+                self.logger.info(
+                    f"📊 Anomalias: {metrics.anomaly_rate:.4f} | CV: {np.mean(metrics.cross_val_scores):.3f}")
 
                 return {
                     'status': 'success',
@@ -945,7 +961,7 @@ class AdvancedTrustShieldTrainer:
             'created_at': datetime.now().isoformat(),
             'hardware_info': {
                 'cpu_count': psutil.cpu_count(),
-                'memory_gb': psutil.virtual_memory().total / (1024**3),
+                'memory_gb': psutil.virtual_memory().total / (1024 ** 3),
                 'platform': 'Intel-i3-1115G4'
             }
         }
@@ -1004,9 +1020,9 @@ class AdvancedTrustShieldTrainer:
 
     def _generate_final_report(self, results: Dict[str, Any], total_time: float):
         """Gera relatório final do treinamento."""
-        self.logger.info(f"\n{'='*80}")
+        self.logger.info(f"\n{'=' * 80}")
         self.logger.info("📊 === RELATÓRIO FINAL ===")
-        self.logger.info(f"{'='*80}")
+        self.logger.info(f"{'=' * 80}")
 
         successful_models = [k for k, v in results.items() if v.get('status') == 'success']
         failed_models = [k for k, v in results.items() if v.get('status') == 'failed']
@@ -1055,9 +1071,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos de uso:
-  python train_advanced.py --config config/config.yaml --model all
-  python train_advanced.py --config config/config.yaml --model isolation_forest
-  python train_advanced.py --config config/config.yaml --model lof,one_class_svm
+  make train
+  python src/models/train_fraud_model.py --config config/config.yaml --model isolation_forest
+  python src/models/train_fraud_model.py --config config/config.yaml --model lof,one_class_svm
 
 Modelos suportados:
   - isolation_forest: Isolation Forest otimizado
@@ -1067,9 +1083,9 @@ Modelos suportados:
   - all: Todos os modelos
 
 Antes de executar:
-  1. mlflow ui --host 0.0.0.0 --port 5000
+  1. make mlflow
   2. Verificar config/config.yaml
-  3. Dados em outputs/featured_dataset.parquet
+  3. Dados em data/features/featured_dataset.parquet
         """
     )
 
