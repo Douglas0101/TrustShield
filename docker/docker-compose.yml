@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  trustshield-trainer:
+    build: ../../../Downloads
+    container_name: trustshield-trainer
+    volumes:
+      - ./data:/home/trustshield/data
+      - ./outputs:/home/trustshield/outputs
+      - ./config:/home/trustshield/config
+      - ./logs:/home/trustshield/logs
+      - ./mlruns:/home/trustshield/mlruns
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+    depends_on:
+      - mlflow
+    networks:
+      - trustshield-net
+
+  mlflow:
+    image: python:3.9-slim
+    container_name: trustshield-mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+    command: >
+      bash -c "
+        pip install mlflow &&
+        mlflow server --host 0.0.0.0 --port 5000 --default-artifact-root /mlflow/mlruns
+      "
+    networks:
+      - trustshield-net
+
+  postgres:
+    image: postgres:13
+    container_name: trustshield-postgres
+    environment:
+      POSTGRES_DB: trustshield
+      POSTGRES_USER: trustshield
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - trustshield-net
+
+networks:
+  trustshield-net:
+    driver: bridge
+
+volumes:
+  postgres_data:

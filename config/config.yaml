@@ -1,0 +1,118 @@
+# Configuração Avançada TrustShield Enterprise
+# Versão: 4.0.0-enterprise
+
+project:
+  name: "TrustShield-Advanced"
+  version: "4.0.0"
+  random_state: 42
+
+# === PATHS ===
+paths:
+  data:
+    featured_dataset: "outputs/featured_dataset.parquet"
+    raw_data: "data/raw"
+    processed: "data/processed"
+  models:
+    output_dir: "outputs/models"
+    registry: "models/registry"
+  logs:
+    output_dir: "logs"
+
+# === PREPROCESSING ===
+preprocessing:
+  features_to_drop:
+    - "timestamp"
+    - "user_id"
+    - "transaction_id"
+  categorical_features:
+    - "use_chip"
+    - "gender"
+  feature_store_version: "v2.0"
+  enable_feature_engineering: true
+  memory_optimization: true
+
+# === MODELS ===
+models:
+  isolation_forest:
+    params:
+      n_estimators: 150
+      contamination: 0.1
+      max_features: 0.8
+      bootstrap: true
+      n_jobs: 4
+      random_state: 42
+
+  lof:
+    params:
+      n_neighbors: 25
+      algorithm: "auto"
+      contamination: 0.1
+      n_jobs: 4
+
+  one_class_svm:
+    params:
+      nu: 0.1
+      learning_rate: "adaptive"
+      eta0: 0.01
+      random_state: 42
+
+  hierarchical_lof:
+    params:
+      n_clusters: 50
+      n_neighbors: 20
+      contamination: 0.1
+
+# === TRAINING ===
+training:
+  model_types: ["isolation_forest", "lof", "one_class_svm", "hierarchical_lof"]
+  test_size: 0.15
+  cross_validation_folds: 5
+  max_training_time: 3600  # segundos
+  target_inference_time_ms: 200.0
+  intel_optimization: true
+  batch_size_auto: true
+
+# === VALIDATION ===
+validation:
+  enable_cross_validation: true
+  stratified: false
+  shuffle: true
+  performance_tests: true
+  memory_tests: true
+
+# === SLA & PERFORMANCE ===
+sla:
+  inference_time_ms: 200
+  availability_percent: 99.9
+  detection_recall_min: 0.90
+  detection_precision_min: 0.85
+  false_positive_rate_max: 0.02
+
+# === MLFLOW ===
+mlflow:
+  experiment_name: "TrustShield-Advanced"
+  tracking_uri: "file://./mlruns"
+  artifact_store: "file://./mlruns"
+  enable_model_registry: true
+  enable_auto_logging: true
+
+# === HARDWARE ===
+hardware:
+  target_platform: "Intel-i3-1115G4"
+  cpu_cores: 4
+  memory_gb: 20
+  enable_optimization: true
+  mkl_threads: 4
+
+# === SECURITY ===
+security:
+  enable_audit_log: true
+  encrypt_models: false
+  secure_memory: true
+
+# === OBSERVABILITY ===
+observability:
+  structured_logging: true
+  metrics_collection: true
+  resource_monitoring: true
+  performance_profiling: true

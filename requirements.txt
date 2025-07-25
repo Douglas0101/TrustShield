@@ -1,0 +1,59 @@
+# TrustShield Advanced Requirements
+# Versão: 4.0.0-enterprise
+
+# === CORE ML ===
+scikit-learn
+numpy
+pandas
+scipy
+
+# === EXPERIMENT TRACKING ===
+mlflow
+wandb
+
+# === DATA & STORAGE ===
+pyarrow
+fastparquet
+h5py
+
+# === OPTIMIZATION ===
+numba
+joblib
+
+# === MONITORING ===
+psutil
+prometheus-client
+
+# === CONFIGURATION ===
+pyyaml
+python-dotenv
+pydantic
+
+# === TESTING ===
+pytest
+pytest-cov
+pytest-mock
+
+# === LOGGING ===
+structlog
+colorama
+
+# === API & WEB ===
+fastapi
+uvicorn
+streamlit
+
+# === SECURITY ===
+cryptography
+keyring
+
+# === UTILITIES ===
+click
+tqdm
+rich
+
+# === DEVELOPMENT ===
+black
+flake8
+mypy
+pre-commit

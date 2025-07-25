@@ -1,0 +1,88 @@
+(rapids-25.06) douglasdesouza@douglasdesouza-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ python src/models/predict.py
+
+==========================================================================================
+🎯 DEMO PERFEITO - ZERO ERROS DE FEATURES - TRUSTSHIELD
+==========================================================================================
+🚀 Inicializando preditor PERFEITO...
+2025-07-24 02:36:26,654 - [PERFECT] - INFO - 📁 Modelo: isolation_forest_i3_optimized_20250723_210210.joblib
+2025-07-24 02:36:26,654 - [PERFECT] - INFO - 📁 Config: /home/douglasdesouza/PycharmProjects/TrustShield/config/config.yaml
+2025-07-24 02:36:26,654 - [PERFECT] - INFO - 🎯 === PREDITOR PERFEITO INTEL i3-1115G4 ===
+2025-07-24 02:36:26,654 - [PERFECT] - INFO - 💻 CPUs: 4 cores @ 2701.3885000000005 MHz
+2025-07-24 02:36:26,654 - [PERFECT] - INFO - 🧠 RAM: 19.3 GB (disponível: 12.2 GB)
+2025-07-24 02:36:26,654 - [PERFECT] - INFO - ⚙️ Threads: 4 (Intel otimizado)
+2025-07-24 02:36:26,654 - [PERFECT] - INFO - 🚀 Target: 46k+ samples/s (sem erros de features)
+2025-07-24 02:36:26,654 - [PERFECT] - INFO - 📥 Carregando modelo: /home/douglasdesouza/PycharmProjects/TrustShield/outputs/models/isolation_forest_i3_optimized_20250723_210210.joblib
+2025-07-24 02:36:28,482 - [PERFECT] - INFO - ✅ Modelo carregado em 1.83s | Tipo: isolation_forest
+2025-07-24 02:36:28,482 - [PERFECT] - INFO - 🎯 Features EXATAS: 21
+2025-07-24 02:36:28,482 - [PERFECT] - INFO - 🔍 Primeiras 5: ['amount', 'current_age', 'retirement_age', 'birth_year', 'birth_month']
+2025-07-24 02:36:28,482 - [PERFECT] - INFO - 🎯 Preditor PERFEITO inicializado - Match 100% com modelo!
+
+📊 STATUS DO SISTEMA:
+  • Modelo: isolation_forest
+  • CPU: 7.7%
+  • RAM: 41.6%
+  • Features exatas: 21
+  • Scaler: ❌
+
+🚨 EXEMPLO 1: Transação ALTAMENTE Suspeita
+2025-07-24 02:36:28,583 - [PERFECT] - INFO - 🔄 Preparando 1 transação(ões) com MATCH EXATO
+2025-07-24 02:36:28,586 - [PERFECT] - INFO - ✅ One-hot aplicado (smart)
+2025-07-24 02:36:28,589 - [PERFECT] - INFO - ✅ Preparação PERFEITA em 7.2ms
+2025-07-24 02:36:28,590 - [PERFECT] - INFO - 📊 Shape final: (1, 21) (match exato)
+[Parallel(n_jobs=1)]: Done  49 tasks      | elapsed:    0.0s
+[Parallel(n_jobs=1)]: Done 150 out of 150 | elapsed:    0.0s finished
+[Parallel(n_jobs=1)]: Done  49 tasks      | elapsed:    0.0s
+[Parallel(n_jobs=1)]: Done 150 out of 150 | elapsed:    0.0s finished
+2025-07-24 02:36:28,603 - [PERFECT] - INFO - 📊 ✅ Predição: 1 amostras em 20.8ms | Throughput: 48 samples/s
+2025-07-24 02:36:28,603 - [PERFECT] - INFO - 🎯 Resultado PERFEITO: ANOMALIA | Confiança: 0.083 | Tempo: 20.8ms
+  🎯 Resultado: ANOMALIA
+  📊 Confiança: 0.083
+  ⏱️ Tempo: 20.8ms
+  🔧 Features matched: 21
+  ✅ Sucesso: SIM
+
+✅ EXEMPLO 2: Transação TOTALMENTE Normal
+2025-07-24 02:36:28,604 - [PERFECT] - INFO - 🔄 Preparando 1 transação(ões) com MATCH EXATO
+2025-07-24 02:36:28,606 - [PERFECT] - INFO - ✅ One-hot aplicado (smart)
+2025-07-24 02:36:28,610 - [PERFECT] - INFO - ✅ Preparação PERFEITA em 6.4ms
+2025-07-24 02:36:28,610 - [PERFECT] - INFO - 📊 Shape final: (1, 21) (match exato)
+[Parallel(n_jobs=1)]: Done  49 tasks      | elapsed:    0.0s
+[Parallel(n_jobs=1)]: Done 150 out of 150 | elapsed:    0.0s finished
+[Parallel(n_jobs=1)]: Done  49 tasks      | elapsed:    0.0s
+[Parallel(n_jobs=1)]: Done 150 out of 150 | elapsed:    0.0s finished
+2025-07-24 02:36:28,626 - [PERFECT] - INFO - 📊 ✅ Predição: 1 amostras em 23.2ms | Throughput: 43 samples/s
+2025-07-24 02:36:28,627 - [PERFECT] - INFO - 🎯 Resultado PERFEITO: NORMAL | Confiança: 0.106 | Tempo: 23.2ms
+  🎯 Resultado: NORMAL
+  📊 Confiança: 0.106
+  ⏱️ Tempo: 23.2ms
+  🔧 Features matched: 21
+  ✅ Sucesso: SIM
+
+🧪 EXEMPLO 3: Dados Mínimos (Robustez)
+2025-07-24 02:36:28,627 - [PERFECT] - INFO - 🔄 Preparando 1 transação(ões) com MATCH EXATO
+2025-07-24 02:36:28,627 - [PERFECT] - INFO - ✅ One-hot aplicado (smart)
+2025-07-24 02:36:28,631 - [PERFECT] - INFO - ✅ Preparação PERFEITA em 4.4ms
+2025-07-24 02:36:28,631 - [PERFECT] - INFO - 📊 Shape final: (1, 21) (match exato)
+[Parallel(n_jobs=1)]: Done  49 tasks      | elapsed:    0.0s
+[Parallel(n_jobs=1)]: Done 150 out of 150 | elapsed:    0.0s finished
+[Parallel(n_jobs=1)]: Done  49 tasks      | elapsed:    0.0s
+[Parallel(n_jobs=1)]: Done 150 out of 150 | elapsed:    0.0s finished
+2025-07-24 02:36:28,644 - [PERFECT] - INFO - 📊 ✅ Predição: 1 amostras em 16.9ms | Throughput: 59 samples/s
+2025-07-24 02:36:28,644 - [PERFECT] - INFO - 🎯 Resultado PERFEITO: ANOMALIA | Confiança: 0.001 | Tempo: 16.9ms
+  🎯 Resultado: ANOMALIA
+  📊 Confiança: 0.001
+  ⏱️ Tempo: 16.9ms
+  🔧 Features matched: 21
+  ✅ Sucesso: SIM
+  📝 Sistema preencheu automaticamente campos faltantes
+
+📈 ESTATÍSTICAS FINAIS:
+  • Total predições: 3
+  • Sucessos: 3
+  • Taxa de sucesso: 100.0%
+  • Tempo médio: 20.3ms
+
+🎯 PREDITOR PERFEITO FUNCIONANDO!
+✅ ZERO erros de features!
+✅ Match 100% com modelo treinado!
+✅ Performance otimizada Intel i3-1115G4!
