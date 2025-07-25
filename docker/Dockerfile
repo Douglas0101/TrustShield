@@ -35,7 +35,8 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Copiar código
-COPY --chown=trustshield:trustshield ../../../Downloads .
+# Linha correta a ser adicionada
+COPY --chown=trustshield:trustshield . .
 
 # Criar diretórios necessários
 RUN mkdir -p outputs/models logs mlruns
@@ -48,4 +49,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import sys; sys.exit(0)"
 
 # Comando padrão
-CMD ["python", "train_advanced.py", "--config", "config/config_advanced.yaml", "--model", "all"]
+CMD ["python", "-m", "src.models.train_fraud_model", "--config", "config/config.yaml", "--model", "all"]

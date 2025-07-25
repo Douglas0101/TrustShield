@@ -57,3 +57,5 @@ black
 flake8
 mypy
 pre-commit
+boto3
+psycopg2-binary

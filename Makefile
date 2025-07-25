@@ -40,15 +40,21 @@ train-single:
 mlflow:
 	mlflow ui --host 0.0.0.0 --port 5000
 
+# ... (outras regras) ...
+
 # === DOCKER ===
+# Aponta para os ficheiros dentro da pasta /docker
 docker-build:
-	docker build -t trustshield-advanced:latest -f docker/Dockerfile .
+	# A linha abaixo DEVE começar com um Tab
+	sudo docker build -t trustshield-advanced:latest -f docker/Dockerfile .
 
 docker-run:
-	docker-compose -f docker/docker-compose.yml up -d
+	# A linha abaixo DEVE começar com um Tab
+	sudo docker compose -f docker/docker-compose.yml up -d
 
 docker-stop:
-	docker-compose -f docker/docker-compose.yml down
+	# A linha abaixo DEVE começar com um Tab
+	sudo docker compose -f docker/docker-compose.yml down
 
 # === CLEANUP ===
 clean:

@@ -9,7 +9,7 @@ project:
 # === PATHS ===
 paths:
   data:
-    featured_dataset: "outputs/featured_dataset.parquet"
+    featured_dataset: "data/features/featured_dataset.parquet" # <--- CAMINHO CORRETO
     raw_data: "data/raw"
     processed: "data/processed"
   models:
@@ -24,6 +24,16 @@ preprocessing:
     - "timestamp"
     - "user_id"
     - "transaction_id"
+    - "date" # <--- ESTA LINHA É CRUCIAL PARA CORRIGIR O ERRO
+    - "card_id"
+    - "merchant_id"
+    - "merchant_city"
+    - "merchant_state"
+    - "zip"
+    - "address"
+    - "errors"
+    - "mcc_description"
+    - "is_fraud"
   categorical_features:
     - "use_chip"
     - "gender"

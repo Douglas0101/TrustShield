@@ -10,6 +10,8 @@ import tempfile
 import yaml
 from pathlib import Path
 from unittest.mock import Mock, patch
+from src.models.train_fraud_model import (ModelType, TrainingConfig, ModelMetrics, CircuitBreaker, ResourceMonitor,
+                                          IntelOptimizer, ModelTrainerFactory)
 
 # Imports do sistema (assumindo que estão disponíveis)
 # from train_advanced import (
@@ -25,6 +27,7 @@ class TestModelTypes:
 
     def test_model_type_enum(self):
         """Testa enum de tipos de modelo."""
+
         assert ModelType.ISOLATION_FOREST.value == "isolation_forest"
         assert ModelType.LOCAL_OUTLIER_FACTOR.value == "lof"
         assert ModelType.ONE_CLASS_SVM.value == "one_class_svm"
