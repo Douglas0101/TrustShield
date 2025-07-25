@@ -35,7 +35,7 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Copiar código
-COPY --chown=trustshield:trustshield ../../../Downloads .
+COPY --chown=trustshield:trustshield . .
 
 # Criar diretórios necessários
 RUN mkdir -p outputs/models logs mlruns

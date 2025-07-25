@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   trustshield-trainer:
-    build: ../../../Downloads
+    build: ..
     container_name: trustshield-trainer
     volumes:
       - ./data:/home/trustshield/data
