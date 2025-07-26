@@ -1,18 +1,18 @@
-# Dockerfile - TrustShield Advanced
+# Dockerfile - TrustShield Advanced (Versão 5.1.0-stable)
 FROM python:3.9-slim
 
 # Metadata
 LABEL maintainer="TrustShield Team"
-LABEL version="4.0.0-enterprise"
+LABEL version="5.1.0-stable"
 LABEL description="Sistema Avançado de Detecção de Fraudes"
 
-# Variáveis de ambiente
+# Variáveis de ambiente para otimização e logging
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV OMP_NUM_THREADS=4
 ENV MKL_NUM_THREADS=4
 
-# Instalar dependências do sistema
+# Instalar dependências do sistema necessárias para as bibliotecas Python
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
@@ -23,29 +23,25 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Criar usuário não-root
+# Criar um utilizador não-root para segurança
 RUN useradd --create-home --shell /bin/bash trustshield
 USER trustshield
 WORKDIR /home/trustshield
 
-# Copiar requirements
+# Copiar apenas o ficheiro de requisitos primeiro para aproveitar o cache do Docker
 COPY requirements.txt .
 
-# Instalar dependências Python
+# Instalar dependências Python como utilizador não-root
 RUN pip install --user --no-cache-dir -r requirements.txt
 
-# Copiar código
+# Copiar o resto do código da aplicação
 COPY --chown=trustshield:trustshield . .
 
-# Criar diretórios necessários
+# Criar diretórios necessários que serão mapeados por volumes
 RUN mkdir -p outputs/models logs mlruns
 
-# Expor porta MLflow
+# Expor a porta do MLflow (embora o serviço principal seja outro, é uma boa prática)
 EXPOSE 5000
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)"
-
-# Comando padrão
-CMD ["python", "train_advanced.py", "--config", "config/config_advanced.yaml", "--model", "all"]
+# Comando padrão que será executado quando o contentor iniciar
+CMD ["python", "src/models/train_fraud_model.py", "--config", "config/config.yaml", "--model", "all"]
