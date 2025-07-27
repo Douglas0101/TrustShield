@@ -1,0 +1,126 @@
+(rapids-25.06) douglasdesouza@douglasdesouza-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make purge
+🔥🔥🔥 ATENÇÃO: Parando todos os serviços e APAGANDO TODOS OS VOLUMES DE DADOS! 🔥🔥🔥
+docker compose -f docker/docker-compose.yml down --volumes
+[+] Running 7/7
+ ✔ Container trustshield-mlflow       Removed                                                                                                                                                                                 10.8s
+ ✔ Container trustshield-postgres     Removed                                                                                                                                                                                  0.3s
+ ✔ Container docker-create-buckets-1  Removed                                                                                                                                                                                  0.0s
+ ✔ Container trustshield-minio        Removed                                                                                                                                                                                  0.2s
+ ✔ Volume docker_minio_data           Removed                                                                                                                                                                                  0.0s
+ ✔ Volume docker_postgres_data        Removed                                                                                                                                                                                  0.0s
+ ✔ Network docker_trustshield-net     Removed                                                                                                                                                                                  0.1s
+🧹 Limpando cache do Docker...
+docker system prune -f
+Deleted Images:
+deleted: sha256:9d561a19332dc97a4656159b5ed13aa1bf1db4b8439a30c8b9e1d0d61c657efc
+deleted: sha256:0e4fdcbb86bbe016659698710900c5dea090256c58a9011da3b595d661652432
+deleted: sha256:296c77f747b9a72be37d76724689a5b5682120e001c897ba0684be66bd729fad
+deleted: sha256:0eb6ecaf1a6b783e34993ba345323a7e3bdaf63120d3999d90c3c8becd47958d
+deleted: sha256:56737e64c0a8eedfd6adaf598aad344a69179087a4c42da27a19f331f4109f12
+deleted: sha256:7e8055d2920e96b1be59c997465a6474d3f2d17b285255927a8a9efdd443d3f3
+deleted: sha256:bdda310daed657d16785923446c2b5f5b9cdfc06e221aa8034c6792239ee435c
+deleted: sha256:3168740af295d1d1eabb861adf6b24f66b5e375b170ca598330a3bda5460dbe3
+deleted: sha256:a61af00be2f3c49507774c131ab060a72f527c9f9fd362e675cce494ea4c13b7
+
+Deleted build cache objects:
+qhgqlwnrbvrv8zf1ogatspvoh
+2keazg1gumq5p8dwomhhdvqjo
+e9skp7ylg398afuj54nfpu1j5
+78z2azqtidditdr31n3vwfsnx
+t0v87y1oj83fq3jfgpqtr88yr
+8su9gj2u9iyj8cwpn6pzx7l56
+wj51esda5ft6p5yi8pgxmsdhm
+qv3fho6q0sa005zwvk514se9w
+xzr4urwwv9n4hccsnt56xgskm
+htakcksjmht8ylayc4hxwi1ap
+
+Total reclaimed space: 3.12GB
+(rapids-25.06) douglasdesouza@douglasdesouza-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make build-fresh
+🧼 Construindo a imagem 'trustshield-advanced:latest' do zero (sem cache)...
+docker build --no-cache -t trustshield-advanced:latest -f docker/Dockerfile .
+[+] Building 90.3s (13/13) FINISHED                                                                                                                                                                                  docker:default
+ => [internal] load build definition from Dockerfile                                                                                                                                                                           0.0s
+ => => transferring dockerfile: 1.51kB                                                                                                                                                                                         0.0s
+ => [internal] load metadata for docker.io/library/python:3.10-slim                                                                                                                                                            0.0s
+ => [internal] load .dockerignore                                                                                                                                                                                              0.0s
+ => => transferring context: 365B                                                                                                                                                                                              0.0s
+ => CACHED [1/8] FROM docker.io/library/python:3.10-slim                                                                                                                                                                       0.0s
+ => [internal] load build context                                                                                                                                                                                              0.0s
+ => => transferring context: 617.55kB                                                                                                                                                                                          0.0s
+ => [2/8] RUN apt-get update && apt-get install -y     build-essential     gcc     g++     libblas-dev     liblapack-dev     libhdf5-dev     pkg-config     && rm -rf /var/lib/apt/lists/*                                    22.6s
+ => [3/8] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                                                              0.1s
+ => [4/8] WORKDIR /home/trustshield                                                                                                                                                                                            0.0s
+ => [5/8] COPY requirements.txt .                                                                                                                                                                                              0.0s
+ => [6/8] RUN pip install --user --no-cache-dir -r requirements.txt                                                                                                                                                           64.1s
+ => [7/8] COPY --chown=trustshield:trustshield . .                                                                                                                                                                             0.0s
+ => [8/8] RUN mkdir -p outputs/models logs mlruns                                                                                                                                                                              0.1s
+ => exporting to image                                                                                                                                                                                                         3.3s
+ => => exporting layers                                                                                                                                                                                                        3.3s
+ => => writing image sha256:3849caa859650c80c4cac1a2b9f566c1e1a821dc5c7ec4998b5713151089ad76                                                                                                                                   0.0s
+ => => naming to docker.io/library/trustshield-advanced:latest                                                                                                                                                                 0.0s
+(rapids-25.06) douglasdesouza@douglasdesouza-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make services-up
+🚀 Subindo os serviços de backend (Postgres, MinIO, MLflow)...
+docker compose -f docker/docker-compose.yml up -d postgres minio mlflow
+[+] Running 7/7
+ ✔ Network docker_trustshield-net     Created                                                                                                                                                                                  0.0s
+ ✔ Volume "docker_minio_data"         Created                                                                                                                                                                                  0.0s
+ ✔ Volume "docker_postgres_data"      Created                                                                                                                                                                                  0.0s
+ ✔ Container trustshield-minio        Healthy                                                                                                                                                                                  6.3s
+ ✔ Container trustshield-postgres     Healthy                                                                                                                                                                                  6.3s
+ ✔ Container docker-create-buckets-1  Exited                                                                                                                                                                                   6.3s
+ ✔ Container trustshield-mlflow       Started                                                                                                                                                                                  6.4s
+(rapids-25.06) douglasdesouza@douglasdesouza-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make train
+🧠 Executando o pipeline de treino...
+docker compose -f docker/docker-compose.yml run --rm trustshield-trainer
+[+] Creating 3/3
+ ✔ Container trustshield-minio     Running                                                                                                                                                                                     0.0s
+ ✔ Container trustshield-postgres  Running                                                                                                                                                                                     0.0s
+ ✔ Container trustshield-mlflow    Running                                                                                                                                                                                     0.0s
+[+] Running 3/3
+ ✔ Container trustshield-minio        Healthy                                                                                                                                                                                  1.1s
+ ✔ Container docker-create-buckets-1  Exited                                                                                                                                                                                   0.6s
+ ✔ Container trustshield-postgres     Healthy                                                                                                                                                                                  0.5s
+2025/07/28 03:11:03 INFO mlflow.tracking.fluent: Experiment with name 'TrustShield-Advanced' does not exist. Creating a new experiment.
+2025-07-28 03:11:03,447 - [ADVANCED-94484118] - INFO - 🎯 MLflow configurado: TrustShield-Advanced
+2025-07-28 03:11:03,447 - [ADVANCED-94484118] - INFO - 📊 UI disponível em: http://localhost:5000
+2025-07-28 03:11:03,447 - [ADVANCED-94484118] - INFO - 🚀 Intel i3-1115G4 otimizado: 4 cores, 19.3GB RAM
+2025-07-28 03:11:03,447 - [ADVANCED-94484118] - INFO - 🚀 === SISTEMA ULTRA-AVANÇADO INICIALIZADO ===
+2025-07-28 03:11:03,447 - [ADVANCED-94484118] - INFO - 🆔 Experiment ID: 94484118-2989-4c56-af1f-a3673c718bc9
+2025-07-28 03:11:03,447 - [ADVANCED-94484118] - INFO - 🚀 === INICIANDO PIPELINE ULTRA-AVANÇADO ===
+2025-07-28 03:11:03,447 - [ADVANCED-94484118] - INFO - 📁 === CARREGANDO E PREPARANDO DADOS ===
+2025-07-28 03:11:03,447 - [ADVANCED-94484118] - INFO - 📂 Carregando: /home/trustshield/data/features/featured_dataset.parquet
+2025-07-28 03:11:06,901 - [ADVANCED-94484118] - INFO - ✅ Dados carregados: 13,305,915 amostras, 31 features
+2025-07-28 03:11:32,932 - [ADVANCED-94484118] - INFO - 💾 Otimização memória: 18.5% redução (6722.7→5479.1MB)
+2025-07-28 03:11:32,932 - [ADVANCED-94484118] - INFO - 🔧 Aplicando feature engineering...
+2025-07-28 03:11:33,550 - [ADVANCED-94484118] - INFO - ✅ Feature engineering concluído: 33 features
+2025-07-28 03:11:39,226 - [ADVANCED-94484118] - INFO - 💾 Schema salvo: 26 features
+2025-07-28 03:11:43,343 - [ADVANCED-94484118] - INFO - 📊 Split: Train=11,310,027, Test=1,995,888
+2025-07-28 03:11:43,343 - [ADVANCED-94484118] - INFO - 🔧 Features finais: 26
+2025-07-28 03:11:43,682 - [ADVANCED-94484118] - WARNING - ⚠️ Uso de CPU alto: 100.0%
+2025-07-28 03:11:43,684 - [ADVANCED-94484118] - WARNING - ⚠️ Recursos limitados, pulando isolation_forest
+2025-07-28 03:11:43,784 - [ADVANCED-94484118] - WARNING - ⚠️ Uso de CPU alto: 92.3%
+2025-07-28 03:11:43,785 - [ADVANCED-94484118] - WARNING - ⚠️ Recursos limitados, pulando lof
+2025-07-28 03:11:43,886 - [ADVANCED-94484118] - INFO -
+================================================================================
+2025-07-28 03:11:43,886 - [ADVANCED-94484118] - INFO - 🎯 TREINANDO: ONE_CLASS_SVM
+2025-07-28 03:11:43,886 - [ADVANCED-94484118] - INFO - ================================================================================
+2025/07/28 03:11:44 WARNING mlflow.utils.git_utils: Failed to import Git (the Git executable is probably not on your PATH), so Git SHA is not available. Error: Failed to initialize: Bad git executable.
+The git executable must be specified in one of the following ways:
+    - be included in your $PATH
+    - be set via $GIT_PYTHON_GIT_EXECUTABLE
+    - explicitly set via git.refresh(<full-path-to-git-executable>)
+
+All git commands will error until this is rectified.
+
+This initial message can be silenced or aggravated in the future by setting the
+$GIT_PYTHON_REFRESH environment variable. Use one of the following values:
+    - quiet|q|silence|s|silent|none|n|0: for no message or exception
+    - warn|w|warning|log|l|1: for a warning message (logging level CRITICAL, displayed by default)
+    - error|e|exception|raise|r|2: for a raised exception
+
+Example:
+    export GIT_PYTHON_REFRESH=quiet
+
+2025-07-28 03:11:44,356 - [ADVANCED-94484118] - INFO - ⚡ Treinando SVM com Nystroem: 500 componentes
+
+make: *** [Makefile:67: train] Erro 137

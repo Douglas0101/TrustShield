@@ -21,14 +21,9 @@
     "is_weekend",
     "is_night_transaction",
     "amount_vs_avg",
-    "amount_rolling_mean",
-    "amount_rolling_std",
     "use_chip_Online Transaction",
     "use_chip_Swipe Transaction",
     "gender_Male"
   ],
-  "feature_count": 26,
-  "version": "v1.0",
-  "created_at": "2025-07-27T19:59:29.826170",
-  "experiment_id": "91b57c90-b6ea-4ccd-b118-d54ea6695487"
+  "version": "v1.0"
 }

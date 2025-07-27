@@ -81,7 +81,9 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: trustshield-trainer
+    mem_limit: 8g  # Limite de memória de 8GB
     volumes:
+      - ../src:/home/trustshield/src
       - ../data:/home/trustshield/data
       - ../outputs:/home/trustshield/outputs
       - ../config:/home/trustshield/config
