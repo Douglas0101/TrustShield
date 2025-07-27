@@ -15,13 +15,13 @@ make docker-logs
 docker compose -f docker/docker-compose.yml down --volumes
 [+] Running 8/8
  ✔ Container trustshield-trainer      Removed                                                                                                                                                                                  0.0s
- ✔ Container trustshield-mlflow       Removed                                                                                                                                                                                 10.8s
+ ✔ Container trustshield-mlflow       Removed                                                                                                                                                                                 10.7s
+ ✔ Container trustshield-postgres     Removed                                                                                                                                                                                  0.1s
  ✔ Container docker-create-buckets-1  Removed                                                                                                                                                                                  0.0s
- ✔ Container trustshield-postgres     Removed                                                                                                                                                                                  0.2s
  ✔ Container trustshield-minio        Removed                                                                                                                                                                                  0.2s
- ✔ Volume docker_minio_data           Removed                                                                                                                                                                                  0.0s
- ✔ Network docker_trustshield-net     Removed                                                                                                                                                                                  0.1s
  ✔ Volume docker_postgres_data        Removed                                                                                                                                                                                  0.0s
+ ✔ Network docker_trustshield-net     Removed                                                                                                                                                                                  0.1s
+ ✔ Volume docker_minio_data           Removed                                                                                                                                                                                  0.0s
 Deleted Images:
 untagged: minio/mc:latest
 untagged: minio/mc@sha256:fb8f773eac8ef9d6da0486d5dec2f42f219358bcb8de579d1623d518c9ebd4cc
@@ -31,6 +31,12 @@ deleted: sha256:2406f5ec1abc48ada12c5d1580aa6f747587b219259c5df38fcd969330e985a7
 deleted: sha256:5b48da35e45557a109d1221656cfbefe22655e28f5e634de800012b0b7b6b0ae
 deleted: sha256:b01114d07d0a13204919413a12dbe09d5faef647e99a876b5c6c4ae74946d27f
 deleted: sha256:dee864263aaf08d97788563b9eaf2d6302e9d59feb9b09f0fdf7904f2fd2f37b
+untagged: docker-trustshield-trainer:latest
+untagged: trustshield-advanced:latest
+deleted: sha256:8755fff1d0b8d8ba9a489be370fe871ef5161d891deb8ccae6010a61e733a4e8
+untagged: python:3.10-slim
+untagged: python@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5
+deleted: sha256:13839a48c354366e5535d8d9d6b5540b5d06814ca2befbee62af385cd0d121a4
 untagged: postgres:13
 untagged: postgres@sha256:42654ff6e04090c2faf39e6bd6830c44e73e1b42f3025fe8f4b06715af182911
 deleted: sha256:54706ca98cd54208379ad1d44c08bbe98ea962a04d8b8655533f18123e3ba7da
@@ -47,12 +53,6 @@ deleted: sha256:06381656dfc8b4e29a8f8f46ee18a5b41f30ce7fa132b43cf6ec349fba47e29e
 deleted: sha256:e851422a31b72455d185ef1058fa24480fad18cc0c85bbeb81e4e84a6a3fc408
 deleted: sha256:f0733af95a7d8b8e0423360a863fd2bec52d92eab63c80c7c7ef00b0dc40c304
 deleted: sha256:186299f81ef363d66cb3e799f26253fb68f2ad69d3a13432f83de4557175a6b9
-untagged: docker-trustshield-trainer:latest
-untagged: trustshield-advanced:latest
-deleted: sha256:f17a4ebcb7f50b2609b5f221ba8546f011d75c2137a0cefffa742c8a7f6cc211
-untagged: python:3.10-slim
-untagged: python@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5
-deleted: sha256:13839a48c354366e5535d8d9d6b5540b5d06814ca2befbee62af385cd0d121a4
 untagged: minio/minio:latest
 untagged: minio/minio@sha256:d249d1fb6966de4d8ad26c04754b545205ff15a62e4fd19ebd0f26fa5baacbc0
 deleted: sha256:a98a9d647e700e45c1d3d2e44709f23952a39c199731d84e623eb558fd5501f4
@@ -67,75 +67,61 @@ deleted: sha256:4937fca89967f254325642431a2b55afa05ff9cf065e79b33e8756ad01476619
 deleted: sha256:ff59c129bdee8355d5b47559167f5f7c893dc99d9779a2b3194fa59152e90110
 
 Deleted build cache objects:
-rafwbzbrf7rvite1mwk6nv8bh
-fwwfamseodx8oiivs79ea7q12
-vy77fyez2hwhzs8tc84xga6w0
-tyt5hme297az7746obfm1lmgm
-zjgcg0b89118jjy7d4fkyourk
-v37zjhr3pt4gb8o01doxpnqq0
-8rx0atp0793yanayf2qoms715
-jj3t3jpl6bvix0kjigz0bacbz
-ee6o3f2x67jnufag9ndkdveri
-tf04w3n5yc1ur4lc8feu75336
-ms87i5lyorallciuyqmhuxdqf
-brawzz6739xoomv1hhvmde1je
-f66pjltm4p3j11ft41cbp9k6o
-k8huows0zp5zidv9dp07mlhqa
+oa7cb3n5p2hmhfej24zsmnaea
+s8n8ytdwy9qgnvuse6vu9vkmb
+9c7dell1pqy0d3p11u9m9k126
+b95gd582vup29fnfzpd9ei462
+x6nx53yhnzes10eo10d1gwnt7
+qtl9zkr7nk7nr6lnf4rzjcn5g
+juyqsrvkdi1jl6tojroy7arju
+5xgnf5nb3llhgvxvyt2l7p1at
+8x6kmy5sdx1wr8epj6ltxdxbf
+h1kmh4pcaygqhc53c7pt31s1r
+ljn6bjcjdmtyakhqvqyuntpcr
+n7koz37519g6gy3u13hutgx5e
+st2erxe7w8rr4fik1r5xd1bau
+shzostrvie58dzaaj2r9b3kjl
 
 Total reclaimed space: 2.146GB
 docker build -t trustshield-advanced:latest -f docker/Dockerfile .
-[+] Building 104.9s (13/13) FINISHED                                                                                                                                                                                 docker:default
+[+] Building 97.6s (13/13) FINISHED                                                                                                                                                                                  docker:default
  => [internal] load build definition from Dockerfile                                                                                                                                                                           0.0s
  => => transferring dockerfile: 1.51kB                                                                                                                                                                                         0.0s
- => [internal] load metadata for docker.io/library/python:3.10-slim                                                                                                                                                            5.6s
+ => [internal] load metadata for docker.io/library/python:3.10-slim                                                                                                                                                            2.8s
  => [internal] load .dockerignore                                                                                                                                                                                              0.0s
  => => transferring context: 365B                                                                                                                                                                                              0.0s
- => [1/8] FROM docker.io/library/python:3.10-slim@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5                                                                                                      7.8s
+ => [1/8] FROM docker.io/library/python:3.10-slim@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5                                                                                                      4.3s
  => => resolve docker.io/library/python:3.10-slim@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5                                                                                                      0.0s
  => => sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5 9.13kB / 9.13kB                                                                                                                                 0.0s
  => => sha256:5b73bbad254f55db4a64a6d5b4f237327f8be74d0b3caa953c59be1f9d21151f 1.75kB / 1.75kB                                                                                                                                 0.0s
  => => sha256:13839a48c354366e5535d8d9d6b5540b5d06814ca2befbee62af385cd0d121a4 5.37kB / 5.37kB                                                                                                                                 0.0s
- => => sha256:59e22667830bf04fb35e15ed9c70023e9d121719bb87f0db7f3159ee7c7e0b8d 28.23MB / 28.23MB                                                                                                                               3.6s
- => => sha256:12b8240e46e9f448e7eba19870e233d03c7160ca9b1777ab3ec2eeddf4349fa8 3.51MB / 3.51MB                                                                                                                                 2.5s
- => => sha256:3fa1124e7cf3ed5061a51b47c3e7a138e1b25dce3c94e9967a6b2a9acfe36402 15.65MB / 15.65MB                                                                                                                               7.5s
- => => sha256:00aa2453f38062a311a828d4d0790d1911a81372ad928c8856387ceccc7a6c12 250B / 250B                                                                                                                                     2.9s
- => => extracting sha256:59e22667830bf04fb35e15ed9c70023e9d121719bb87f0db7f3159ee7c7e0b8d                                                                                                                                      0.6s
+ => => sha256:59e22667830bf04fb35e15ed9c70023e9d121719bb87f0db7f3159ee7c7e0b8d 28.23MB / 28.23MB                                                                                                                               3.3s
+ => => sha256:12b8240e46e9f448e7eba19870e233d03c7160ca9b1777ab3ec2eeddf4349fa8 3.51MB / 3.51MB                                                                                                                                 3.0s
+ => => sha256:3fa1124e7cf3ed5061a51b47c3e7a138e1b25dce3c94e9967a6b2a9acfe36402 15.65MB / 15.65MB                                                                                                                               3.8s
+ => => sha256:00aa2453f38062a311a828d4d0790d1911a81372ad928c8856387ceccc7a6c12 250B / 250B                                                                                                                                     3.3s
+ => => extracting sha256:59e22667830bf04fb35e15ed9c70023e9d121719bb87f0db7f3159ee7c7e0b8d                                                                                                                                      0.5s
  => => extracting sha256:12b8240e46e9f448e7eba19870e233d03c7160ca9b1777ab3ec2eeddf4349fa8                                                                                                                                      0.1s
  => => extracting sha256:3fa1124e7cf3ed5061a51b47c3e7a138e1b25dce3c94e9967a6b2a9acfe36402                                                                                                                                      0.3s
  => => extracting sha256:00aa2453f38062a311a828d4d0790d1911a81372ad928c8856387ceccc7a6c12                                                                                                                                      0.0s
  => [internal] load build context                                                                                                                                                                                              0.0s
- => => transferring context: 639.76kB                                                                                                                                                                                          0.0s
- => [2/8] RUN apt-get update && apt-get install -y     build-essential     gcc     g++     libblas-dev     liblapack-dev     libhdf5-dev     pkg-config     && rm -rf /var/lib/apt/lists/*                                    19.6s
+ => => transferring context: 643.42kB                                                                                                                                                                                          0.0s
+ => [2/8] RUN apt-get update && apt-get install -y     build-essential     gcc     g++     libblas-dev     liblapack-dev     libhdf5-dev     pkg-config     && rm -rf /var/lib/apt/lists/*                                    18.7s
  => [3/8] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                                                              0.1s
  => [4/8] WORKDIR /home/trustshield                                                                                                                                                                                            0.0s
  => [5/8] COPY requirements.txt .                                                                                                                                                                                              0.0s
- => [6/8] RUN pip install --user --no-cache-dir -r requirements.txt                                                                                                                                                           68.5s
+ => [6/8] RUN pip install --user --no-cache-dir -r requirements.txt                                                                                                                                                           68.3s
  => [7/8] COPY --chown=trustshield:trustshield . .                                                                                                                                                                             0.0s
  => [8/8] RUN mkdir -p outputs/models logs mlruns                                                                                                                                                                              0.1s
- => exporting to image                                                                                                                                                                                                         3.1s
+ => exporting to image                                                                                                                                                                                                         3.2s
  => => exporting layers                                                                                                                                                                                                        3.1s
- => => writing image sha256:8755fff1d0b8d8ba9a489be370fe871ef5161d891deb8ccae6010a61e733a4e8                                                                                                                                   0.0s
+ => => writing image sha256:bb6bc664ffb340bff7d9949af8b19c2621f8886ab67f4f3ae9932d43642d0ea3                                                                                                                                   0.0s
  => => naming to docker.io/library/trustshield-advanced:latest                                                                                                                                                                 0.0s
 docker compose -f docker/docker-compose.yml up -d
 [+] Running 35/35
- ✔ postgres Pulled                                                                                                                                                                                                            12.1s
- ✔ minio Pulled                                                                                                                                                                                                               14.1s
- ✔ create-buckets Pulled                                                                                                                                                                                                      16.5s
- ✔ mlflow Pulled                                                                                                                                                                                                               6.3s
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ ✔ mlflow Pulled                                                                                                                                                                                                               5.3s
+ ✔ create-buckets Pulled                                                                                                                                                                                                       5.8s
+ ✔ minio Pulled                                                                                                                                                                                                                8.6s
+ ✔ postgres Pulled                                                                                                                                                                                                            16.9s
 [+] Building 0.1s (15/15) FINISHED
  => [internal] load local bake definitions                                                                                                                                                                                     0.0s
  => => reading from stdin 444B                                                                                                                                                                                                 0.0s
@@ -144,9 +130,9 @@ docker compose -f docker/docker-compose.yml up -d
  => [internal] load metadata for docker.io/library/python:3.10-slim                                                                                                                                                            0.0s
  => [internal] load .dockerignore                                                                                                                                                                                              0.0s
  => => transferring context: 365B                                                                                                                                                                                              0.0s
- => [1/8] FROM docker.io/library/python:3.10-slim                                                                                                                                                                              0.0s
  => [internal] load build context                                                                                                                                                                                              0.0s
  => => transferring context: 1.70kB                                                                                                                                                                                            0.0s
+ => [1/8] FROM docker.io/library/python:3.10-slim                                                                                                                                                                              0.0s
  => CACHED [2/8] RUN apt-get update && apt-get install -y     build-essential     gcc     g++     libblas-dev     liblapack-dev     libhdf5-dev     pkg-config     && rm -rf /var/lib/apt/lists/*                              0.0s
  => CACHED [3/8] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                                                       0.0s
  => CACHED [4/8] WORKDIR /home/trustshield                                                                                                                                                                                     0.0s
@@ -156,7 +142,7 @@ docker compose -f docker/docker-compose.yml up -d
  => CACHED [8/8] RUN mkdir -p outputs/models logs mlruns                                                                                                                                                                       0.0s
  => exporting to image                                                                                                                                                                                                         0.0s
  => => exporting layers                                                                                                                                                                                                        0.0s
- => => writing image sha256:8755fff1d0b8d8ba9a489be370fe871ef5161d891deb8ccae6010a61e733a4e8                                                                                                                                   0.0s
+ => => writing image sha256:bb6bc664ffb340bff7d9949af8b19c2621f8886ab67f4f3ae9932d43642d0ea3                                                                                                                                   0.0s
  => => naming to docker.io/library/docker-trustshield-trainer                                                                                                                                                                  0.0s
  => resolving provenance for metadata file                                                                                                                                                                                     0.0s
 [+] Running 9/9
@@ -164,33 +150,33 @@ docker compose -f docker/docker-compose.yml up -d
  ✔ Network docker_trustshield-net     Created                                                                                                                                                                                  0.0s
  ✔ Volume "docker_minio_data"         Created                                                                                                                                                                                  0.0s
  ✔ Volume "docker_postgres_data"      Created                                                                                                                                                                                  0.0s
- ✔ Container trustshield-postgres     Healthy                                                                                                                                                                                  7.8s
- ✔ Container trustshield-minio        Healthy                                                                                                                                                                                  7.8s
+ ✔ Container trustshield-postgres     Healthy                                                                                                                                                                                  6.6s
+ ✔ Container trustshield-minio        Healthy                                                                                                                                                                                  6.6s
  ✔ Container docker-create-buckets-1  Exited                                                                                                                                                                                   6.3s
  ✔ Container trustshield-mlflow       Started                                                                                                                                                                                  6.4s
  ✔ Container trustshield-trainer      Started                                                                                                                                                                                  6.5s
 docker compose -f docker/docker-compose.yml logs -f trustshield-trainer
-trustshield-trainer  | 2025/07/27 15:48:57 INFO mlflow.tracking.fluent: Experiment with name 'TrustShield-Advanced' does not exist. Creating a new experiment.
-trustshield-trainer  | 2025-07-27 15:48:57,255 - [ADVANCED-275c4ff5] - INFO - 🎯 MLflow configurado: TrustShield-Advanced
-trustshield-trainer  | 2025-07-27 15:48:57,255 - [ADVANCED-275c4ff5] - INFO - 📊 UI disponível em: http://localhost:5000
-trustshield-trainer  | 2025-07-27 15:48:57,255 - [ADVANCED-275c4ff5] - INFO - 🚀 Intel i3-1115G4 otimizado: 4 cores, 19.3GB RAM
-trustshield-trainer  | 2025-07-27 15:48:57,255 - [ADVANCED-275c4ff5] - INFO - 🚀 === SISTEMA ULTRA-AVANÇADO INICIALIZADO ===
-trustshield-trainer  | 2025-07-27 15:48:57,255 - [ADVANCED-275c4ff5] - INFO - 🆔 Experiment ID: 275c4ff5-8fe2-47ce-8470-9a647af83ba3
-trustshield-trainer  | 2025-07-27 15:48:57,255 - [ADVANCED-275c4ff5] - INFO - 🚀 === INICIANDO PIPELINE ULTRA-AVANÇADO ===
-trustshield-trainer  | 2025-07-27 15:48:57,255 - [ADVANCED-275c4ff5] - INFO - 📁 === CARREGANDO E PREPARANDO DADOS ===
-trustshield-trainer  | 2025-07-27 15:48:57,255 - [ADVANCED-275c4ff5] - INFO - 📂 Carregando: /home/trustshield/data/features/featured_dataset.parquet
-trustshield-trainer  | 2025-07-27 15:48:59,879 - [ADVANCED-275c4ff5] - INFO - ✅ Dados carregados: 13,305,915 amostras, 31 features
-trustshield-trainer  | 2025-07-27 15:49:21,471 - [ADVANCED-275c4ff5] - INFO - 💾 Otimização memória: 18.5% redução (6722.7→5479.1MB)
-trustshield-trainer  | 2025-07-27 15:49:21,471 - [ADVANCED-275c4ff5] - INFO - 🔧 Aplicando feature engineering...
-trustshield-trainer  | 2025-07-27 15:49:22,030 - [ADVANCED-275c4ff5] - INFO - ✅ Feature engineering concluído: 33 features
-trustshield-trainer  | 2025-07-27 15:49:26,488 - [ADVANCED-275c4ff5] - INFO - 💾 Schema salvo: 26 features
-trustshield-trainer  | 2025-07-27 15:49:29,479 - [ADVANCED-275c4ff5] - INFO - 📊 Split: Train=11,310,027, Test=1,995,888
-trustshield-trainer  | 2025-07-27 15:49:29,479 - [ADVANCED-275c4ff5] - INFO - 🔧 Features finais: 26
-trustshield-trainer  | 2025-07-27 15:49:29,694 - [ADVANCED-275c4ff5] - INFO -
+trustshield-trainer  | 2025/07/27 19:59:00 INFO mlflow.tracking.fluent: Experiment with name 'TrustShield-Advanced' does not exist. Creating a new experiment.
+trustshield-trainer  | 2025-07-27 19:59:00,065 - [ADVANCED-91b57c90] - INFO - 🎯 MLflow configurado: TrustShield-Advanced
+trustshield-trainer  | 2025-07-27 19:59:00,065 - [ADVANCED-91b57c90] - INFO - 📊 UI disponível em: http://localhost:5000
+trustshield-trainer  | 2025-07-27 19:59:00,065 - [ADVANCED-91b57c90] - INFO - 🚀 Intel i3-1115G4 otimizado: 4 cores, 19.3GB RAM
+trustshield-trainer  | 2025-07-27 19:59:00,065 - [ADVANCED-91b57c90] - INFO - 🚀 === SISTEMA ULTRA-AVANÇADO INICIALIZADO ===
+trustshield-trainer  | 2025-07-27 19:59:00,065 - [ADVANCED-91b57c90] - INFO - 🆔 Experiment ID: 91b57c90-b6ea-4ccd-b118-d54ea6695487
+trustshield-trainer  | 2025-07-27 19:59:00,065 - [ADVANCED-91b57c90] - INFO - 🚀 === INICIANDO PIPELINE ULTRA-AVANÇADO ===
+trustshield-trainer  | 2025-07-27 19:59:00,065 - [ADVANCED-91b57c90] - INFO - 📁 === CARREGANDO E PREPARANDO DADOS ===
+trustshield-trainer  | 2025-07-27 19:59:00,065 - [ADVANCED-91b57c90] - INFO - 📂 Carregando: /home/trustshield/data/features/featured_dataset.parquet
+trustshield-trainer  | 2025-07-27 19:59:02,667 - [ADVANCED-91b57c90] - INFO - ✅ Dados carregados: 13,305,915 amostras, 31 features
+trustshield-trainer  | 2025-07-27 19:59:24,150 - [ADVANCED-91b57c90] - INFO - 💾 Otimização memória: 18.5% redução (6722.7→5479.1MB)
+trustshield-trainer  | 2025-07-27 19:59:24,151 - [ADVANCED-91b57c90] - INFO - 🔧 Aplicando feature engineering...
+trustshield-trainer  | 2025-07-27 19:59:24,706 - [ADVANCED-91b57c90] - INFO - ✅ Feature engineering concluído: 33 features
+trustshield-trainer  | 2025-07-27 19:59:29,826 - [ADVANCED-91b57c90] - INFO - 💾 Schema salvo: 26 features
+trustshield-trainer  | 2025-07-27 19:59:32,881 - [ADVANCED-91b57c90] - INFO - 📊 Split: Train=11,310,027, Test=1,995,888
+trustshield-trainer  | 2025-07-27 19:59:32,881 - [ADVANCED-91b57c90] - INFO - 🔧 Features finais: 26
+trustshield-trainer  | 2025-07-27 19:59:33,102 - [ADVANCED-91b57c90] - INFO -
 trustshield-trainer  | ================================================================================
-trustshield-trainer  | 2025-07-27 15:49:29,694 - [ADVANCED-275c4ff5] - INFO - 🎯 TREINANDO: ISOLATION_FOREST
-trustshield-trainer  | 2025-07-27 15:49:29,694 - [ADVANCED-275c4ff5] - INFO - ================================================================================
-trustshield-trainer  | 2025/07/27 15:49:29 WARNING mlflow.utils.git_utils: Failed to import Git (the Git executable is probably not on your PATH), so Git SHA is not available. Error: Failed to initialize: Bad git executable.
+trustshield-trainer  | 2025-07-27 19:59:33,102 - [ADVANCED-91b57c90] - INFO - 🎯 TREINANDO: ISOLATION_FOREST
+trustshield-trainer  | 2025-07-27 19:59:33,102 - [ADVANCED-91b57c90] - INFO - ================================================================================
+trustshield-trainer  | 2025/07/27 19:59:33 WARNING mlflow.utils.git_utils: Failed to import Git (the Git executable is probably not on your PATH), so Git SHA is not available. Error: Failed to initialize: Bad git executable.
 trustshield-trainer  | The git executable must be specified in one of the following ways:
 trustshield-trainer  |     - be included in your $PATH
 trustshield-trainer  |     - be set via $GIT_PYTHON_GIT_EXECUTABLE
@@ -207,26 +193,26 @@ trustshield-trainer  |
 trustshield-trainer  | Example:
 trustshield-trainer  |     export GIT_PYTHON_REFRESH=quiet
 trustshield-trainer  |
-trustshield-trainer  | 2025-07-27 15:49:29,871 - [ADVANCED-275c4ff5] - INFO - 🌲 Treinando Isolation Forest: 11310027 amostras, 26 features
-trustshield-trainer  | 2025-07-27 15:51:40,344 - [ADVANCED-275c4ff5] - INFO - 💾 Modelo salvo: /home/trustshield/outputs/models/isolation_forest_advanced_20250727_155140.joblib
-trustshield-trainer  | 2025/07/27 15:51:40 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
+trustshield-trainer  | 2025-07-27 19:59:33,273 - [ADVANCED-91b57c90] - INFO - 🌲 Treinando Isolation Forest: 11310027 amostras, 26 features
+trustshield-trainer  | 2025-07-27 20:01:44,814 - [ADVANCED-91b57c90] - INFO - 💾 Modelo salvo: /home/trustshield/outputs/models/isolation_forest_advanced_20250727_200144.joblib
+trustshield-trainer  | 2025/07/27 20:01:45 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
 trustshield-trainer  | Successfully registered model 'TrustShield-isolation_forest'.
 trustshield-trainer  | Created version '1' of model 'TrustShield-isolation_forest'.
-trustshield-trainer  | 2025-07-27 15:51:44,430 - [ADVANCED-275c4ff5] - INFO - ✅ isolation_forest treinado com sucesso!
-trustshield-trainer  | 2025-07-27 15:51:44,430 - [ADVANCED-275c4ff5] - INFO - ⏱️ Tempo: 129.26s | Inferência: 277.5ms
-trustshield-trainer  | 2025-07-27 15:51:44,430 - [ADVANCED-275c4ff5] - INFO - 📊 Anomalias: 0.0850 | CV: nan
-trustshield-trainer  | 2025-07-27 15:51:44,579 - [ADVANCED-275c4ff5] - INFO - 📊 Sistema: CPU=0.0% | RAM=43.6% | Processo=2929MB
-trustshield-trainer  | 2025-07-27 15:51:46,727 - [ADVANCED-275c4ff5] - INFO -
+trustshield-trainer  | 2025-07-27 20:01:48,692 - [ADVANCED-91b57c90] - INFO - ✅ isolation_forest treinado com sucesso!
+trustshield-trainer  | 2025-07-27 20:01:48,692 - [ADVANCED-91b57c90] - INFO - ⏱️ Tempo: 130.22s | Inferência: 335.2ms
+trustshield-trainer  | 2025-07-27 20:01:48,692 - [ADVANCED-91b57c90] - INFO - 📊 Anomalias: 0.0850 | CV: nan
+trustshield-trainer  | 2025-07-27 20:01:48,838 - [ADVANCED-91b57c90] - INFO - 📊 Sistema: CPU=2.4% | RAM=44.2% | Processo=2260MB
+trustshield-trainer  | 2025-07-27 20:01:50,986 - [ADVANCED-91b57c90] - INFO -
 trustshield-trainer  | ================================================================================
-trustshield-trainer  | 2025-07-27 15:51:46,727 - [ADVANCED-275c4ff5] - INFO - 🎯 TREINANDO: LOF
-trustshield-trainer  | 2025-07-27 15:51:46,727 - [ADVANCED-275c4ff5] - INFO - ================================================================================
-trustshield-trainer  | 2025-07-27 15:51:48,450 - [ADVANCED-275c4ff5] - INFO - 🎯 LOF: Usando subset de 10000 amostras
-trustshield-trainer  | 2025-07-27 15:51:48,450 - [ADVANCED-275c4ff5] - INFO - 🎯 Treinando LOF: 10000 amostras
-trustshield-trainer  | 2025-07-27 15:51:48,701 - [ADVANCED-275c4ff5] - INFO - 💾 Modelo salvo: /home/trustshield/outputs/models/lof_advanced_20250727_155148.joblib
-trustshield-trainer  | 2025/07/27 15:51:48 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-trustshield-trainer  | 2025/07/27 15:51:49 WARNING mlflow.models.signature: Failed to infer the model signature from the input example. Reason: AttributeError("This 'LocalOutlierFactor' has no attribute 'predict'"). To see the full traceback, set the logging level to DEBUG via `logging.getLogger("mlflow").setLevel(logging.DEBUG)`.
-trustshield-trainer  | 2025/07/27 15:51:49 WARNING mlflow.sklearn: Model was missing function: predict. Not logging python_function flavor!
-trustshield-trainer  | 2025/07/27 15:51:50 WARNING mlflow.models.model: Failed to validate serving input example {
+trustshield-trainer  | 2025-07-27 20:01:50,986 - [ADVANCED-91b57c90] - INFO - 🎯 TREINANDO: LOF
+trustshield-trainer  | 2025-07-27 20:01:50,986 - [ADVANCED-91b57c90] - INFO - ================================================================================
+trustshield-trainer  | 2025-07-27 20:01:56,972 - [ADVANCED-91b57c90] - INFO - 🎯 LOF: Usando subset de 10000 amostras
+trustshield-trainer  | 2025-07-27 20:01:56,972 - [ADVANCED-91b57c90] - INFO - 🎯 Treinando LOF: 10000 amostras
+trustshield-trainer  | 2025-07-27 20:01:57,235 - [ADVANCED-91b57c90] - INFO - 💾 Modelo salvo: /home/trustshield/outputs/models/lof_advanced_20250727_200157.joblib
+trustshield-trainer  | 2025/07/27 20:01:57 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
+trustshield-trainer  | 2025/07/27 20:01:57 WARNING mlflow.models.signature: Failed to infer the model signature from the input example. Reason: AttributeError("This 'LocalOutlierFactor' has no attribute 'predict'"). To see the full traceback, set the logging level to DEBUG via `logging.getLogger("mlflow").setLevel(logging.DEBUG)`.
+trustshield-trainer  | 2025/07/27 20:01:57 WARNING mlflow.sklearn: Model was missing function: predict. Not logging python_function flavor!
+trustshield-trainer  | 2025/07/27 20:01:59 WARNING mlflow.models.model: Failed to validate serving input example {
 trustshield-trainer  |   "dataframe_split": {
 trustshield-trainer  |     "columns": [
 trustshield-trainer  |       "id_transaction",
@@ -403,13 +389,13 @@ trustshield-trainer  | }. Alternatively, you can avoid passing input example and
 trustshield-trainer  | Got error: Model does not have the "python_function" flavor
 trustshield-trainer  | Successfully registered model 'TrustShield-lof'.
 trustshield-trainer  | Created version '1' of model 'TrustShield-lof'.
-trustshield-trainer  | 2025-07-27 15:51:50,800 - [ADVANCED-275c4ff5] - INFO - ✅ lof treinado com sucesso!
-trustshield-trainer  | 2025-07-27 15:51:50,800 - [ADVANCED-275c4ff5] - INFO - ⏱️ Tempo: 1.77s | Inferência: 6.9ms
-trustshield-trainer  | 2025-07-27 15:51:50,800 - [ADVANCED-275c4ff5] - INFO - 📊 Anomalias: 0.1000 | CV: 0.803
-trustshield-trainer  | 2025-07-27 15:51:50,944 - [ADVANCED-275c4ff5] - INFO - 📊 Sistema: CPU=0.0% | RAM=44.2% | Processo=3001MB
-trustshield-trainer  | 2025-07-27 15:51:53,091 - [ADVANCED-275c4ff5] - INFO -
+trustshield-trainer  | 2025-07-27 20:01:59,546 - [ADVANCED-91b57c90] - INFO - ✅ lof treinado com sucesso!
+trustshield-trainer  | 2025-07-27 20:01:59,546 - [ADVANCED-91b57c90] - INFO - ⏱️ Tempo: 6.05s | Inferência: 7.0ms
+trustshield-trainer  | 2025-07-27 20:01:59,546 - [ADVANCED-91b57c90] - INFO - 📊 Anomalias: 0.1000 | CV: 0.803
+trustshield-trainer  | 2025-07-27 20:01:59,691 - [ADVANCED-91b57c90] - INFO - 📊 Sistema: CPU=0.0% | RAM=45.4% | Processo=2558MB
+trustshield-trainer  | 2025-07-27 20:02:01,837 - [ADVANCED-91b57c90] - INFO -
 trustshield-trainer  | ================================================================================
-trustshield-trainer  | 2025-07-27 15:51:53,092 - [ADVANCED-275c4ff5] - INFO - 🎯 TREINANDO: ONE_CLASS_SVM
-trustshield-trainer  | 2025-07-27 15:51:53,092 - [ADVANCED-275c4ff5] - INFO - ================================================================================
-trustshield-trainer  | 2025-07-27 15:51:53,222 - [ADVANCED-275c4ff5] - INFO - ⚡ Treinando SVM com Nystroem: 500 componentes
+trustshield-trainer  | 2025-07-27 20:02:01,837 - [ADVANCED-91b57c90] - INFO - 🎯 TREINANDO: ONE_CLASS_SVM
+trustshield-trainer  | 2025-07-27 20:02:01,838 - [ADVANCED-91b57c90] - INFO - ================================================================================
+trustshield-trainer  | 2025-07-27 20:02:01,968 - [ADVANCED-91b57c90] - INFO - ⚡ Treinando SVM com Nystroem: 500 componentes
 trustshield-trainer exited with code 137
