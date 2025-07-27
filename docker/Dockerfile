@@ -1,5 +1,5 @@
 # Dockerfile - TrustShield Advanced (Versão 5.1.0-stable)
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 # Metadata
 LABEL maintainer="TrustShield Team"

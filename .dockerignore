@@ -1,0 +1,26 @@
+# .dockerignore
+
+# Git e IDEs
+.git/
+.idea/
+.vscode/
+
+# Artefactos do Projeto (MUITO IMPORTANTE)
+data/
+logs/
+outputs/
+mlruns/
+notebooks/
+
+# Cache e Ambientes Virtuais
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.env
+.venv
+venv/
+
+# Ficheiros do Docker (para não se incluírem a si próprios)
+Dockerfile
+docker-compose.yml

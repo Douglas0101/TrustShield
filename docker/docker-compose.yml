@@ -57,7 +57,7 @@ services:
       - trustshield-net
 
   mlflow:
-    image: python:3.9-slim
+    image: python:3.10-slim # <-- ALTERE ESTA LINHA
     container_name: trustshield-mlflow
     ports:
       - "5000:5000"
