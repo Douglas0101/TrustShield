@@ -55,11 +55,6 @@ build:
 	@echo "🛠️  Construindo a imagem 'trustshield-advanced:latest'..."
 	docker build -t trustshield-advanced:latest -f docker/Dockerfile .
 
-# Constrói a imagem do zero, ignorando qualquer cache. Útil para depuração.
-build-fresh:
-	@echo "🧼 Construindo a imagem 'trustshield-advanced:latest' do zero (sem cache)..."
-	docker build --no-cache -t trustshield-advanced:latest -f docker/Dockerfile .
-
 # Executa o treino como uma tarefa única. O contêiner é removido ao final (--rm).
 # Isso permite que você rode o treino várias vezes sem acumular contêineres parados.
 train:
