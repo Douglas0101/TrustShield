@@ -1,52 +1,67 @@
 #!/bin/sh
-# entrypoint.sh - TrustShield Project (Versão 7.0.1-aligned)
-# Garante que serviços dependentes (MLflow, MinIO, PostgreSQL) estejam prontos antes de executar o comando principal.
-# Alinhado com docker-compose.yml (v7.0.2-aligned) e Makefile (v7.0.0-aligned). Correções aplicadas para compatibilidade POSIX e linting.
+# entrypoint.sh - TrustShield Project (Versão 8.1.0-posix-compliant)
+# Garante que os serviços dependentes estejam totalmente operacionais antes de executar o comando principal.
+# Script com sintaxe corrigida para ser 100% compatível com POSIX sh.
 
+# Termina o script imediatamente se um comando falhar.
 set -e
 
-# Variáveis configuráveis (podem ser sobrescritas via env no docker-compose)
-WAIT_TIMEOUT=${WAIT_TIMEOUT:-60}  # Timeout total por serviço em segundos
+# --- Variáveis de Ambiente ---
+WAIT_TIMEOUT=${WAIT_TIMEOUT:-90}
 
-# Função para verificar a saúde de um serviço com timeout
-wait_for_service() {
-  # Declarações separadas (correção para evitar masking de retornos)
-  _host="$1"
-  _port="$2"
-  _service_name="$3"
-  _timeout="$4"
-
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: Aguardando pelo serviço: ${_service_name} em ${_host}:${_port}..."
-
-  # Verifica se nc está disponível
-  if ! command -v nc >/dev/null 2>&1; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERRO: 'nc' não encontrado. Instale netcat-traditional no Dockerfile."
-    exit 1
-  fi
-
-  # Declarações e atribuições separadas
-  _start_time=""
-  _start_time=$(date +%s)
-  while ! nc -z "${_host}" "${_port}"; do
-    sleep 2
-    _current_time=""
-    _current_time=$(date +%s)
-    if [ $((_current_time - _start_time)) -ge "${_timeout}" ]; then
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERRO: Timeout ao aguardar ${_service_name} após ${_timeout}s."
-      exit 1
-    fi
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: Aguardando..."
-  done
-
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: ${_service_name} está pronto."
+# --- Função de Log ---
+log_info() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ENTRYPOINT] INFO: $1"
 }
 
-# Aguarda pelos serviços dependentes (com quoting em variáveis)
-wait_for_service "postgres" "5432" "PostgreSQL" "${WAIT_TIMEOUT}"  # Backend para MLflow tracking
-wait_for_service "minio" "9000" "MinIO" "${WAIT_TIMEOUT}"        # Storage para artefatos MLflow
-wait_for_service "mlflow" "5000" "MLflow UI" "${WAIT_TIMEOUT}"   # Servidor MLflow
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ENTRYPOINT] ERROR: $1" >&2
+    exit 1
+}
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: Todos os serviços estão prontos. Executando o comando principal..."
+# --- Função para Aguardar por Serviços ---
+wait_for_service() {
+    # CORREÇÃO: Removido 'local', que não é POSIX. Em 'sh', variáveis
+    # dentro de funções já têm escopo local por padrão.
+    host="$1"
+    port="$2"
+    service_name="$3"
+    timeout="$4"
 
-# Executa o comando passado para o container (ex: python src/models/train_fraud_model.py)
+    log_info "Aguardando pelo serviço: ${service_name} em ${host}:${port}..."
+
+    # CORREÇÃO: Declaração e atribuição separadas para evitar mascarar o código de saída do comando.
+    start_time=""
+    start_time=$(date +%s)
+
+    # CORREÇÃO: Utiliza 'printf' em vez de 'echo -n', que é o padrão POSIX
+    # para imprimir sem uma nova linha.
+    while ! nc -z "${host}" "${port}"; do
+        sleep 2
+
+        current_time=""
+        current_time=$(date +%s)
+
+        # CORREÇÃO: Variáveis dentro de expansão aritmética devem ser usadas sem '$'.
+        if [ $((current_time - start_time)) -ge "${timeout}" ]; then
+            log_error "Timeout ao aguardar por ${service_name} após ${timeout} segundos."
+        fi
+        printf "."
+    done
+
+    # Adiciona uma nova linha para uma formatação de log mais limpa após os pontos.
+    printf "\n"
+    log_info "Serviço ${service_name} está pronto!"
+}
+
+# --- Orquestração do Arranque ---
+# CORREÇÃO: Garante que a variável de ambiente está entre aspas para
+# prevenir "word splitting" caso ela contenha espaços.
+wait_for_service "postgres" "5432" "PostgreSQL" "${WAIT_TIMEOUT}"
+wait_for_service "minio" "9000" "MinIO" "${WAIT_TIMEOUT}"
+wait_for_service "mlflow" "5000" "MLflow UI" "${WAIT_TIMEOUT}"
+
+log_info "Todos os serviços estão operacionais. Executando o comando principal..."
+
+# 'exec' substitui o processo do shell pelo comando, o que é uma boa prática.
 exec "$@"

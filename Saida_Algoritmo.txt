@@ -1,35 +1,103 @@
-(rapids-25.06) douglasdesouza@douglasdesouza-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make build-fresh
-🧼 Construindo a imagem 'trustshield-advanced:latest' do zero (sem cache)...
-docker build --no-cache -t trustshield-advanced:latest -f docker/Dockerfile .
-[+] Building 5.0s (11/13)                                                                                                                                                                                            docker:default
+(rapids-25.06) douglasdesouza@douglasdesouza-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ # 1. Limpeza total (opcional, mas recomendado para um começo limpo)
+make purge
+
+# 2. Construir a imagem
+make build
+
+# 3. Iniciar os serviços de suporte
+make services-up
+
+# 4. Executar o treino
+make train
+🔥🔥🔥 ATENÇÃO: Parando todos os serviços e APAGANDO TODOS OS VOLUMES DE DADOS! 🔥🔥🔥
+docker compose -f docker/docker-compose.yml down --volumes
+WARN[0000] The "i" variable is not set. Defaulting to a blank string.
+[+] Running 8/8
+ ✔ Container trustshield-trainer      Removed                                                                                                                                                                                  0.0s
+ ✔ Container trustshield-mlflow       Removed                                                                                                                                                                                 10.2s
+ ✔ Container docker-create-buckets-1  Removed                                                                                                                                                                                  0.0s
+ ✔ Container trustshield-postgres     Removed                                                                                                                                                                                  0.1s
+ ✔ Container trustshield-minio        Removed                                                                                                                                                                                  0.2s
+ ✔ Network docker_trustshield-net     Removed                                                                                                                                                                                  0.1s
+ ✔ Volume docker_minio_data           Removed                                                                                                                                                                                  0.0s
+ ✔ Volume docker_postgres_data        Removed                                                                                                                                                                                  0.0s
+🧹 Limpando cache do builder do Docker...
+docker builder prune -a -f
+ID                                              RECLAIMABLE     SIZE            LAST ACCESSED
+45yrslhi9sbkix24h4puh68co*                      true            2.147kB         13 minutes ago
+idanud89bfnc20cxew11olxcy                       true    2.634kB         13 minutes ago
+nyr93ogffw6mwuwouhjbju86s*                      true    1.96kB          13 minutes ago
+kz6m4vjacecomztlov553tofw*                      true    98.73kB         13 minutes ago
+1eiby06afltn2ia6dinkpa1lc                       true    93.16kB         13 minutes ago
+3n1x0lcxbvmjj47k5v7akrd0u                       true    0B              13 minutes ago
+8ab4gcory498sta3bry8so2uw                       true    2.318kB         13 minutes ago
+sn0luo77khao2fi2m4rb9409n                       true    2.318kB         13 minutes ago
+kdvbr7etiw3c0trragrblrkv7                       true    1.159GB         13 minutes ago
+f9mjgmd5uup4cpojw1e94bmx9                       true    618B            13 minutes ago
+ji35e4bjt58mk33s2fg4xh4ed                       true    0B              13 minutes ago
+1w1e5wjayeyp3rn01ew6q6bnt                       true    8.947kB         13 minutes ago
+y202pqpbyq5oucf8p8os311tg                       true    324.3MB         13 minutes ago
+ifdch8zgrvbjecrii2e9jlosq                       true    0B              13 minutes ago
+q19mp51u5gyvbrwua1awn1fa3                       true    0B              14 minutes ago
+y3ii6ncmspm073e9kqx48f2q0                       true    0B              14 minutes ago
+689dc36mcdqqpf6exhgrf84sr                       true    0B              14 minutes ago
+Total:  1.484GB
+🧹 Limpando outros recursos do Docker...
+docker system prune -f
+Total reclaimed space: 0B
+🛠️  Construindo a imagem 'trustshield-advanced:latest'...
+docker build -t trustshield-advanced:latest -f docker/Dockerfile .
+[+] Building 89.0s (16/16) FINISHED                                                                                                                                                                                  docker:default
  => [internal] load build definition from Dockerfile                                                                                                                                                                           0.0s
- => => transferring dockerfile: 1.83kB                                                                                                                                                                                         0.0s
- => [internal] load metadata for docker.io/library/python:3.10-slim                                                                                                                                                            5.0s
+ => => transferring dockerfile: 2.00kB                                                                                                                                                                                         0.0s
+ => [internal] load metadata for docker.io/library/python:3.10-slim                                                                                                                                                            3.7s
  => [internal] load .dockerignore                                                                                                                                                                                              0.0s
- => => transferring context: 2.14kB                                                                                                                                                                                            0.0s
- => [1/9] FROM docker.io/library/python:3.10-slim@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5                                                                                                      0.0s
+ => => transferring context: 3.54kB                                                                                                                                                                                            0.0s
+ => [internal] load build context                                                                                                                                                                                              0.0s
+ => => transferring context: 101.63kB                                                                                                                                                                                          0.0s
+ => [ 1/11] FROM docker.io/library/python:3.10-slim@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5                                                                                                    0.0s
  => => resolve docker.io/library/python:3.10-slim@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5                                                                                                      0.0s
  => => sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5 9.13kB / 9.13kB                                                                                                                                 0.0s
  => => sha256:5b73bbad254f55db4a64a6d5b4f237327f8be74d0b3caa953c59be1f9d21151f 1.75kB / 1.75kB                                                                                                                                 0.0s
  => => sha256:13839a48c354366e5535d8d9d6b5540b5d06814ca2befbee62af385cd0d121a4 5.37kB / 5.37kB                                                                                                                                 0.0s
- => [internal] load build context                                                                                                                                                                                              0.0s
- => => transferring context: 663B                                                                                                                                                                                              0.0s
- => CACHED [2/9] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     gcc     git     && rm -rf /var/lib/apt/lists/*                                                                       0.0s
- => CACHED [3/9] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                                                       0.0s
- => CACHED [4/9] WORKDIR /home/trustshield                                                                                                                                                                                     0.0s
- => CACHED [5/9] COPY --chown=trustshield:trustshield requirements.txt .                                                                                                                                                       0.0s
- => CACHED [6/9] RUN pip install --user --no-cache-dir -r requirements.txt                                                                                                                                                     0.0s
- => ERROR [7/9] COPY --chown=trustshield:trustshield docker/entrypoint.sh /home/trustshield/entrypoint.sh                                                                                                                      0.0s
-------
- > [7/9] COPY --chown=trustshield:trustshield docker/entrypoint.sh /home/trustshield/entrypoint.sh:
-------
-Dockerfile:42
---------------------
-  40 |     # 9. Copiar o entrypoint e torná-lo executável
-  41 |     # O seu docker-compose.yml usa um entrypoint, então precisamos dele na imagem.
-  42 | >>> COPY --chown=trustshield:trustshield docker/entrypoint.sh /home/trustshield/entrypoint.sh
-  43 |     RUN chmod +x /home/trustshield/entrypoint.sh
-  44 |
---------------------
-ERROR: failed to build: failed to solve: failed to compute cache key: failed to calculate checksum of ref 9dd1cb2a-d048-4db5-8b15-5b6087fc5452::vgrwz3m5343gr8a3mpbz9zndt: "/docker/entrypoint.sh": not found
-make: *** [Makefile:55: build-fresh] Erro 1
+ => [ 2/11] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     gcc     git     && rm -rf /var/lib/apt/lists/*                                                                           11.9s
+ => [ 3/11] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                                                            0.1s
+ => [ 4/11] WORKDIR /home/trustshield                                                                                                                                                                                          0.0s
+ => [ 5/11] COPY --chown=trustshield:trustshield requirements.txt .                                                                                                                                                            0.0s
+ => [ 6/11] RUN pip install --user --no-cache-dir -r requirements.txt                                                                                                                                                         69.0s
+ => [ 7/11] COPY --chown=trustshield:trustshield docker/entrypoint.sh /home/trustshield/entrypoint.sh                                                                                                                          0.0s
+ => [ 8/11] RUN chmod +x /home/trustshield/entrypoint.sh                                                                                                                                                                       0.1s
+ => [ 9/11] RUN mkdir -p outputs logs                                                                                                                                                                                          0.1s
+ => [10/11] COPY --chown=trustshield:trustshield src/ ./src                                                                                                                                                                    0.0s
+ => [11/11] COPY --chown=trustshield:trustshield config/ ./config                                                                                                                                                              0.0s
+ => exporting to image                                                                                                                                                                                                         3.8s
+ => => exporting layers                                                                                                                                                                                                        3.8s
+ => => writing image sha256:4a61f0cba6c69bad116549b8e77ad32f18adb68a51a193d706c759a284ede349                                                                                                                                   0.0s
+ => => naming to docker.io/library/trustshield-advanced:latest                                                                                                                                                                 0.0s
+🚀 Subindo os serviços de backend (Postgres, MinIO, MLflow)...
+docker compose -f docker/docker-compose.yml up -d
+WARN[0000] The "i" variable is not set. Defaulting to a blank string.
+[+] Running 8/8
+ ✔ Network docker_trustshield-net     Created                                                                                                                                                                                  0.0s
+ ✔ Volume "docker_minio_data"         Created                                                                                                                                                                                  0.0s
+ ✔ Volume "docker_postgres_data"      Created                                                                                                                                                                                  0.0s
+ ✔ Container trustshield-minio        Healthy                                                                                                                                                                                  5.9s
+ ✔ Container trustshield-postgres     Healthy                                                                                                                                                                                  6.5s
+ ✔ Container docker-create-buckets-1  Exited                                                                                                                                                                                  26.4s
+ ✘ Container trustshield-mlflow       Error                                                                                                                                                                                   77.0s
+ ✔ Container trustshield-trainer      Created                                                                                                                                                                                  0.0s
+dependency failed to start: container trustshield-mlflow is unhealthy
+make: *** [Makefile:36: services-up] Erro 1
+🧠 Executando o pipeline de treino...
+docker compose -f docker/docker-compose.yml run --rm trustshield-trainer
+WARN[0000] The "i" variable is not set. Defaulting to a blank string.
+[+] Creating 3/3
+ ✔ Container trustshield-minio     Running                                                                                                                                                                                     0.0s
+ ✔ Container trustshield-postgres  Running                                                                                                                                                                                     0.0s
+ ✔ Container trustshield-mlflow    Running                                                                                                                                                                                     0.0s
+[+] Running 3/3
+ ✔ Container trustshield-minio        Healthy                                                                                                                                                                                  0.5s
+ ✔ Container docker-create-buckets-1  Exited                                                                                                                                                                                  20.6s
+ ✔ Container trustshield-postgres     Healthy                                                                                                                                                                                  0.5s
+dependency failed to start: container trustshield-mlflow is unhealthy
+make: *** [Makefile:59: train] Erro 1

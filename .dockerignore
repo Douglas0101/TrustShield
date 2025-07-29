@@ -1,100 +1,127 @@
-# .dockerignore - TrustShield Project (Versão 7.0.1-aligned)
-# Ignora arquivos e diretórios desnecessários para otimizar o contexto de build do Docker,
-# reduzindo tamanho e tempo de build, com foco em segurança, volumes montados e eliminação de redundâncias.
+# ==============================================================================
+# TrustShield Project .gitignore (Versão 8.0.0-robust)
+#
+# Este ficheiro especifica ficheiros e diretórios que o Git deve ignorar.
+# Está organizado por secções para garantir que dados sensíveis, artefactos
+# gerados e configurações de ambiente local não sejam versionados.
+# ==============================================================================
 
-# ###################################### #
-# Ficheiros de Controlo de Versão e IDEs #
-# ###################################### #
-.git/
-.gitignore
-.gitattributes
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# ################################################# #
-# Diretórios de Dados, Artefactos e Logs (CRUCIAL) #
-# ################################################# #
-# Estes são geridos por volumes no docker-compose; não copiar para a imagem.
-data/
-outputs/
-logs/
-mlruns/
-cache/
+# ------------------------------------------------------------------------------
+# 1. DADOS SENSÍVEIS E CONFIGURAÇÕES DE AMBIENTE
+# CRÍTICO: Nunca versionar segredos ou ficheiros de ambiente locais.
+# ------------------------------------------------------------------------------
+# Ignora o diretório completo de segredos
 secrets/
-models/  # Modelos são gerados/salvados em runtime ou via MLflow
-notebooks/  # Ignora toda a pasta, cobrindo *.ipynb e outros
 
-# ################################## #
-# Ambiente de Desenvolvimento Python #
-# ################################## #
+# Ignora ficheiros de ambiente, mas permite um ficheiro de exemplo
+.env
+.env.*
+!.env.example
+
+# ------------------------------------------------------------------------------
+# 2. ARTEFACTOS DE ML E EXPERIMENTAÇÃO
+# Diretórios gerados por execuções de ML que não devem ser versionados.
+# ------------------------------------------------------------------------------
+# Diretório de tracking local do MLflow
+mlruns/
+
+# Diretório de saídas geradas (modelos, relatórios, figuras)
+outputs/
+
+# Diretório de logs
+logs/
+
+# Cache de dados da Joblib (usado no train_fraud_model.py)
+cache/
+
+# ------------------------------------------------------------------------------
+# 3. DADOS GERADOS E INTERMEDIÁRIOS
+# Ignora dados que são resultado dos scripts do pipeline.
+# Apenas os dados em 'data/raw/' devem ser considerados para versionamento.
+# ------------------------------------------------------------------------------
+data/processed/
+data/features/
+data/interim/
+
+# ------------------------------------------------------------------------------
+# 4. AMBIENTE PYTHON E DEPENDÊNCIAS
+# Ignora ambientes virtuais, ficheiros de cache e artefactos de build.
+# ------------------------------------------------------------------------------
+# Ambientes virtuais
 .venv/
 venv/
 env/
+
+# Ficheiros de cache do Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.egg-info/
-dist/
+*.py[cod]
+*$py.class
+
+# Artefactos de distribuição e instalação
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
 *.egg
+MANIFEST
 
-# ################################# #
-# Ficheiros de Configuração Docker #
-# ################################# #
-# O entrypoint.sh, o código-fonte (src) e as configurações (config) são necessários
-# durante o build da imagem, portanto não podem ser ignorados.
-
-
-# ################################################# #
-# Ficheiros de Configuração Sensíveis e de Ambiente #
-# ################################################# #
-.env
-*.env.*
-!*.env.example
-*.key
-*.pem
-*.crt
-
-# ###################### #
-# Documentação e Análise #
-# ###################### #
-docs/
-*.md
-*.pdf
-*.html
-
-# ################### #
-# Ficheiros de Testes #
-# ################### #
-tests/
+# ------------------------------------------------------------------------------
+# 5. ARTEFACTOS DE TESTES E LINTING
+# Ficheiros gerados por ferramentas de teste e análise de código.
+# ------------------------------------------------------------------------------
 .pytest_cache/
 .coverage
-*.cover
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+.mypy_cache/
+.ruff_cache/
 
-# ################# #
-# CI/CD e Automação #
-# ################# #
-.github/
-.gitlab-ci.yml
-Makefile
-Jenkinsfile
+# ------------------------------------------------------------------------------
+# 6. CONFIGURAÇÕES DE IDE E EDITOR
+# Ficheiros específicos do ambiente de desenvolvimento de cada utilizador.
+# ------------------------------------------------------------------------------
+# JetBrains (PyCharm, etc.)
+.idea/
 
-# ################### #
-# Ficheiros Temporários #
-# ################### #
-*.log
-*.tmp
-*.bak
+# VS Code
+.vscode/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ------------------------------------------------------------------------------
+# 7. FICHEIROS DE SISTEMA OPERACIONAL E TEMPORÁRIOS
+# ------------------------------------------------------------------------------
+# macOS
 .DS_Store
-Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 
-# ############################ #
-# Específicos de RAPIDS/GPU #
-# ############################ #
-*.cuda*
-/tmp/cuda*
-/tmp/rapids*
-/var/tmp/cuda*
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# Ficheiros temporários (ex: Vim)
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Saídas de algoritmos e logs de execução
+Saida_Algoritmo.txt
