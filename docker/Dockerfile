@@ -1,52 +1,48 @@
-# Dockerfile Final (CPU) - TrustShield Advanced v7.0.4-cpu
-# Este Dockerfile é otimizado para ambientes baseados em CPU, como o Intel i3.
-# Ele é leve, seguro e contém todas as dependências necessárias para a execução do seu projeto.
+# Dockerfile Unificado - TrustShield v9.1.0 (Corrigido)
+# Propósito: Construir uma imagem única e robusta a partir do código-fonte e dependências.
+FROM python:3.10-slim as builder
 
-# 1. Imagem Base: Leve e oficial do Python.
-FROM python:3.10-slim
+LABEL stage="builder"
 
-# 2. Metadata: Boas práticas para identificar a imagem.
-LABEL maintainer="TrustShield Team"
-LABEL version="7.0.4-cpu"
-LABEL description="Sistema Avançado de Detecção de Fraudes (CPU Build)"
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on
 
-# 3. Variáveis de Ambiente: Otimização e logging.
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
+# Instala dependências de sistema
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 
-# 4. Instalação de Dependências do Sistema (INCLUINDO O GIT)
-# Instala o 'git' para que o MLflow possa rastrear os commits.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# Cria o usuário da aplicação
+RUN useradd --create-home --shell /bin/bash trustshield
+WORKDIR /home/trustshield
 
-# 5. Segurança: Criar e usar um utilizador não-root.
+# Copia e instala TODOS os requisitos
+COPY --chown=trustshield:trustshield requirements.txt .
+USER trustshield
+RUN pip install --user -r requirements.txt
+
+# --- Estágio Final ---
+FROM python:3.10-slim as final
+
+LABEL maintainer="TrustShield Team" version="9.1.0-unified"
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+
 RUN useradd --create-home --shell /bin/bash trustshield
 USER trustshield
 WORKDIR /home/trustshield
 
-# 6. Otimização de Cache: Copiar apenas 'requirements.txt' primeiro.
-COPY --chown=trustshield:trustshield requirements.txt .
-
-# 7. Instalação de Dependências Python
-# Instala as dependências como o usuário 'trustshield'
-RUN pip install --user --no-cache-dir -r requirements.txt
-
-# 8. Adiciona o diretório de binários do usuário ao PATH
+COPY --from=builder --chown=trustshield:trustshield /home/trustshield/.local /home/trustshield/.local
 ENV PATH="/home/trustshield/.local/bin:${PATH}"
 
-# 9. Copiar o entrypoint e torná-lo executável
-COPY --chown=trustshield:trustshield docker/entrypoint.sh /home/trustshield/entrypoint.sh
-RUN chmod +x /home/trustshield/entrypoint.sh
+# Copia o código-fonte e a configuração.
+COPY --chown=trustshield:trustshield src ./src
+COPY --chown=trustshield:trustshield config ./config
 
-# 10. Cria diretórios para volumes para evitar problemas de permissão
-RUN mkdir -p outputs logs
+# CORREÇÃO: A linha 'COPY outputs' foi REMOVIDA.
+# A pasta 'outputs' é gerenciada por um volume no docker-compose.yml,
+# que é a abordagem correta para dados gerados em tempo de execução.
 
-# 11. Copiar o restante do código-fonte
-COPY --chown=trustshield:trustshield src/ ./src
-COPY --chown=trustshield:trustshield config/ ./config
+EXPOSE 8000
 
-# 12. Ponto de Entrada: Executa o script de entrada.
-ENTRYPOINT ["/home/trustshield/entrypoint.sh"]
+# O comando padrão é iniciar a API. O Makefile irá sobrescrever isso para o treino.
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,4 +1,4 @@
-# docker/docker-compose.yml (Versão 7.0.2-aligned)
+# docker/docker-compose.yml (Versão 9.0.0 - Arquitetura Unificada)
 services:
   postgres:
     image: postgres:13.12
@@ -21,11 +21,6 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     labels:
       - "com.trustshield.component=storage"
 
@@ -49,11 +44,6 @@ services:
       timeout: 2s
       retries: 5
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     labels:
       - "com.trustshield.component=artifact-store"
 
@@ -68,11 +58,7 @@ services:
     entrypoint: >
       /bin/sh -c "
       echo 'Aguardando MinIO...';
-      for i in {1..10}; do
-        mc alias set myminio http://minio:9000 \$(cat /run/secrets/minio_root_user) \$(cat /run/secrets/minio_root_password) && break;
-        echo 'Tentativa $i falhou. Aguardando 2s...';
-        sleep 2;
-      done;
+      mc alias set myminio http://minio:9000 $$(cat /run/secrets/minio_root_user) $$(cat /run/secrets/minio_root_password) --api S3v4;
       echo 'Verificando/Criando bucket mlflow...';
       mc ls myminio/mlflow || mc mb myminio/mlflow;
       echo 'Bucket mlflow pronto.';
@@ -84,91 +70,67 @@ services:
       - "com.trustshield.component=init"
 
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.14.3
+    build:
+      context: .
+      dockerfile: mlflow.Dockerfile
     container_name: trustshield-mlflow
     ports:
       - "5000:5000"
     environment:
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID_FILE=/run/secrets/minio_root_user
+      - AWS_SECRET_ACCESS_KEY_FILE=/run/secrets/minio_root_password
     secrets:
       - minio_root_user
       - minio_root_password
       - postgres_password
-    # SEÇÃO CORRIGIDA - GARANTE A INSTALAÇÃO DAS DEPENDÊNCIAS
     command: >
-      bash -c "
-      pip install boto3 psycopg2-binary && \
-      export AWS_ACCESS_KEY_ID=$(cat /run/secrets/minio_root_user) && \
-      export AWS_SECRET_ACCESS_KEY=$(cat /run/secrets/minio_root_password) && \
-      mlflow server \
-        --host 0.0.0.0 \
-        --port 5000 \
-        --backend-store-uri postgresql://${POSTGRES_USER:-mlflow}:\$(cat /run/secrets/postgres_password)@postgres/${POSTGRES_DB:-mlflow} \
+      mlflow server
+        --host 0.0.0.0
+        --port 5000
+        --backend-store-uri postgresql://${POSTGRES_USER:-mlflow}:$$(cat /run/secrets/postgres_password)@postgres/${POSTGRES_DB:-mlflow}
         --default-artifact-root s3://mlflow/
-      "
     depends_on:
       postgres:
         condition: service_healthy
       create-buckets:
         condition: service_completed_successfully
-    volumes:
-      - ./mlruns:/mlflow/mlruns  # Persiste experimentos MLflow
     networks:
       - trustshield-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     labels:
       - "com.trustshield.component=tracking"
 
-  trustshield-trainer:
+  trustshield-api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: trustshield-trainer
-    deploy:
-      resources:
-        limits:
-          memory: ${TRAINER_MEM_LIMIT:-12g}
-          cpus: '${TRAINER_CPU_LIMIT:-4.0}'
-    volumes:
-      - ./src:/home/trustshield/src
-      - ./data:/home/trustshield/data
-      - ./outputs:/home/trustshield/outputs
-      - ./config:/home/trustshield/config
-      - ./logs:/home/trustshield/logs
+    container_name: trustshield-api
+    ports:
+      - "8000:8000"
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
     secrets:
       - minio_root_user
       - minio_root_password
+    volumes:
+      - ../src:/home/trustshield/src
+      - ../outputs:/home/trustshield/outputs
+      - ../config:/home/trustshield/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     depends_on:
       mlflow:
-        condition: service_healthy
+        condition: service_started
     networks:
       - trustshield-net
-    entrypoint: ["/bin/sh", "/home/trustshield/entrypoint.sh"]
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]  # Verifica se o processo Python está rodando
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+    restart: unless-stopped
     labels:
-      - "com.trustshield.component=trainer"
+      - "com.trustshield.component=api"
 
 networks:
   trustshield-net:

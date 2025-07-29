@@ -1,35 +1,37 @@
 # -*- coding: utf-8 -*-
 """
-Módulo de Inferência DEFINITIVO - Projeto TrustShield
-VERSÃO FINAL PERFEITA PARA INTEL i3-1115G4
+Módulo de Inferência de Produção - Projeto TrustShield
+Versão: 4.0.0-production-ready
 
-🎯 CORREÇÃO DEFINITIVA:
-1. ✅ USA APENAS features conhecidas pelo modelo treinado
-2. ✅ One-hot encoding PRECISO (não cria features extras)
-3. ✅ Match 100% com modelo (sem erros de features)
-4. ✅ Performance otimizada (46k+ samples/s)
-5. ✅ Error handling completo
-6. ✅ Logs detalhados
-7. ✅ Sistema nunca falha
+Este módulo representa o motor de inferência final do TrustShield, projetado
+para ser implantado em um ambiente de produção. Ele é otimizado para robustez,
+performance e, crucialmente, para garantir 100% de compatibilidade com os
+modelos treinados pelo pipeline de MLOps.
 
-BASEADO NA ANÁLISE DA SAÍDA:
-- Modelo conhece features específicas: ['amount', 'current_age', ...]
-- NÃO conhece: 'gender_Female', 'use_chip_Chip Transaction'
-- SOLUÇÃO: Usar apenas as features que o modelo foi treinado
+🎯 Funcionalidades Principais:
+1.  ✅ Carregamento de Artefatos: Lida de forma inteligente com os artefatos
+       gerados pelo pipeline de treino (modelo + scaler).
+2.  ✅ Match Perfeito de Features: Extrai as features exatas do artefato do
+       modelo e alinha qualquer dado de entrada para corresponder perfeitamente,
+       eliminando a causa nº 1 de falhas em produção.
+3.  ✅ Performance Otimizada: Configurado para extrair o máximo de performance
+       do hardware alvo (Intel i3), mantendo a compatibilidade.
+4.  ✅ API-Ready: Estruturado com métodos claros para predição e status,
+       pronto para ser envolvido por uma API (ex: FastAPI).
+5.  ✅ Monitoramento e Logging: Inclui monitoramento de recursos e logs
+       detalhados para observabilidade em produção.
 
 Hardware Target:
 - CPU: 11th Gen Intel® Core™ i3-1115G4 × 4 cores
 - RAM: 19.3 GB
-- Target: 46k+ samples/s (Isolation Forest)
 
-Execução:
-    python src/models/predict_final.py
+Execução da Demonstração:
+    python src/models/predict.py
 
-Autor: TrustShield Team - Final Perfect Version
-Versão: 3.0.0-perfect-final
+Autor: IA Gemini com base na arquitetura TrustShield
+Data: 2025-07-29
 """
 
-import argparse
 import logging
 import os
 import psutil
@@ -38,13 +40,13 @@ import time
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Tuple, Any
+from typing import Dict, List, Optional, Union, Any
 
 import joblib
 import numpy as np
 import pandas as pd
 
-# Configurações Intel específicas
+# Configurações de otimização de performance para o hardware alvo
 os.environ['OMP_NUM_THREADS'] = '4'
 os.environ['MKL_NUM_THREADS'] = '4'
 os.environ['NUMBA_NUM_THREADS'] = '4'
@@ -52,15 +54,12 @@ os.environ['OPENBLAS_NUM_THREADS'] = '4'
 os.environ['MKL_DYNAMIC'] = 'FALSE'
 
 warnings.filterwarnings('ignore')
-BATCH_SIZE = 10000
-MAX_MEMORY_USAGE = 0.70
-CACHE_TTL_SECONDS = 3600
 
 
-class PerfectResourceMonitor:
-    """Monitor de recursos perfeito."""
+class ResourceMonitor:
+    """Monitora os recursos do sistema de forma eficiente para observabilidade."""
 
-    def __init__(self, logger):
+    def __init__(self, logger: logging.Logger):
         self.logger = logger
         self.process = psutil.Process()
         self.start_time = time.time()
@@ -69,565 +68,380 @@ class PerfectResourceMonitor:
         self.success_count = 0
 
     def get_current_stats(self) -> Dict[str, Any]:
-        """Obtém estatísticas atuais."""
+        """Obtém as estatísticas atuais de CPU, memória e performance."""
         try:
             memory = psutil.virtual_memory()
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-
             return {
-                'cpu_usage_percent': round(cpu_percent, 1),
+                'cpu_usage_percent': round(psutil.cpu_percent(interval=0.1), 1),
                 'memory_usage_percent': round(memory.percent, 1),
-                'memory_available_gb': round(memory.available / (1024**3), 1),
+                'memory_available_gb': round(memory.available / (1024 ** 3), 1),
                 'predictions_made': self.prediction_count,
                 'success_count': self.success_count,
                 'avg_inference_time_ms': round((self.total_inference_time / max(self.prediction_count, 1)) * 1000, 2),
                 'uptime_seconds': round(time.time() - self.start_time, 1),
                 'success_rate': round((self.success_count / max(self.prediction_count, 1)) * 100, 1)
             }
-        except Exception:
+        except Exception as e:
+            self.logger.warning(f"⚠️ Falha ao obter estatísticas do sistema: {e}")
             return {'error': 'Erro ao obter stats'}
 
     def log_prediction_stats(self, inference_time: float, batch_size: int = 1, success: bool = True):
-        """Log de estatísticas."""
+        """Registra e calcula as métricas de performance após cada predição."""
         self.prediction_count += batch_size
         self.total_inference_time += inference_time
-
         if success:
             self.success_count += batch_size
 
         try:
-            throughput = batch_size / inference_time if inference_time > 0 else 0
-            status = "✅" if success else "❌"
-
-            self.logger.info(f"📊 {status} Predição: {batch_size} amostras em {inference_time*1000:.1f}ms | "
-                           f"Throughput: {throughput:.0f} samples/s")
+            throughput = batch_size / inference_time if inference_time > 0 else float('inf')
+            status_icon = "✅" if success else "❌"
+            self.logger.info(
+                f"📊 {status_icon} Predição: {batch_size} amostra(s) em {inference_time * 1000:.1f}ms | "
+                f"Throughput: {throughput:.0f} amostras/s"
+            )
         except Exception as e:
-            self.logger.warning(f"⚠️ Erro no log: {e}")
+            self.logger.warning(f"⚠️ Erro ao registrar log de predição: {e}")
 
 
-class PerfectPredictor:
-    """Preditor PERFEITO que usa APENAS features conhecidas pelo modelo."""
+class TrustShieldPredictor:
+    """
+    Motor de inferência de produção do TrustShield.
+    Carrega um modelo treinado e fornece uma interface robusta para predições em tempo real.
+    """
 
-    def __init__(self, model_path: Optional[Path] = None, config_path: Optional[Path] = None):
-
+    def __init__(self, model_path: Optional[Path] = None):
         self.logger = self._setup_logger()
-        self.monitor = PerfectResourceMonitor(self.logger)
+        self.monitor = ResourceMonitor(self.logger)
 
         try:
-            # Auto-detectar caminhos
-            if model_path is None or config_path is None:
-                model_path, config_path = self._auto_detect_paths()
-
-            self.model_path = model_path
-            self.config_path = config_path
-
-            # Log sistema
+            self.model_path = model_path or self._auto_detect_paths()
             self._log_system_info()
-
-            # Carregar modelo e extrair features exatas
-            self._load_model_and_extract_exact_features()
-
-            self.logger.info("🎯 Preditor PERFEITO inicializado - Match 100% com modelo!")
+            self._load_artifacts()
+            self.logger.info("🎯 Motor de Inferência TrustShield inicializado com sucesso!")
 
         except Exception as e:
-            self.logger.error(f"❌ Erro crítico: {e}")
+            self.logger.critical(f"❌ Erro crítico na inicialização do preditor: {e}", exc_info=True)
             raise
 
     def _setup_logger(self) -> logging.Logger:
-        """Setup do logger perfeito."""
-        logger = logging.getLogger('TrustShield-Perfect')
+        """Configura um logger padronizado para o módulo."""
+        logger = logging.getLogger('TrustShieldPredictor')
         logger.setLevel(logging.INFO)
-
         if not logger.handlers:
-            formatter = logging.Formatter('%(asctime)s - [PERFECT] - %(levelname)s - %(message)s')
-
+            formatter = logging.Formatter('%(asctime)s - [TrustShield-Predictor] - %(levelname)s - %(message)s')
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setFormatter(formatter)
             logger.addHandler(console_handler)
-
         return logger
 
     def _log_system_info(self):
-        """Log das informações do sistema."""
+        """Registra informações do sistema para referência."""
         try:
             memory = psutil.virtual_memory()
             cpu_freq = psutil.cpu_freq()
-
-            self.logger.info("🎯 === PREDITOR PERFEITO INTEL i3-1115G4 ===")
-            self.logger.info(f"💻 CPUs: {psutil.cpu_count()} cores @ {cpu_freq.current if cpu_freq else 'N/A'} MHz")
-            self.logger.info(f"🧠 RAM: {memory.total/(1024**3):.1f} GB (disponível: {memory.available/(1024**3):.1f} GB)")
-            self.logger.info(f"⚙️ Threads: 4 (Intel otimizado)")
-            self.logger.info(f"🚀 Target: 46k+ samples/s (sem erros de features)")
+            self.logger.info("=" * 60)
+            self.logger.info("🚀 INICIALIZANDO MOTOR DE INFERÊNCIA DE PRODUÇÃO")
+            self.logger.info(
+                f"💻 CPUs: {psutil.cpu_count(logical=False)} cores físicos @ {cpu_freq.current if cpu_freq else 'N/A'} MHz")
+            self.logger.info(f"🧠 RAM Total: {memory.total / (1024 ** 3):.1f} GB")
+            self.logger.info(f"⚙️ Threads Otimizadas: 4 (Intel MKL/OMP)")
+            self.logger.info("=" * 60)
         except Exception as e:
-            self.logger.warning(f"⚠️ Erro ao obter info: {e}")
+            self.logger.warning(f"⚠️ Não foi possível obter informações detalhadas do sistema: {e}")
 
-    def _auto_detect_paths(self) -> Tuple[Path, Path]:
-        """Auto-detecta caminhos."""
+    def _auto_detect_paths(self) -> Path:
+        """Detecta automaticamente o caminho do modelo mais recente."""
         try:
-            project_root = Path(__file__).resolve().parents[2] if '__file__' in globals() else Path.cwd()
-
-            config_path = project_root / "config" / "config.yaml"
-            if not config_path.exists():
-                config_path = Path("config/config.yaml")
-
+            project_root = Path(__file__).resolve().parents[2]
             model_dir = project_root / "outputs" / "models"
-            if not model_dir.exists():
-                model_dir = Path("outputs/models")
 
-            # Buscar modelo (preferência para isolation_forest)
-            patterns = ["*isolation_forest*.joblib", "*.joblib"]
-            model_path = None
+            # Prioriza modelos 'isolation_forest' e depois busca o mais recente
+            model_patterns = ["*isolation_forest*.joblib", "*.joblib"]
+            latest_model = None
 
-            for pattern in patterns:
+            for pattern in model_patterns:
                 models = list(model_dir.glob(pattern))
                 if models:
-                    model_path = max(models, key=lambda p: p.stat().st_mtime)
-                    break
+                    latest_model = max(models, key=lambda p: p.stat().st_mtime)
+                    self.logger.info(f"📁 Modelo detectado automaticamente: {latest_model.name}")
+                    return latest_model
 
-            if not model_path:
-                raise FileNotFoundError("Modelo não encontrado")
-
-            self.logger.info(f"📁 Modelo: {model_path.name}")
-            self.logger.info(f"📁 Config: {config_path}")
-
-            return model_path, config_path
+            raise FileNotFoundError(f"Nenhum modelo encontrado no diretório: {model_dir}")
 
         except Exception as e:
-            self.logger.error(f"❌ Erro na detecção: {e}")
+            self.logger.error(f"❌ Falha na detecção automática de caminhos: {e}")
             raise
 
-    def _load_model_and_extract_exact_features(self):
-        """Carrega modelo e extrai features EXATAS."""
+    def _load_artifacts(self):
+        """
+        Carrega os artefatos de modelo (modelo e scaler) e extrai
+        as features exatas que o modelo espera.
+        """
         try:
             start_time = time.time()
-            self.logger.info(f"📥 Carregando modelo: {self.model_path}")
+            self.logger.info(f"📥 Carregando artefatos de: {self.model_path}")
 
-            # Carregar artefatos
             artifacts = joblib.load(self.model_path)
 
             if isinstance(artifacts, dict):
                 self.model = artifacts.get('model')
                 self.scaler = artifacts.get('scaler')
-            else:
+            else:  # Compatibilidade com modelos mais antigos
                 self.model = artifacts
                 self.scaler = None
+                self.logger.warning("⚠️ Artefato de modelo antigo detectado (sem scaler).")
 
             if not self.model:
-                raise ValueError("Modelo não encontrado nos artefatos")
+                raise ValueError("O artefato carregado não contém um objeto de modelo válido.")
 
-            # EXTRAIR FEATURES EXATAS DO MODELO
-            self.exact_model_features = self._extract_exact_model_features()
-
-            # Detectar tipo
-            self.model_type = self._detect_model_type()
+            self.model_features = self._extract_model_features()
+            self.model_type = self.model.__class__.__name__
 
             load_time = time.time() - start_time
-
-            self.logger.info(f"✅ Modelo carregado em {load_time:.2f}s | Tipo: {self.model_type}")
-            self.logger.info(f"🎯 Features EXATAS: {len(self.exact_model_features)}")
-            self.logger.info(f"🔍 Primeiras 5: {self.exact_model_features[:5]}")
+            self.logger.info(f"✅ Artefatos carregados em {load_time:.2f}s | Tipo: {self.model_type}")
+            self.logger.info(f"🎯 Modelo treinado com {len(self.model_features)} features exatas.")
+            self.logger.debug(f"🔍 Lista de Features: {self.model_features[:10]}...")
 
         except Exception as e:
-            self.logger.error(f"❌ Erro ao carregar: {e}")
+            self.logger.error(f"❌ Falha ao carregar ou processar os artefatos do modelo: {e}")
             raise
 
-    def _extract_exact_model_features(self) -> List[str]:
-        """Extrai as features EXATAS que o modelo conhece."""
-        try:
-            # Tentar múltiplas fontes
-            feature_sources = [
-                # 1. Features do modelo (mais confiável)
-                getattr(self.model, 'feature_names_in_', None),
-                # 2. Features do scaler
-                getattr(self.scaler, 'feature_names_in_', None) if self.scaler else None,
-                # 3. Features dos artefatos
-                None  # Fallback para padrão
-            ]
+    def _extract_model_features(self) -> List[str]:
+        """
+        Extrai a lista de nomes de features que o modelo espera, que é a fonte da verdade.
+        """
+        # A fonte mais confiável de features é o atributo do próprio modelo ou do scaler.
+        feature_names = getattr(self.model, 'feature_names_in_', None)
+        if feature_names is None and self.scaler:
+            feature_names = getattr(self.scaler, 'feature_names_in_', None)
 
-            for features in feature_sources:
-                if features is not None and len(features) > 0:
-                    # Converter para lista se for numpy array
-                    if hasattr(features, 'tolist'):
-                        return features.tolist()
-                    else:
-                        return list(features)
+        if feature_names is not None:
+            return list(feature_names)
 
-            # Fallback: usar features mais comuns do TrustShield
-            self.logger.warning("⚠️ Usando features padrão do TrustShield")
-            return [
-                'amount', 'current_age', 'retirement_age', 'birth_year', 'birth_month',
-                'latitude', 'longitude', 'per_capita_income', 'yearly_income', 'total_debt',
-                'credit_score', 'num_credit_cards', 'transaction_hour', 'day_of_week', 'month',
-                'is_weekend', 'is_night_transaction', 'amount_vs_avg',
-                'use_chip_Swipe Transaction', 'use_chip_Online Transaction', 'gender_Male'
-            ]
+        # Se o modelo não tiver essa informação, é um risco para a produção.
+        raise AttributeError("O artefato do modelo não contém a lista de features ('feature_names_in_'). "
+                             "O modelo precisa ser retreinado com uma versão do Scikit-learn que armazene essa informação.")
 
-        except Exception as e:
-            self.logger.error(f"❌ Erro ao extrair features: {e}")
-            raise
+    def _prepare_input_data(self, transaction_data: Union[Dict, pd.DataFrame]) -> pd.DataFrame:
+        """
+        Prepara os dados de entrada para corresponderem EXATAMENTE ao schema do modelo.
+        Esta é a etapa mais crítica para garantir a robustez em produção.
+        """
+        if isinstance(transaction_data, dict):
+            df = pd.DataFrame([transaction_data])
+        else:  # Assume-se que seja um DataFrame
+            df = transaction_data.copy()
 
-    def _detect_model_type(self) -> str:
-        """Detecta tipo do modelo."""
-        try:
-            if isinstance(self.model, dict):
-                return 'hierarchical_model'
+        # Aplica one-hot encoding para features categóricas conhecidas
+        categorical_cols = {'gender', 'use_chip'}
+        for col in categorical_cols:
+            if col in df.columns:
+                df = pd.get_dummies(df, columns=[col], prefix=col, dtype='int8')
 
-            model_name = self.model.__class__.__name__.lower()
-            if 'isolation' in model_name:
-                return 'isolation_forest'
-            elif 'svm' in model_name:
-                return 'one_class_svm'
-            elif 'lof' in model_name:
-                return 'lof'
-            else:
-                return 'unknown'
-        except Exception:
-            return 'unknown'
+        # Cria um DataFrame final com as colunas exatas e na ordem certa que o modelo espera.
+        # Colunas presentes na entrada são copiadas; as ausentes são criadas com valor 0.
+        final_df = pd.DataFrame(0, index=df.index, columns=self.model_features, dtype='float32')
 
-    def _prepare_data_exact_match(self, transaction_data: Union[Dict, pd.DataFrame, List[Dict]]) -> pd.DataFrame:
-        """Prepara dados com MATCH EXATO das features do modelo."""
-        try:
-            start_time = time.time()
+        common_cols = df.columns.intersection(self.model_features)
+        final_df[common_cols] = df[common_cols]
 
-            # Normalizar entrada
-            if isinstance(transaction_data, dict):
-                df = pd.DataFrame([transaction_data])
-            elif isinstance(transaction_data, list):
-                df = pd.DataFrame(transaction_data)
-            else:
-                df = transaction_data.copy()
+        # Aplica o scaler se ele foi carregado junto com o modelo
+        if self.scaler:
+            try:
+                scaled_data = self.scaler.transform(final_df)
+                final_df = pd.DataFrame(scaled_data, columns=self.model_features, index=final_df.index, dtype='float32')
+                self.logger.debug("✅ Scaler aplicado com sucesso.")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Falha ao aplicar o scaler. Procedendo com dados não escalados. Erro: {e}")
 
-            self.logger.info(f"🔄 Preparando {len(df)} transação(ões) com MATCH EXATO")
+        self.logger.debug(f"📊 Shape dos dados preparados: {final_df.shape} (match exato com o modelo)")
+        return final_df
 
-            # Aplicar one-hot encoding apenas se necessário
-            df = self._apply_smart_one_hot_encoding(df)
-
-            # Criar DataFrame com APENAS as features que o modelo conhece
-            final_df = pd.DataFrame(index=df.index)
-
-            for feature in self.exact_model_features:
-                if feature in df.columns:
-                    final_df[feature] = df[feature]
-                else:
-                    # Valor padrão baseado no tipo de feature
-                    if feature.startswith(('use_chip_', 'gender_')):
-                        final_df[feature] = 0  # Dummy variables
-                    elif feature in ['is_weekend', 'is_night_transaction']:
-                        final_df[feature] = False
-                    else:
-                        final_df[feature] = 0  # Numéricas
-
-            # Garantir ordem exata
-            final_df = final_df[self.exact_model_features]
-
-            # Aplicar scaler se disponível
-            if self.scaler:
-                try:
-                    scaled_data = self.scaler.transform(final_df)
-                    final_df = pd.DataFrame(scaled_data, columns=self.exact_model_features, dtype='float32')
-                    self.logger.info("✅ Scaler aplicado")
-                except Exception as e:
-                    self.logger.warning(f"⚠️ Erro no scaler: {e}")
-
-            prep_time = time.time() - start_time
-            self.logger.info(f"✅ Preparação PERFEITA em {prep_time*1000:.1f}ms")
-            self.logger.info(f"📊 Shape final: {final_df.shape} (match exato)")
-
-            return final_df
-
-        except Exception as e:
-            self.logger.error(f"❌ Erro na preparação: {e}")
-            # Fallback seguro
-            return pd.DataFrame(columns=self.exact_model_features)
-
-    def _apply_smart_one_hot_encoding(self, df: pd.DataFrame) -> pd.DataFrame:
-        """One-hot encoding inteligente baseado nas features do modelo."""
-        try:
-            # Descobrir quais dummies o modelo espera
-            expected_use_chip_dummies = [f for f in self.exact_model_features if f.startswith('use_chip_')]
-            expected_gender_dummies = [f for f in self.exact_model_features if f.startswith('gender_')]
-
-            # One-hot para use_chip se necessário
-            if 'use_chip' in df.columns and expected_use_chip_dummies:
-                df = pd.get_dummies(df, columns=['use_chip'], prefix='use_chip', dtype='int8')
-
-            # One-hot para gender se necessário
-            if 'gender' in df.columns and expected_gender_dummies:
-                df = pd.get_dummies(df, columns=['gender'], prefix='gender', dtype='int8')
-
-            self.logger.info(f"✅ One-hot aplicado (smart)")
-            return df
-
-        except Exception as e:
-            self.logger.warning(f"⚠️ Erro no one-hot: {e}")
-            return df
-
-    def predict_single_perfect(self, transaction_data: Union[Dict, pd.DataFrame]) -> Dict[str, Any]:
-        """Predição PERFEITA sem erros de features."""
+    def predict(self, transaction_data: Union[Dict, pd.DataFrame]) -> Dict[str, Any]:
+        """
+        Executa uma predição para uma única transação ou um batch.
+        Retorna um dicionário estruturado com o resultado.
+        """
         start_time = time.time()
-
         try:
-            # Preparar dados com match exato
-            prepared_df = self._prepare_data_exact_match(transaction_data)
+            prepared_df = self._prepare_input_data(transaction_data)
 
-            if prepared_df.empty:
-                raise ValueError("Dados preparados estão vazios")
+            # Executa a predição
+            predictions = self._execute_prediction(prepared_df)
 
-            # Executar predição
-            prediction = self._execute_prediction_perfect(prepared_df)[0]
-
-            # Calcular confiança
-            confidence_score = self._calculate_confidence_perfect(prepared_df)
+            # Calcula o score de confiança (se possível)
+            confidence_scores = self._calculate_confidence(prepared_df)
 
             inference_time = time.time() - start_time
+            self.monitor.log_prediction_stats(inference_time, len(prepared_df), success=True)
 
-            # Resultado perfeito
-            result = {
-                'prediction': int(prediction),
-                'prediction_label': 'ANOMALIA' if prediction == -1 else 'NORMAL',
-                'confidence_score': float(confidence_score),
+            # Retorna o resultado da primeira predição se for uma única transação
+            is_single = isinstance(transaction_data, dict)
+            result_prediction = int(predictions[0]) if is_single else [int(p) for p in predictions]
+            result_confidence = float(confidence_scores[0]) if is_single else [float(c) for c in confidence_scores]
+
+            return {
+                'prediction': result_prediction,
+                'prediction_label': 'ANOMALIA' if result_prediction == -1 else 'NORMAL',
+                'confidence_score': result_confidence,
                 'inference_time_ms': round(inference_time * 1000, 2),
                 'model_type': self.model_type,
-                'features_matched': len(self.exact_model_features),
+                'model_path': str(self.model_path.name),
                 'timestamp': datetime.now().isoformat(),
                 'success': True
             }
 
-            # Log e monitoramento
-            self.monitor.log_prediction_stats(inference_time, 1, True)
-
-            self.logger.info(f"🎯 Resultado PERFEITO: {result['prediction_label']} | "
-                           f"Confiança: {result['confidence_score']:.3f} | "
-                           f"Tempo: {result['inference_time_ms']:.1f}ms")
-
-            return result
-
         except Exception as e:
             inference_time = time.time() - start_time
-            self.monitor.log_prediction_stats(inference_time, 1, False)
-
-            self.logger.error(f"❌ Erro na predição: {e}")
-
+            self.monitor.log_prediction_stats(inference_time, 1, success=False)
+            self.logger.error(f"❌ Falha durante a predição: {e}", exc_info=True)
             return {
-                'prediction': 1,
+                'prediction': 1,  # Default para 'NORMAL' em caso de erro
                 'prediction_label': 'NORMAL',
                 'confidence_score': 0.0,
-                'inference_time_ms': round(inference_time * 1000, 2),
                 'error': str(e),
-                'model_type': self.model_type,
-                'timestamp': datetime.now().isoformat(),
                 'success': False
             }
 
-    def _execute_prediction_perfect(self, prepared_df: pd.DataFrame) -> np.ndarray:
-        """Execução de predição PERFEITA."""
-        try:
-            if self.model_type == 'isolation_forest':
-                if hasattr(self.model, 'n_jobs'):
-                    original_n_jobs = self.model.n_jobs
-                    self.model.n_jobs = 4
-                    predictions = self.model.predict(prepared_df)
-                    self.model.n_jobs = original_n_jobs
-                else:
-                    predictions = self.model.predict(prepared_df)
-                return predictions
+    def _execute_prediction(self, prepared_df: pd.DataFrame) -> np.ndarray:
+        """Lógica interna para chamar o método de predição do modelo."""
+        # Para modelos Sklearn que suportam, n_jobs é setado em tempo de predição
+        if hasattr(self.model, 'n_jobs'):
+            try:
+                self.model.n_jobs = 4
+            except Exception:
+                pass  # Ignora se o atributo for read-only
 
-            elif hasattr(self.model, 'predict'):
-                return self.model.predict(prepared_df)
+        if hasattr(self.model, 'predict'):
+            return self.model.predict(prepared_df)
+        elif hasattr(self.model, 'decision_function'):  # Fallback para modelos como OneClassSVM
+            scores = self.model.decision_function(prepared_df)
+            return np.where(scores >= 0, 1, -1)
+        else:
+            raise NotImplementedError(
+                f"O modelo do tipo {self.model_type} não possui um método 'predict' ou 'decision_function'.")
 
-            elif hasattr(self.model, 'decision_function'):
-                scores = self.model.decision_function(prepared_df)
-                return np.where(scores >= 0, 1, -1)
-
-            else:
-                self.logger.warning(f"⚠️ Método de predição não encontrado")
-                return np.ones(len(prepared_df), dtype=np.int8)
-
-        except Exception as e:
-            self.logger.error(f"❌ Erro na execução: {e}")
-            return np.ones(len(prepared_df), dtype=np.int8)
-
-    def _calculate_confidence_perfect(self, prepared_df: pd.DataFrame) -> float:
-        """Cálculo de confiança PERFEITO."""
+    def _calculate_confidence(self, prepared_df: pd.DataFrame) -> np.ndarray:
+        """Calcula um score de confiança baseado na saída do modelo."""
         try:
             if hasattr(self.model, 'decision_function'):
-                score = self.model.decision_function(prepared_df)[0]
-                return max(0.0, min(1.0, abs(score)))
+                scores = self.model.decision_function(prepared_df)
+                # Normaliza o score para um intervalo aproximado [0, 1]
+                return 1 / (1 + np.exp(-np.abs(scores)))
             elif hasattr(self.model, 'score_samples'):
-                score = self.model.score_samples(prepared_df)[0]
-                return max(0.0, min(1.0, abs(score)))
-            else:
-                return 0.5
-
+                scores = self.model.score_samples(prepared_df)
+                # Normaliza o score (maior score = mais normal)
+                return (scores - scores.min()) / (scores.max() - scores.min() + 1e-9)
         except Exception as e:
-            self.logger.warning(f"⚠️ Erro na confiança: {e}")
-            return 0.0
+            self.logger.warning(f"⚠️ Não foi possível calcular o score de confiança: {e}")
 
-    def get_system_status(self) -> Dict[str, Any]:
-        """Status perfeito do sistema."""
-        try:
-            stats = self.monitor.get_current_stats()
+        # Retorna um valor padrão se o cálculo não for possível
+        return np.full(len(prepared_df), 0.5)
 
-            return {
-                'system': stats,
-                'model': {
-                    'type': self.model_type,
-                    'path': str(self.model_path),
-                    'exact_features_count': len(self.exact_model_features),
-                    'has_scaler': self.scaler is not None
-                },
-                'performance': {
-                    'total_predictions': self.monitor.prediction_count,
-                    'success_count': self.monitor.success_count,
-                    'success_rate': stats.get('success_rate', 100.0),
-                    'avg_inference_ms': stats.get('avg_inference_time_ms', 0.0),
-                    'uptime_seconds': stats.get('uptime_seconds', 0.0)
-                }
-            }
-        except Exception as e:
-            return {'error': str(e)}
+    def get_status(self) -> Dict[str, Any]:
+        """Retorna um dicionário com o status atual do sistema e do modelo."""
+        return {
+            'status': 'OPERATIONAL',
+            'timestamp': datetime.now().isoformat(),
+            'model_info': {
+                'type': self.model_type,
+                'path': str(self.model_path),
+                'features_count': len(self.model_features),
+                'has_scaler': self.scaler is not None
+            },
+            'performance_metrics': self.monitor.get_current_stats()
+        }
 
 
-def run_perfect_demo():
-    """Demo PERFEITO sem erros de features."""
-    print("\n" + "="*90)
-    print("🎯 DEMO PERFEITO - ZERO ERROS DE FEATURES - TRUSTSHIELD")
-    print("="*90)
+def run_demo():
+    """Executa uma demonstração do motor de inferência com exemplos práticos."""
+    print("\n" + "=" * 80)
+    print("🚀 DEMONSTRAÇÃO DO MOTOR DE INFERÊNCIA TRUSTSHIELD")
+    print("=" * 80)
 
     try:
-        # Inicializar preditor perfeito
-        print("🚀 Inicializando preditor PERFEITO...")
-        predictor = PerfectPredictor()
+        predictor = TrustShieldPredictor()
 
-        # Status
-        status = predictor.get_system_status()
-        print(f"\n📊 STATUS DO SISTEMA:")
-        print(f"  • Modelo: {status['model']['type']}")
-        print(f"  • CPU: {status['system']['cpu_usage_percent']:.1f}%")
-        print(f"  • RAM: {status['system']['memory_usage_percent']:.1f}%")
-        print(f"  • Features exatas: {status['model']['exact_features_count']}")
-        print(f"  • Scaler: {'✅' if status['model']['has_scaler'] else '❌'}")
+        status = predictor.get_status()
+        print("\n📊 STATUS INICIAL DO SISTEMA:")
+        print(f"  ● Modelo: {status['model_info']['type']} de {status['model_info']['path']}")
+        print(f"  ● Features Esperadas: {status['model_info']['features_count']}")
+        print(f"  ● Scaler Presente: {'Sim' if status['model_info']['has_scaler'] else 'Não'}")
 
-        # Exemplo 1: Transação altamente suspeita
-        print(f"\n🚨 EXEMPLO 1: Transação ALTAMENTE Suspeita")
-        suspicious = {
-            'amount': 9500.00,  # Valor altíssimo
+        # Exemplo 1: Transação claramente suspeita
+        print("\n" + "-" * 80)
+        print("🚨 EXEMPLO 1: Transação de Alto Risco (potencial fraude)")
+        suspicious_transaction = {
+            'amount': 8750.00,
             'use_chip': 'Online Transaction',
-            'current_age': 45,
+            'current_age': 50,
             'retirement_age': 65,
-            'birth_year': 1979,
-            'birth_month': 5,
+            'birth_year': 1974,
             'gender': 'Male',
-            'latitude': 40.7128,
-            'longitude': -74.0060,
-            'per_capita_income': 25000,  # Renda baixa
-            'yearly_income': 30000,
-            'total_debt': 45000,  # Alto endividamento
-            'credit_score': 520,  # Score péssimo
-            'num_credit_cards': 15,  # Muitos cartões
-            'transaction_hour': 1,  # Madrugada
-            'day_of_week': 6,  # Sábado
-            'month': 7,
+            'latitude': 25.7617,
+            'longitude': -80.1918,
+            'yearly_income': 40000,
+            'total_debt': 80000,
+            'credit_score': 510,
+            'num_credit_cards': 12,
+            'transaction_hour': 2,  # Madrugada
+            'day_of_week': 6,  # Fim de semana
             'is_weekend': True,
             'is_night_transaction': True,
-            'amount_vs_avg': 47.5  # 47x acima da média!
+            'amount_vs_avg': 50.0  # Valor muito acima da média
         }
+        result = predictor.predict(suspicious_transaction)
+        print(f"  ▶️ Resultado: {result['prediction_label']} (Score: {result['confidence_score']:.3f})")
+        print(f"  ⏱️ Tempo de Inferência: {result['inference_time_ms']:.1f}ms")
+        print(f"  ✅ Sucesso da Predição: {'Sim' if result.get('success') else 'Não'}")
 
-        result = predictor.predict_single_perfect(suspicious)
-
-        print(f"  🎯 Resultado: {result['prediction_label']}")
-        print(f"  📊 Confiança: {result['confidence_score']:.3f}")
-        print(f"  ⏱️ Tempo: {result['inference_time_ms']:.1f}ms")
-        print(f"  🔧 Features matched: {result['features_matched']}")
-        print(f"  ✅ Sucesso: {'SIM' if result['success'] else 'NÃO'}")
-
-        # Exemplo 2: Transação totalmente normal
-        print(f"\n✅ EXEMPLO 2: Transação TOTALMENTE Normal")
-        normal = {
-            'amount': 22.50,
+        # Exemplo 2: Transação normal do dia a dia
+        print("\n" + "-" * 80)
+        print("✅ EXEMPLO 2: Transação de Baixo Risco (normal)")
+        normal_transaction = {
+            'amount': 45.75,
             'use_chip': 'Chip Transaction',
-            'current_age': 28,
+            'current_age': 32,
             'retirement_age': 67,
-            'birth_year': 1996,
-            'birth_month': 8,
+            'birth_year': 1992,
             'gender': 'Female',
-            'latitude': 34.0522,
-            'longitude': -118.2437,
-            'per_capita_income': 65000,
-            'yearly_income': 75000,
-            'total_debt': 5000,
-            'credit_score': 850,  # Score excelente
-            'num_credit_cards': 2,
-            'transaction_hour': 14,
-            'day_of_week': 2,
-            'month': 7,
+            'latitude': 40.7128,
+            'longitude': -74.0060,
+            'yearly_income': 95000,
+            'total_debt': 12000,
+            'credit_score': 780,
+            'num_credit_cards': 3,
+            'transaction_hour': 14,  # Horário comercial
+            'day_of_week': 2,  # Dia de semana
             'is_weekend': False,
             'is_night_transaction': False,
-            'amount_vs_avg': 0.5
+            'amount_vs_avg': 0.8
         }
+        result = predictor.predict(normal_transaction)
+        print(f"  ▶️ Resultado: {result['prediction_label']} (Score: {result['confidence_score']:.3f})")
+        print(f"  ⏱️ Tempo de Inferência: {result['inference_time_ms']:.1f}ms")
 
-        result = predictor.predict_single_perfect(normal)
+        # Exemplo 3: Teste de robustez com dados mínimos
+        print("\n" + "-" * 80)
+        print("🧪 EXEMPLO 3: Teste de Robustez com Dados Mínimos")
+        minimal_data = {'amount': 150.0, 'credit_score': 680, 'transaction_hour': 23}
+        result = predictor.predict(minimal_data)
+        print(f"  ▶️ Resultado: {result['prediction_label']} (Score: {result['confidence_score']:.3f})")
+        print(f"  📝 Nota: O sistema preencheu automaticamente as features ausentes com valores padrão.")
 
-        print(f"  🎯 Resultado: {result['prediction_label']}")
-        print(f"  📊 Confiança: {result['confidence_score']:.3f}")
-        print(f"  ⏱️ Tempo: {result['inference_time_ms']:.1f}ms")
-        print(f"  🔧 Features matched: {result['features_matched']}")
-        print(f"  ✅ Sucesso: {'SIM' if result['success'] else 'NÃO'}")
-
-        # Exemplo 3: Dados mínimos (teste de robustez)
-        print(f"\n🧪 EXEMPLO 3: Dados Mínimos (Robustez)")
-        minimal = {
-            'amount': 75.00,
-            'credit_score': 720,
-            'transaction_hour': 12
-        }
-
-        result = predictor.predict_single_perfect(minimal)
-
-        print(f"  🎯 Resultado: {result['prediction_label']}")
-        print(f"  📊 Confiança: {result['confidence_score']:.3f}")
-        print(f"  ⏱️ Tempo: {result['inference_time_ms']:.1f}ms")
-        print(f"  🔧 Features matched: {result['features_matched']}")
-        print(f"  ✅ Sucesso: {'SIM' if result['success'] else 'NÃO'}")
-        print(f"  📝 Sistema preencheu automaticamente campos faltantes")
-
-        # Status final
-        final_status = predictor.get_system_status()
-        print(f"\n📈 ESTATÍSTICAS FINAIS:")
-        print(f"  • Total predições: {final_status['performance']['total_predictions']}")
-        print(f"  • Sucessos: {final_status['performance']['success_count']}")
-        print(f"  • Taxa de sucesso: {final_status['performance']['success_rate']:.1f}%")
-        print(f"  • Tempo médio: {final_status['performance']['avg_inference_ms']:.1f}ms")
-
-        print(f"\n🎯 PREDITOR PERFEITO FUNCIONANDO!")
-        print(f"✅ ZERO erros de features!")
-        print(f"✅ Match 100% com modelo treinado!")
-        print(f"✅ Performance otimizada Intel i3-1115G4!")
+        print("\n" + "=" * 80)
+        final_status = predictor.get_status()
+        print("\n📈 STATUS FINAL DO SISTEMA:")
+        print(f"  ● Total de Predições: {final_status['performance_metrics']['predictions_made']}")
+        print(f"  ● Taxa de Sucesso: {final_status['performance_metrics']['success_rate']:.1f}%")
+        print(f"  ● Tempo Médio de Inferência: {final_status['performance_metrics']['avg_inference_time_ms']:.1f}ms")
+        print("\nDemonstração concluída com sucesso!")
 
     except Exception as e:
-        print(f"\n❌ ERRO CRÍTICO: {e}")
-
-
-def main():
-    """Função principal PERFEITA."""
-    parser = argparse.ArgumentParser(description="Preditor PERFEITO - TrustShield")
-    parser.add_argument("--debug", action="store_true", help="Debug mode")
-
-    args = parser.parse_args()
-
-    try:
-        if args.debug:
-            logging.getLogger().setLevel(logging.DEBUG)
-
-        run_perfect_demo()
-
-    except KeyboardInterrupt:
-        print("\n❌ Interrompido pelo usuário")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n❌ ERRO: {e}")
+        print(f"\n❌ ERRO CRÍTICO DURANTE A DEMONSTRAÇÃO: {e}")
+        print("Verifique se um modelo foi treinado e se os caminhos estão corretos.")
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    run_demo()
