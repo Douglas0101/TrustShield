@@ -1,6 +1,6 @@
 # Makefile - TrustShield Advanced (Versão 5.2.0-stable)
 # Filosofia: Separa a gestão dos SERVIÇOS (que guardam dados) das TAREFAS (que rodam e terminam).
-.PHONY: help install test lint format clean build train logs services-up services-down purge
+.PHONY: help install test lint format clean build build-fresh train logs services-up services-down purge
 
 # === AJUDA ===
 help:
@@ -12,7 +12,8 @@ help:
 	@echo "  logs [service] - Mostra os logs de um serviço (ex: make logs service=mlflow). Padrão: trustshield-trainer."
 	@echo ""
 	@echo "--- PIPELINE & TAREFAS (EFÊMERAS) ---"
-	@echo "  build          - Constrói (ou reconstrói) a imagem Docker da aplicação."
+	@echo "  build          - Constrói (ou reconstrói) a imagem Docker da aplicação usando cache."
+	@echo "  build-fresh    - Constrói a imagem do zero, IGNORANDO O CACHE. Use para depuração."
 	@echo "  train          - Executa o pipeline de treino completo dentro do Docker. Requer 'services-up'."
 	@echo ""
 	@echo "--- LIMPEZA COMPLETA (DESTRUTIVO) ---"
@@ -30,45 +31,40 @@ help:
 # =====================================================================================
 
 # --- GESTÃO DE SERVIÇOS (PERSISTENTES) ---
-
-# Inicia os serviços de backend em segundo plano. Não inicia o treino.
-# Estes serviços continuarão rodando até você usar 'services-down' ou 'purge'.
 services-up:
 	@echo "🚀 Subindo os serviços de backend (Postgres, MinIO, MLflow)..."
-	docker compose -f docker/docker-compose.yml up -d postgres minio mlflow
+	docker compose -f docker/docker-compose.yml up -d
 
-# Para os serviços de backend. CRUCIAL: NÃO usa '--volumes', preservando os dados.
 services-down:
 	@echo "🛑 Parando os serviços de backend..."
 	docker compose -f docker/docker-compose.yml down
 
-# Mostra os logs. Pode especificar o serviço. Ex: make logs service=mlflow
 service ?= trustshield-trainer
 logs:
 	@echo "🔎 Acompanhando os logs do serviço: $(service)..."
 	docker compose -f docker/docker-compose.yml logs -f $(service)
 
 # --- PIPELINE & TAREFAS (EFÊMERAS) ---
-
-# Constrói a imagem Docker.
 build:
 	@echo "🛠️  Construindo a imagem 'trustshield-advanced:latest'..."
 	docker build -t trustshield-advanced:latest -f docker/Dockerfile .
 
-# Executa o treino como uma tarefa única. O contêiner é removido ao final (--rm).
-# Isso permite que você rode o treino várias vezes sem acumular contêineres parados.
+# ESTA É A REGRA QUE FALTAVA. ELA FORÇA A RECONSTRUÇÃO.
+build-fresh:
+	@echo "🧼 Construindo a imagem 'trustshield-advanced:latest' do zero (sem cache)..."
+	docker build --no-cache -t trustshield-advanced:latest -f docker/Dockerfile .
+
 train:
 	@echo "🧠 Executando o pipeline de treino..."
 	docker compose -f docker/docker-compose.yml run --rm trustshield-trainer
 
 # --- LIMPEZA COMPLETA (DESTRUTIVO) ---
-
-# O antigo 'docker-stop'. Renomeado para 'purge' para deixar claro que é DESTRUTIVO.
-# Use isto apenas quando quiser um reset completo do ambiente.
 purge:
 	@echo "🔥🔥🔥 ATENÇÃO: Parando todos os serviços e APAGANDO TODOS OS VOLUMES DE DADOS! 🔥🔥🔥"
 	docker compose -f docker/docker-compose.yml down --volumes
-	@echo "🧹 Limpando cache do Docker..."
+	@echo "🧹 Limpando cache do builder do Docker..."
+	docker builder prune -a -f
+	@echo "🧹 Limpando outros recursos do Docker..."
 	docker system prune -f
 
 

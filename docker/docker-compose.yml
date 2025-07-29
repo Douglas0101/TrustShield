@@ -1,23 +1,33 @@
-# docker/docker-compose.yml (Versão Final com criação de bucket idempotente)
+# docker/docker-compose.yml (Versão 7.0.2-aligned)
 services:
   postgres:
-    image: postgres:13
+    image: postgres:13.12
     container_name: trustshield-postgres
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=mlflow
-      - POSTGRES_PASSWORD=mlflow
-      - POSTGRES_DB=mlflow
+      - POSTGRES_USER=${POSTGRES_USER:-mlflow}
+      - POSTGRES_DB=${POSTGRES_DB:-mlflow}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - trustshield-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mlflow -d mlflow"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mlflow} -d ${POSTGRES_DB:-mlflow}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.trustshield.component=storage"
 
   minio:
     image: minio/minio:latest
@@ -25,9 +35,9 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+    secrets:
+      - minio_root_user
+      - minio_root_password
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -38,65 +48,126 @@ services:
       interval: 5s
       timeout: 2s
       retries: 5
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.trustshield.component=artifact-store"
 
   create-buckets:
-    image: minio/mc
+    image: minio/mc:latest
     depends_on:
       minio:
         condition: service_healthy
+    secrets:
+      - minio_root_user
+      - minio_root_password
     entrypoint: >
       /bin/sh -c "
-      until (/usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin) do echo '... a aguardar pelo minio ...' && sleep 1; done;
-      # --- CORREÇÃO APLICADA AQUI (IDEMPOTÊNCIA) ---
-      # Verifica se o bucket existe; se não, cria. Evita erros e condições de corrida.
-      /usr/bin/mc ls myminio/mlflow || /usr/bin/mc mb myminio/mlflow;
-      # --- FIM DA CORREÇÃO ---
+      echo 'Aguardando MinIO...';
+      for i in {1..10}; do
+        mc alias set myminio http://minio:9000 \$(cat /run/secrets/minio_root_user) \$(cat /run/secrets/minio_root_password) && break;
+        echo 'Tentativa $i falhou. Aguardando 2s...';
+        sleep 2;
+      done;
+      echo 'Verificando/Criando bucket mlflow...';
+      mc ls myminio/mlflow || mc mb myminio/mlflow;
+      echo 'Bucket mlflow pronto.';
       exit 0;
       "
     networks:
       - trustshield-net
+    labels:
+      - "com.trustshield.component=init"
 
   mlflow:
-    image: python:3.10-slim # <-- ALTERE ESTA LINHA
+    image: ghcr.io/mlflow/mlflow:v2.14.3
     container_name: trustshield-mlflow
     ports:
       - "5000:5000"
     environment:
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
-    command: bash -c "pip install mlflow boto3 psycopg2-binary && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql://mlflow:mlflow@postgres/mlflow --default-artifact-root s3://mlflow/"
+    secrets:
+      - minio_root_user
+      - minio_root_password
+      - postgres_password
+    command: >
+      bash -c "
+      export AWS_ACCESS_KEY_ID=$(cat /run/secrets/minio_root_user) &&
+      export AWS_SECRET_ACCESS_KEY=$(cat /run/secrets/minio_root_password) &&
+      pip install boto3 psycopg2-binary &&
+      mlflow server
+        --host 0.0.0.0
+        --port 5000
+        --backend-store-uri postgresql://${POSTGRES_USER:-mlflow}:\$(cat /run/secrets/postgres_password)@postgres/${POSTGRES_DB:-mlflow}
+        --default-artifact-root s3://mlflow/
+      "
     depends_on:
       postgres:
         condition: service_healthy
-      minio:
-        condition: service_healthy
       create-buckets:
         condition: service_completed_successfully
+    volumes:
+      - ./mlruns:/mlflow/mlruns  # Persiste experimentos MLflow
     networks:
       - trustshield-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.trustshield.component=tracking"
 
   trustshield-trainer:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: trustshield-trainer
-    mem_limit: 8g  # Limite de memória de 8GB
+    deploy:
+      resources:
+        limits:
+          memory: ${TRAINER_MEM_LIMIT:-12g}
+          cpus: '${TRAINER_CPU_LIMIT:-4.0}'
     volumes:
-      - ../src:/home/trustshield/src
-      - ../data:/home/trustshield/data
-      - ../outputs:/home/trustshield/outputs
-      - ../config:/home/trustshield/config
-      - ../logs:/home/trustshield/logs
+      - ./src:/home/trustshield/src
+      - ./data:/home/trustshield/data
+      - ./outputs:/home/trustshield/outputs
+      - ./config:/home/trustshield/config
+      - ./logs:/home/trustshield/logs
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
+    secrets:
+      - minio_root_user
+      - minio_root_password
     depends_on:
-      - mlflow
+      mlflow:
+        condition: service_healthy
     networks:
       - trustshield-net
+    entrypoint: ["/bin/sh", "/home/trustshield/entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]  # Verifica se o processo Python está rodando
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.trustshield.component=trainer"
 
 networks:
   trustshield-net:
@@ -105,3 +176,11 @@ networks:
 volumes:
   postgres_data:
   minio_data:
+
+secrets:
+  postgres_password:
+    file: ../secrets/postgres_password.txt
+  minio_root_user:
+    file: ../secrets/minio_root_user.txt
+  minio_root_password:
+    file: ../secrets/minio_root_password.txt
