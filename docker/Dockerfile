@@ -1,47 +1,52 @@
-# Dockerfile - TrustShield Advanced (Versão 5.1.0-stable)
+# Dockerfile Final (CPU) - TrustShield Advanced v7.0.4-cpu
+# Este Dockerfile é otimizado para ambientes baseados em CPU, como o Intel i3.
+# Ele é leve, seguro e contém todas as dependências necessárias para a execução do seu projeto.
+
+# 1. Imagem Base: Leve e oficial do Python.
 FROM python:3.10-slim
 
-# Metadata
+# 2. Metadata: Boas práticas para identificar a imagem.
 LABEL maintainer="TrustShield Team"
-LABEL version="5.1.0-stable"
-LABEL description="Sistema Avançado de Detecção de Fraudes"
+LABEL version="7.0.4-cpu"
+LABEL description="Sistema Avançado de Detecção de Fraudes (CPU Build)"
 
-# Variáveis de ambiente para otimização e logging
+# 3. Variáveis de Ambiente: Otimização e logging.
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV OMP_NUM_THREADS=4
-ENV MKL_NUM_THREADS=4
 
-# Instalar dependências do sistema necessárias para as bibliotecas Python
-RUN apt-get update && apt-get install -y \
+# 4. Instalação de Dependências do Sistema (INCLUINDO O GIT)
+# Instala o 'git' para que o MLflow possa rastrear os commits.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
-    g++ \
-    libblas-dev \
-    liblapack-dev \
-    libhdf5-dev \
-    pkg-config \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Criar um utilizador não-root para segurança
+# 5. Segurança: Criar e usar um utilizador não-root.
 RUN useradd --create-home --shell /bin/bash trustshield
 USER trustshield
 WORKDIR /home/trustshield
 
-# Copiar apenas o ficheiro de requisitos primeiro para aproveitar o cache do Docker
-COPY requirements.txt .
+# 6. Otimização de Cache: Copiar apenas 'requirements.txt' primeiro.
+COPY --chown=trustshield:trustshield requirements.txt .
 
-# Instalar dependências Python como utilizador não-root
+# 7. Instalação de Dependências Python
+# Instala as dependências como o usuário 'trustshield'
 RUN pip install --user --no-cache-dir -r requirements.txt
 
-# Copiar o resto do código da aplicação
-COPY --chown=trustshield:trustshield . .
+# 8. Adiciona o diretório de binários do usuário ao PATH
+ENV PATH="/home/trustshield/.local/bin:${PATH}"
 
-# Criar diretórios necessários que serão mapeados por volumes
-RUN mkdir -p outputs/models logs mlruns
+# 9. Copiar o entrypoint e torná-lo executável
+COPY --chown=trustshield:trustshield docker/entrypoint.sh /home/trustshield/entrypoint.sh
+RUN chmod +x /home/trustshield/entrypoint.sh
 
-# Expor a porta do MLflow (embora o serviço principal seja outro, é uma boa prática)
-EXPOSE 5000
+# 10. Cria diretórios para volumes para evitar problemas de permissão
+RUN mkdir -p outputs logs
 
-# Comando padrão que será executado quando o contentor iniciar
-CMD ["python", "src/models/train_fraud_model.py", "--config", "config/config.yaml", "--model", "all"]
+# 11. Copiar o restante do código-fonte
+COPY --chown=trustshield:trustshield src/ ./src
+COPY --chown=trustshield:trustshield config/ ./config
+
+# 12. Ponto de Entrada: Executa o script de entrada.
+ENTRYPOINT ["/home/trustshield/entrypoint.sh"]

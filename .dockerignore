@@ -1,26 +1,100 @@
-# .dockerignore
+# .dockerignore - TrustShield Project (Versão 7.0.1-aligned)
+# Ignora arquivos e diretórios desnecessários para otimizar o contexto de build do Docker,
+# reduzindo tamanho e tempo de build, com foco em segurança, volumes montados e eliminação de redundâncias.
 
-# Git e IDEs
+# ###################################### #
+# Ficheiros de Controlo de Versão e IDEs #
+# ###################################### #
 .git/
+.gitignore
+.gitattributes
 .idea/
 .vscode/
+*.swp
+*.swo
 
-# Artefactos do Projeto (MUITO IMPORTANTE)
+# ################################################# #
+# Diretórios de Dados, Artefactos e Logs (CRUCIAL) #
+# ################################################# #
+# Estes são geridos por volumes no docker-compose; não copiar para a imagem.
 data/
-logs/
 outputs/
+logs/
 mlruns/
-notebooks/
+cache/
+secrets/
+models/  # Modelos são gerados/salvados em runtime ou via MLflow
+notebooks/  # Ignora toda a pasta, cobrindo *.ipynb e outros
 
-# Cache e Ambientes Virtuais
+# ################################## #
+# Ambiente de Desenvolvimento Python #
+# ################################## #
+.venv/
+venv/
+env/
 __pycache__/
 *.pyc
-.pytest_cache/
-.mypy_cache/
-.env
-.venv
-venv/
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
 
-# Ficheiros do Docker (para não se incluírem a si próprios)
-Dockerfile
-docker-compose.yml
+# ################################# #
+# Ficheiros de Configuração Docker #
+# ################################# #
+# O entrypoint.sh, o código-fonte (src) e as configurações (config) são necessários
+# durante o build da imagem, portanto não podem ser ignorados.
+
+
+# ################################################# #
+# Ficheiros de Configuração Sensíveis e de Ambiente #
+# ################################################# #
+.env
+*.env.*
+!*.env.example
+*.key
+*.pem
+*.crt
+
+# ###################### #
+# Documentação e Análise #
+# ###################### #
+docs/
+*.md
+*.pdf
+*.html
+
+# ################### #
+# Ficheiros de Testes #
+# ################### #
+tests/
+.pytest_cache/
+.coverage
+*.cover
+
+# ################# #
+# CI/CD e Automação #
+# ################# #
+.github/
+.gitlab-ci.yml
+Makefile
+Jenkinsfile
+
+# ################### #
+# Ficheiros Temporários #
+# ################### #
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# ############################ #
+# Específicos de RAPIDS/GPU #
+# ############################ #
+*.cuda*
+/tmp/cuda*
+/tmp/rapids*
+/var/tmp/cuda*
