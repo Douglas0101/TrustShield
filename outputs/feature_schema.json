@@ -1,0 +1,29 @@
+{
+  "feature_names": [
+    "id_transaction",
+    "client_id",
+    "amount",
+    "mcc",
+    "current_age",
+    "retirement_age",
+    "birth_year",
+    "birth_month",
+    "latitude",
+    "longitude",
+    "per_capita_income",
+    "yearly_income",
+    "total_debt",
+    "credit_score",
+    "num_credit_cards",
+    "transaction_hour",
+    "day_of_week",
+    "month",
+    "is_weekend",
+    "is_night_transaction",
+    "amount_vs_avg",
+    "use_chip_Online Transaction",
+    "use_chip_Swipe Transaction",
+    "gender_Male"
+  ],
+  "version": "v1.0"
+}

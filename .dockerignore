@@ -1,0 +1,127 @@
+# ==============================================================================
+# TrustShield Project .gitignore (Versão 8.0.0-robust)
+#
+# Este ficheiro especifica ficheiros e diretórios que o Git deve ignorar.
+# Está organizado por secções para garantir que dados sensíveis, artefactos
+# gerados e configurações de ambiente local não sejam versionados.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. DADOS SENSÍVEIS E CONFIGURAÇÕES DE AMBIENTE
+# CRÍTICO: Nunca versionar segredos ou ficheiros de ambiente locais.
+# ------------------------------------------------------------------------------
+# Ignora o diretório completo de segredos
+secrets/
+
+# Ignora ficheiros de ambiente, mas permite um ficheiro de exemplo
+.env
+.env.*
+!.env.example
+
+# ------------------------------------------------------------------------------
+# 2. ARTEFACTOS DE ML E EXPERIMENTAÇÃO
+# Diretórios gerados por execuções de ML que não devem ser versionados.
+# ------------------------------------------------------------------------------
+# Diretório de tracking local do MLflow
+mlruns/
+
+# Diretório de saídas geradas (modelos, relatórios, figuras)
+outputs/
+
+# Diretório de logs
+logs/
+
+# Cache de dados da Joblib (usado no train_fraud_model.py)
+cache/
+
+# ------------------------------------------------------------------------------
+# 3. DADOS GERADOS E INTERMEDIÁRIOS
+# Ignora dados que são resultado dos scripts do pipeline.
+# Apenas os dados em 'data/raw/' devem ser considerados para versionamento.
+# ------------------------------------------------------------------------------
+data/processed/
+data/features/
+data/interim/
+
+# ------------------------------------------------------------------------------
+# 4. AMBIENTE PYTHON E DEPENDÊNCIAS
+# Ignora ambientes virtuais, ficheiros de cache e artefactos de build.
+# ------------------------------------------------------------------------------
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Ficheiros de cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Artefactos de distribuição e instalação
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ------------------------------------------------------------------------------
+# 5. ARTEFACTOS DE TESTES E LINTING
+# Ficheiros gerados por ferramentas de teste e análise de código.
+# ------------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+
+# ------------------------------------------------------------------------------
+# 6. CONFIGURAÇÕES DE IDE E EDITOR
+# Ficheiros específicos do ambiente de desenvolvimento de cada utilizador.
+# ------------------------------------------------------------------------------
+# JetBrains (PyCharm, etc.)
+.idea/
+
+# VS Code
+.vscode/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ------------------------------------------------------------------------------
+# 7. FICHEIROS DE SISTEMA OPERACIONAL E TEMPORÁRIOS
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# Ficheiros temporários (ex: Vim)
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Saídas de algoritmos e logs de execução
+Saida_Algoritmo.txt
