@@ -1,0 +1,65 @@
+# ==============================================================================
+# TrustShield Advanced Requirements (Versão 8.0.0-robust)
+#
+# Este ficheiro define as dependências Python para o projeto TrustShield.
+# Está organizado por funcionalidade para clareza e manutenibilidade.
+# Para garantir a reprodutibilidade, fixe as versões usando 'pip freeze > requirements.txt'
+# ==============================================================================
+
+# --- CORE DE CIÊNCIA DE DADOS E ML ---
+# Bibliotecas fundamentais para manipulação de dados e machine learning.
+scikit-learn
+numpy
+pandas
+scipy
+
+# --- MLOPS: EXPERIMENTAÇÃO E GOVERNANÇA ---
+# Ferramentas para rastreamento, versionamento e otimização de modelos.
+mlflow         # Plataforma de ciclo de vida de ML (tracking, registry).
+optuna         # Framework de otimização de hiperparâmetros.
+optuna-integration[mlflow]
+jsonschema     # Para validar a estrutura do ficheiro de configuração.
+
+# --- ARMAZENAMENTO E MANIPULAÇÃO DE DADOS ---
+# Drivers e bibliotecas para interagir com formatos de ficheiro e storage.
+pyarrow        # Engine para trabalhar com o formato Parquet.
+fastparquet    # Alternativa ao pyarrow para ficheiros Parquet.
+boto3          # SDK da AWS para Python, necessário para o MLflow comunicar com o MinIO (S3).
+
+# --- OTIMIZAÇÃO E PERFORMANCE ---
+# Bibliotecas para acelerar a execução e processar grandes volumes de dados.
+numba          # Compilador JIT que acelera código Python numérico.
+joblib         # Para serialização eficiente de objetos Python (modelos).
+dask           # Para computação paralela em datasets maiores que a memória.
+
+# --- MONITORIZAÇÃO E AVALIAÇÃO ---
+# Ferramentas para monitorizar recursos e visualizar resultados.
+psutil         # Para aceder a informações do sistema (CPU, memória).
+matplotlib     # Biblioteca base para criação de gráficos.
+seaborn        # Para visualizações estatísticas mais atraentes.
+
+# --- CONFIGURAÇÃO E UTILITÁRIOS ---
+# Bibliotecas para gerir configurações e outras tarefas de suporte.
+pyyaml         # Para ler e escrever ficheiros de configuração YAML.
+python-dotenv  # Para gerir variáveis de ambiente a partir de ficheiros .env.
+click          # Para criar interfaces de linha de comando (CLI) elegantes.
+tqdm           # Para adicionar barras de progresso a loops e processos.
+rich           # Para formatação de texto rico no terminal.
+
+# --- API E VISUALIZAÇÃO (PARA FUTURAS EXPANSÕES) ---
+# Dependências para a API de inferência e o dashboard de monitorização.
+fastapi
+uvicorn
+streamlit
+
+# ==============================================================================
+# DEPENDÊNCIAS DE DESENVOLVIMENTO
+# Instale separadamente com: pip install -r requirements-dev.txt
+# ==============================================================================
+black
+flake8
+mypy
+pre-commit
+pytest
+pytest-cov
+pytest-mock

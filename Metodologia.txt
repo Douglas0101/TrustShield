@@ -1,0 +1,21 @@
+Metodologia
+
+1. Aquisição e Integração:
+2. Importação de arquivos CSV/JSON e junção por identificadores de usuário e código MCC.
+3. Criação de dicionários de tradução de códigos MCC para categorias legíveis.
+4. Pré-processamento:
+5. Limpeza de valores ausentes e inconsistentes.
+6. Normalização e agregação temporal (diária, semanal, mensal).
+7. Análise Exploratória (EDA):
+8. Estatísticas descritivas (médias, medianas, desvios-padrão).
+9. Visualização de distribuições de gastos por categoria e região.
+10. Modelagem Preditiva:
+11. Clustering (K‑means, DBSCAN) para segmentação de clientes.
+12. Classificação (Random Forest, XGBoost) para detecção de fraudes.
+13. Regressão (LightGBM, Redes Neurais) para previsão de volume de transações.
+14. Sistemas de Recomendação (Filtragem Colaborativa e Baseada em Conteúdo) para ofertas.
+15. Validação e Avaliação:
+16. Cruzamento de validação, métricas de AUC, precisão, recall e F1-Score.
+17. Testes A/B para mensurar impacto em campanhas.
+18. Deploy e Monitoramento:
+19. Criação de pipelines em cloud (AWS/GCP) e monitoramento contínuo de performance.
