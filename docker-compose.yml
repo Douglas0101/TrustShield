@@ -1,4 +1,5 @@
-# docker/docker-compose.yml (Versão 9.0.0 - Arquitetura Unificada)
+# docker-compose.yml (Versão 11.0.0 - Robusto com .env)
+# Utiliza um arquivo .env na raiz para gerenciar credenciais.
 services:
   postgres:
     image: postgres:13.12
@@ -6,11 +7,10 @@ services:
     ports:
       - "5432:5432"
     environment:
+      # CORREÇÃO: As credenciais são lidas do arquivo .env
       - POSTGRES_USER=${POSTGRES_USER:-mlflow}
       - POSTGRES_DB=${POSTGRES_DB:-mlflow}
-      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
-    secrets:
-      - postgres_password
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -21,8 +21,6 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-    labels:
-      - "com.trustshield.component=storage"
 
   minio:
     image: minio/minio:latest
@@ -30,9 +28,10 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
-    secrets:
-      - minio_root_user
-      - minio_root_password
+    environment:
+      # CORREÇÃO: As credenciais são lidas do arquivo .env
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -44,21 +43,20 @@ services:
       timeout: 2s
       retries: 5
     restart: unless-stopped
-    labels:
-      - "com.trustshield.component=artifact-store"
 
   create-buckets:
     image: minio/mc:latest
     depends_on:
       minio:
         condition: service_healthy
-    secrets:
-      - minio_root_user
-      - minio_root_password
+    environment:
+      # CORREÇÃO: Passa as credenciais como variáveis de ambiente
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     entrypoint: >
       /bin/sh -c "
       echo 'Aguardando MinIO...';
-      mc alias set myminio http://minio:9000 $$(cat /run/secrets/minio_root_user) $$(cat /run/secrets/minio_root_password) --api S3v4;
+      mc alias set myminio http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD --api S3v4;
       echo 'Verificando/Criando bucket mlflow...';
       mc ls myminio/mlflow || mc mb myminio/mlflow;
       echo 'Bucket mlflow pronto.';
@@ -66,29 +64,26 @@ services:
       "
     networks:
       - trustshield-net
-    labels:
-      - "com.trustshield.component=init"
 
   mlflow:
     build:
       context: .
-      dockerfile: mlflow.Dockerfile
+      dockerfile: docker/mlflow.Dockerfile
     container_name: trustshield-mlflow
     ports:
       - "5000:5000"
     environment:
+      # CORREÇÃO: As credenciais são lidas do arquivo .env
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-      - AWS_ACCESS_KEY_ID_FILE=/run/secrets/minio_root_user
-      - AWS_SECRET_ACCESS_KEY_FILE=/run/secrets/minio_root_password
-    secrets:
-      - minio_root_user
-      - minio_root_password
-      - postgres_password
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER:-mlflow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     command: >
       mlflow server
         --host 0.0.0.0
         --port 5000
-        --backend-store-uri postgresql://${POSTGRES_USER:-mlflow}:$$(cat /run/secrets/postgres_password)@postgres/${POSTGRES_DB:-mlflow}
+        --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-mlflow}
         --default-artifact-root s3://mlflow/
     depends_on:
       postgres:
@@ -98,12 +93,10 @@ services:
     networks:
       - trustshield-net
     restart: unless-stopped
-    labels:
-      - "com.trustshield.component=tracking"
 
   trustshield-api:
     build:
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile
     container_name: trustshield-api
     ports:
@@ -111,13 +104,13 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-    secrets:
-      - minio_root_user
-      - minio_root_password
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
     volumes:
-      - ../src:/home/trustshield/src
-      - ../outputs:/home/trustshield/outputs
-      - ../config:/home/trustshield/config
+      - ./src:/home/trustshield/src
+      - ./outputs:/home/trustshield/outputs
+      - ./config:/home/trustshield/config
+      - ./data:/home/trustshield/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
       interval: 15s
@@ -129,8 +122,6 @@ services:
     networks:
       - trustshield-net
     restart: unless-stopped
-    labels:
-      - "com.trustshield.component=api"
 
 networks:
   trustshield-net:
@@ -139,11 +130,3 @@ networks:
 volumes:
   postgres_data:
   minio_data:
-
-secrets:
-  postgres_password:
-    file: ../secrets/postgres_password.txt
-  minio_root_user:
-    file: ../secrets/minio_root_user.txt
-  minio_root_password:
-    file: ../secrets/minio_root_password.txt

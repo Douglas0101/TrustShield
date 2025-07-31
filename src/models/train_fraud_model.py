@@ -95,7 +95,15 @@ class ModelMetrics:
     timestamp: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {k: v.value if isinstance(v, Enum) else v for k, v in self.__dict__.items()}
+        # CORREÇÃO: Retorna apenas métricas numéricas para o MLflow, convertendo o que for necessário.
+        metrics_dict = {}
+        for k, v in self.__dict__.items():
+            if isinstance(v, (int, float)):
+                metrics_dict[k] = v
+            elif isinstance(v, datetime):
+                # Converte datetime para um timestamp numérico (float) que o MLflow aceita.
+                metrics_dict[k] = v.timestamp()
+        return metrics_dict
 
 
 # =====================================================================================
@@ -138,7 +146,7 @@ class DataRepository(Protocol):
 
 
 # =====================================================================================
-# 🏭 CAMADA DE INFRAESTRUTURA - IMPLEMENTAÇÕES CONCRETAS
+# 🏭 CAMADA DE INFRASTRUTURA - IMPLEMENTAÇÕES CONCRETAS
 # =====================================================================================
 
 class AdvancedLogger:
@@ -158,55 +166,35 @@ class ConsoleLogObserver(TrainingObserver):
     def __init__(self, logger: AdvancedLogger): self.logger = logger
 
     def update(self, event: TrainingEvent, data: Dict[str, Any]):
-        messages = {
-            TrainingEvent.PIPELINE_START: f"🚀 === INICIANDO PIPELINE DE TREINO (ID: {data['experiment_id'][:8]}) ===",
-            TrainingEvent.DATA_LOADING_START: "📁 Carregando e preparando dados...",
-            TrainingEvent.DATA_LOADING_COMPLETE: f"✅ Dados prontos: {data['train_samples']:,} para treino, {data['test_samples']:,} para teste.",
-            TrainingEvent.TRAINING_START: f"\n{'=' * 60}\n🎯 TREINANDO MODELO: {data['model_type'].value.upper()}\n{'=' * 60}",
-            TrainingEvent.TRAINING_COMPLETE: f"✅ Modelo {data['model_type'].value} treinado com sucesso.",
-            TrainingEvent.MODEL_VALIDATED: f"📊 Métricas: Anomalias={data['metrics'].anomaly_rate:.4f} | Inferência={data['metrics'].inference_time:.1f}ms | CPU={data['metrics'].cpu_usage_percent:.1f}%",
-            TrainingEvent.MODEL_SAVED: f"💾 Artefato completo (modelo + scaler) salvo em: {data['model_path']}",
-            TrainingEvent.PIPELINE_COMPLETE: f"\n{'=' * 60}\n🎉 PIPELINE CONCLUÍDO COM SUCESSO em {data['total_time']:.2f}s\n{'=' * 60}",
-            TrainingEvent.PIPELINE_FAILED: f"❌ ERRO CRÍTICO NO PIPELINE: {data['error']}",
-        }
-        if message := messages.get(event): self.logger.log(logging.INFO, message)
-
-
-class MLflowObserver(TrainingObserver):
-    def __init__(self, experiment_name: str, config_path: str):
-        self.experiment_name = experiment_name
-        self.run_id = None
-        self.config_path = config_path
-
-    def update(self, event: TrainingEvent, data: Dict[str, Any]):
-        if event == TrainingEvent.TRAINING_START:
-            run_name = f"{data['model_type'].value}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-            mlflow.start_run(run_name=run_name)
-            self.run_id = mlflow.active_run().info.run_id
-            mlflow.log_params(data['params'])
-            mlflow.log_params({"train_samples": data['train_samples'], "feature_count": data['feature_count']})
-            mlflow.log_artifact(self.config_path)
-
+        message = ""
+        if event == TrainingEvent.PIPELINE_START:
+            message = f"🚀 === INICIANDO PIPELINE DE TREINO (ID: {data['experiment_id'][:8]}) ==="
+        elif event == TrainingEvent.DATA_LOADING_START:
+            message = "📁 Carregando e preparando dados..."
+        elif event == TrainingEvent.DATA_LOADING_COMPLETE:
+            message = f"✅ Dados prontos: {data['train_samples']:,} para treino, {data['test_samples']:,} para teste."
+        elif event == TrainingEvent.TRAINING_START:
+            message = f"\n{'=' * 60}\n🎯 TREINANDO MODELO: {data['model_type'].value.upper()}\n{'=' * 60}"
+        elif event == TrainingEvent.TRAINING_COMPLETE:
+            message = f"✅ Modelo {data['model_type'].value} treinado com sucesso."
         elif event == TrainingEvent.MODEL_VALIDATED:
-            mlflow.log_metrics(data['metrics'].to_dict())
-            mlflow.set_tag("model_type", data['metrics'].model_type.value)
-
-        elif event == TrainingEvent.MLFLOW_LOGGING_COMPLETE:
-            model_path = data['model_path']
-            model_type = data['model_type']
-            # ATUALIZAÇÃO: Registra o modelo a partir do artefato completo salvo.
-            mlflow.log_artifact(model_path, artifact_path="model_artifact")
-            mlflow.register_model(
-                model_uri=f"runs:/{self.run_id}/model_artifact",
-                name=f"TrustShield-{model_type.value}"
-            )
-            mlflow.set_tag("status", "success")
-            mlflow.end_run()
-
-        elif event == TrainingEvent.PIPELINE_FAILED:
+            message = f"📊 Métricas: Anomalias={data['metrics'].anomaly_rate:.4f} | Inferência={data['metrics'].inference_time:.1f}ms | CPU={data['metrics'].cpu_usage_percent:.1f}%"
+        elif event == TrainingEvent.MODEL_SAVED:
+            message = f"💾 Artefato completo (modelo + scaler) salvo em: {data['model_path']}"
+        elif event == TrainingEvent.PIPELINE_COMPLETE:
             if mlflow.active_run():
-                mlflow.set_tag("status", "failed")
-                mlflow.end_run(status="FAILED")
+                mlflow.end_run()
+        elif event == TrainingEvent.PIPELINE_FAILED:
+            message = f"❌ ERRO CRÍTICO NO PIPELINE: {data['error']}"
+
+        if message:
+            self.logger.log(logging.INFO, message)
+
+
+
+
+
+
 
 
 class BaseTrainingStrategy:
@@ -272,7 +260,6 @@ class ParquetDataRepository(DataRepository):
         self.project_root = project_root
         self.use_dask = use_dask
 
-    @memory.cache
     def get_prepared_data(self) -> Tuple[Union[pd.DataFrame, dd.DataFrame], Union[pd.DataFrame, dd.DataFrame]]:
         # A lógica de carregamento e preparação de dados permanece a mesma.
         data_path = self.project_root / self.config['paths']['data']['featured_dataset']
@@ -313,7 +300,6 @@ class AdvancedTrustShieldTrainer(Subject):
         self.logger = AdvancedLogger('TrustShield')
         self.data_repository = ParquetDataRepository(self.config, self.project_root, use_dask=self.use_dask)
         self.attach(ConsoleLogObserver(self.logger))
-        self.attach(MLflowObserver(self.config.get('mlflow', {}).get('experiment_name', 'TrustShield'), config_path))
         self._setup_environment()
 
     def _load_and_validate_config(self, config_path: str) -> Dict[str, Any]:
@@ -322,7 +308,7 @@ class AdvancedTrustShieldTrainer(Subject):
         return config
 
     def _setup_environment(self):
-        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"))
+        mlflow.set_tracking_uri("http://mlflow:5000")
         mlflow.set_experiment(self.config.get('mlflow', {}).get('experiment_name', 'TrustShield'))
 
     def run_pipeline(self, model_types_str: List[str]):
@@ -338,9 +324,9 @@ class AdvancedTrustShieldTrainer(Subject):
             model_types = [ModelType(m) for m in model_types_str if m in ModelType._value2member_map_]
             for model_type in model_types:
                 self._train_and_log_model(model_type, X_train, X_test)
-            self.notify(TrainingEvent.PIPELINE_COMPLETE, {"total_time": time.time() - start_time})
+            self.notify(TrainingEvent.PIPELINE_COMPLETE, {"total_time": time.time() - start_time, "experiment_id": self.experiment_id})
         except Exception as e:
-            self.notify(TrainingEvent.PIPELINE_FAILED, {"error": str(e)})
+            self.notify(TrainingEvent.PIPELINE_FAILED, {"error": str(e), "experiment_id": self.experiment_id})
             self.logger.log(logging.ERROR, f"Erro fatal no pipeline: {e}")
             raise
         finally:
@@ -355,41 +341,43 @@ class AdvancedTrustShieldTrainer(Subject):
         })
         strategy = ModelTrainerFactory.create_strategy(model_type, self.config)
 
-        # ATUALIZAÇÃO: Recebe o modelo E o scaler da estratégia.
         train_start = time.time()
         model, scaler = strategy.train(X_train)
         training_time = time.time() - train_start
         self.notify(TrainingEvent.TRAINING_COMPLETE, {"model_type": model_type, "training_time": training_time})
 
-        # ATUALIZAÇÃO: Passa o scaler para a validação.
         metrics = strategy.validate(model, scaler, X_test)
         metrics.training_time = training_time
         self.notify(TrainingEvent.MODEL_VALIDATED, {"metrics": metrics})
 
-        # ATUALIZAÇÃO: Salva o artefato completo.
-        model_path = self._save_artifact(model, scaler, model_type)
-        self.notify(TrainingEvent.MODEL_SAVED, {"model_path": model_path})
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        with mlflow.start_run(run_name=f"{model_type.value}_{timestamp}") as run:
+            run_id = run.info.run_id
+            self.notify(TrainingEvent.MODEL_SAVED, {"model_path": f"runs:/{run_id}/model"})
+            
+            mlflow.log_params(params)
+            mlflow.log_metrics(metrics.to_dict())
+            
+            # Log scaler as a separate artifact
+            scaler_path = "scaler.joblib"
+            joblib.dump(scaler, scaler_path)
+            mlflow.log_artifact(scaler_path, artifact_path="scaler")
 
-        self.notify(TrainingEvent.MLFLOW_LOGGING_COMPLETE, {
-            "model_type": model_type, "model_path": model_path
-        })
+            # Log the model using the sklearn flavor
+            mlflow.sklearn.log_model(sk_model=model, artifact_path="model")
+
+            # Register the logged model
+            model_uri = f"runs:/{run_id}/model"
+            registered_model = mlflow.register_model(
+                model_uri=model_uri,
+                name=f"TrustShield-{model_type.value}"
+            )
+            self.notify(TrainingEvent.MLFLOW_LOGGING_COMPLETE, {
+                "model_type": model_type, "model_path": model_uri, "model_version": registered_model.version
+            })
         gc.collect()
 
-    # ATUALIZAÇÃO: O método agora salva um dicionário.
-    def _save_artifact(self, model: Any, scaler: Any, model_type: ModelType) -> Path:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        model_name = f"{model_type.value}_{timestamp}.joblib"
-        model_path = self.project_root / 'outputs' / 'models' / model_name
-        model_path.parent.mkdir(parents=True, exist_ok=True)
-
-        artifacts = {
-            'model': model,
-            'scaler': scaler,
-            'training_timestamp': datetime.now().isoformat()
-        }
-
-        joblib.dump(artifacts, model_path, compress=3)
-        return model_path
+    
 
 
 # =====================================================================================

@@ -32,32 +32,42 @@ help:
 # ATUALIZAÇÃO: Trocado 'docker-compose' por 'docker compose' em todos os comandos.
 services-up:
 	@echo "🚀 Subindo todos os serviços (API, Postgres, MinIO, MLflow)..."
-	docker compose -f docker/docker-compose.yml up -d --remove-orphans
+	docker compose -f docker-compose.yml up -d --remove-orphans
 
 services-down:
 	@echo "🛑 Parando todos os serviços..."
-	docker compose -f docker/docker-compose.yml down --remove-orphans
+	docker compose -f docker-compose.yml down --remove-orphans
 
 services-up-fresh:
 	@echo "🧼 Reconstruindo a imagem unificada e subindo todos os serviços do zero..."
-	docker compose -f docker/docker-compose.yml up -d --build --force-recreate --remove-orphans
+	docker compose -f docker-compose.yml up -d --build --force-recreate --remove-orphans
 
 service ?= trustshield-api
 logs:
 	@echo "🔎 Acompanhando os logs do serviço: $(service)..."
-	docker compose -f docker/docker-compose.yml logs -f $(service)
+	docker compose -f docker-compose.yml logs -f $(service)
 
 # --- PIPELINE & TAREFAS (EFÊMERAS) ---
 args ?= --model isolation_forest
+make-dataset:
+	@echo "Creating the dataset..."
+	@echo "Command: python /home/trustshield/src/data/make_dataset.py"
+	docker compose -f docker-compose.yml run --rm trustshield-api python /home/trustshield/src/data/make_dataset.py
+
+build-features:
+	@echo "🛠️  Executando a engenharia de features no ambiente unificado..."
+	@echo "   Comando: python /home/trustshield/src/features/build_features.py"
+	docker compose -f docker-compose.yml run --rm trustshield-api python /home/trustshield/src/features/build_features.py
+
 train:
 	@echo "🧠 Executando o pipeline de treino no ambiente unificado..."
 	@echo "   Comando: python /home/trustshield/src/models/train_fraud_model.py $(args)"
-	docker compose -f docker/docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py $(args)
+	docker compose -f docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py $(args)
 
 # --- LIMPEZA COMPLETA (DESTRUTIVO) ---
 purge:
 	@echo "🔥🔥🔥 ATENÇÃO: Parando todos os serviços e APAGANDO TODOS OS VOLUMES DE DADOS! 🔥🔥🔥"
-	docker compose -f docker/docker-compose.yml down --volumes
+	docker compose -f docker-compose.yml down --volumes
 	@echo "🧹 Limpando cache do builder do Docker..."
 	docker builder prune -a -f
 	@echo "🧹 Limpando outros recursos do Docker..."
