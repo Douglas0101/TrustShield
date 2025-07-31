@@ -1,0 +1,101 @@
+# Configuração Avançada TrustShield Enterprise
+# Versão: 10.0.0 (com suporte a Forecast Otimizado)
+
+project:
+  name: "TrustShield-Advanced"
+  version: "10.0.0"
+  random_state: 42
+
+# === CAMINHOS E ARTEFATOS ===
+paths:
+  data:
+    featured_dataset: "data/features/featured_dataset.parquet"
+    # Novo: Caminho para o dataset agregado para séries temporais
+    time_series_dataset: "data/processed/time_series_anomalies.parquet"
+  config: "config/config.yaml"
+
+# === SÉRIES TEMPORAIS (FORECAST) ===
+time_series:
+  time_column: "date" # Coluna de data/hora no dataset de features
+  aggregation_freq: "D" # 'D' para diário, 'W' para semanal, 'M' para mensal
+  forecast_horizon_end_date: "2040-12-31"
+  prophet_params:
+    daily_seasonality: true
+    weekly_seasonality: true
+    yearly_seasonality: true
+    seasonality_mode: 'multiplicative'
+  arima_params:
+    order: [5, 1, 0] # Ordem (p,d,q) para o modelo ARIMA
+
+# === PRÉ-PROCESSAMENTO E DADOS ===
+preprocessing:
+  sample_frac: 0.1 # Fração dos dados a ser usada. 1.0 para dataset completo.
+  scaler: "standard" # Opções: 'standard' ou 'robust'
+
+# === MODELAGEM (DETECÇÃO DE ANOMALIAS) ===
+models:
+  isolation_forest:
+    features:
+      - amount
+      - current_age
+      - retirement_age
+      - birth_year
+      - birth_month
+      - latitude
+      - longitude
+      - per_capita_income
+      - yearly_income
+      - total_debt
+      - credit_score
+      - num_credit_cards
+      - transaction_hour
+      - day_of_week
+      - month
+      - is_weekend
+      - is_night_transaction
+      - amount_vs_avg
+
+# === TREINAMENTO E HPO ===
+training:
+  test_size: 0.15
+  validation_size: 0.15
+
+hyper_optimization:
+  n_trials: 50
+  fixed_contamination: 0.01
+  space:
+    n_estimators: [50, 200]
+    max_samples: [0.5, 1.0]
+    max_features: [0.5, 1.0]
+
+# === MLFLOW E REGISTRO DE MODELOS ===
+mlflow:
+  experiment_name: "TrustShield-Fraud-Detection"
+
+model_registry:
+  model_name: "TrustShield-IsolationForest-Prod"
+  promotion_threshold: 0.15
+  latency_p95_guard_s_per_row: 0.1
+
+# === PERFORMANCE E ROBUSTEZ ===
+performance:
+  batch_size: 100000 # Tamanho do batch para pontuação de anomalias
+  n_jobs: -1         # -1 para usar todos os núcleos de CPU
+
+robustness:
+  retry_attempts: 3  # Tentativas para carregar o modelo do MLflow
+
+# === OUTRAS SEÇÕES EMPRESARIAIS ===
+validation:
+  enable_performance_tests: true
+  enable_memory_tests: true
+sla:
+  inference_time_ms: 200
+  availability_percent: 99.9
+hardware:
+  target_platform: "Intel-i3-1115G4"
+  cpu_cores: 4
+security:
+  enable_audit_log: true
+observability:
+  structured_logging: true
