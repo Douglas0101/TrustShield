@@ -1,11 +1,14 @@
-# docker/mlflow.Dockerfile (Final e Verificado)
+# docker/mlflow.Dockerfile (Versão 2.0 - Corrigida com dependências de sistema)
 # Imagem personalizada para o serviço MLflow para incluir dependências.
 
-# ATUALIZAÇÃO: Usa a versão estável mais recente e oficial do MLflow,
-# verificada diretamente do repositório GitHub.
+# Usa a versão estável e oficial do MLflow.
 FROM ghcr.io/mlflow/mlflow:v3.1.4
 
-# Instala as dependências necessárias para a conexão com PostgreSQL (backend) e MinIO (artifacts).
-# Fazer isso no build da imagem é muito mais eficiente do que no runtime,
-# resultando em um startup mais rápido e confiável do serviço.
-RUN pip install boto3 psycopg2-binary
+# Instala as dependências de sistema E de Python.
+# 1. netcat-openbsd: ESSENCIAL para o script de 'command' no docker-compose.yml funcionar.
+# 2. boto3 e psycopg2-binary: Para conectar ao MinIO e PostgreSQL.
+# Usamos --no-install-recommends para manter a imagem enxuta e limpamos o cache do apt.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends netcat-openbsd curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    pip install boto3 psycopg2-binary

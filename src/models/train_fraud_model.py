@@ -3,15 +3,14 @@
 Sistema de Treinamento Ultra-Avançado - Projeto TrustShield
 VERSÃO EMPRESARIAL REARQUITETADA COM ENGENHARIA DE SOFTWARE CORRIGIDA
 
-🏆 APRIMORAMENTOS PROFUNDOS (v8.1.0-hotfix):
-✅ Cache Corrigido: O decorador @memory.cache agora usa `ignore=['self']`.
-✅ MLflow Aprimorado: Registra o artefato completo, garantindo reprodutibilidade.
-✅ Dask Otimizado: Otimiza o uso de memória ao lidar com Dask DataFrames.
-✅ Padrões de Design Refinados: Assinaturas de métodos mais claras e explícitas.
+🏆 APRIMORAMENTOS PROFUNDOS (v8.4.0-final-fix):
+✅ Cache Removido: O decorador @memory.cache foi removido para garantir estabilidade.
+✅ Logging Robusto: O ConsoleLogObserver usa .get() para evitar KeyErrors.
+✅ MLflow ID Corrigido: Captura e utiliza o ID do experimento real do MLflow.
 
 Autor: TrustShield Team & IA Gemini
-Versão: 8.1.0-hotfix
-Data: 2025-08-01
+Versão: 8.4.0-final-fix
+Data: 2025-08-02
 """
 
 import argparse
@@ -40,14 +39,8 @@ from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import dask.dataframe as dd
-from joblib import Memory
 
 warnings.filterwarnings('ignore')
-
-# Configuração de cache para dados
-cachedir = Path('cache')
-cachedir.mkdir(exist_ok=True)
-memory = Memory(cachedir, verbose=0)
 
 # Schema para validação de config.yaml
 CONFIG_SCHEMA = {
@@ -151,22 +144,40 @@ class AdvancedLogger:
 
 
 class ConsoleLogObserver(TrainingObserver):
-    def __init__(self, logger: AdvancedLogger): self.logger = logger
+    def __init__(self, logger: AdvancedLogger):
+        self.logger = logger
 
     def update(self, event: TrainingEvent, data: Dict[str, Any]):
-        messages = {
-            TrainingEvent.PIPELINE_START: f"🚀 === INICIANDO PIPELINE DE TREINO (ID: {data['experiment_id'][:8]}) ===",
-            TrainingEvent.DATA_LOADING_START: "📁 Carregando e preparando dados...",
-            TrainingEvent.DATA_LOADING_COMPLETE: f"✅ Dados prontos: {data['train_samples']:,} para treino, {data['test_samples']:,} para teste.",
-            TrainingEvent.TRAINING_START: f"\n{'=' * 60}\n🎯 TREINANDO MODELO: {data['model_type'].value.upper()}\n{'=' * 60}",
-            TrainingEvent.TRAINING_COMPLETE: f"✅ Modelo {data['model_type'].value} treinado com sucesso.",
-            TrainingEvent.MODEL_VALIDATED: f"📊 Métricas: Anomalias={data['metrics'].anomaly_rate:.4f} | Inferência={data['metrics'].inference_time:.1f}ms | CPU={data['metrics'].cpu_usage_percent:.1f}%",
-            TrainingEvent.MODEL_SAVED: f"💾 Artefato completo (modelo + scaler) salvo em: {data['model_path']}",
-            TrainingEvent.MLFLOW_LOGGING_COMPLETE: f"📦 Artefato e métricas registados no MLflow (Run ID: {data['run_id'][:8]}...)",
-            TrainingEvent.PIPELINE_COMPLETE: f"\n{'=' * 60}\n🎉 PIPELINE CONCLUÍDO COM SUCESSO em {data['total_time']:.2f}s\n{'=' * 60}",
-            TrainingEvent.PIPELINE_FAILED: f"❌ ERRO CRÍTICO NO PIPELINE: {data['error']}",
-        }
-        if message := messages.get(event): self.logger.log(logging.INFO, message)
+        log_message = ""
+        if event == TrainingEvent.PIPELINE_START:
+            log_message = f"🚀 === INICIANDO PIPELINE DE TREINO (Experimento ID: {data.get('experiment_id', 'N/A')[:8]}) ==="
+        elif event == TrainingEvent.DATA_LOADING_START:
+            log_message = "📁 Carregando e preparando dados..."
+        elif event == TrainingEvent.DATA_LOADING_COMPLETE:
+            train_samples = data.get('train_samples', 'N/A')
+            test_samples = data.get('test_samples', 'N/A')
+            log_message = f"✅ Dados prontos: {train_samples:,} para treino, {test_samples:,} para teste."
+        elif event == TrainingEvent.TRAINING_START:
+            model_name = data.get('model_type', type('Dummy', (), {'value': 'N/A'})()).value.upper()
+            log_message = f"\n{'=' * 60}\n🎯 TREINANDO MODELO: {model_name}\n{'=' * 60}"
+        elif event == TrainingEvent.TRAINING_COMPLETE:
+            model_name = data.get('model_type', type('Dummy', (), {'value': 'N/A'})()).value
+            log_message = f"✅ Modelo {model_name} treinado com sucesso."
+        elif event == TrainingEvent.MODEL_VALIDATED:
+            metrics = data.get('metrics')
+            if metrics:
+                log_message = f"📊 Métricas: Anomalias={metrics.anomaly_rate:.4f} | Inferência={metrics.inference_time:.1f}ms | CPU={metrics.cpu_usage_percent:.1f}%"
+        elif event == TrainingEvent.MODEL_SAVED:
+            log_message = f"💾 Artefato completo (modelo + scaler) salvo em: {data.get('model_path', 'N/A')}"
+        elif event == TrainingEvent.MLFLOW_LOGGING_COMPLETE:
+            log_message = f"📦 Artefato e métricas registados no MLflow (Run ID: {data.get('run_id', 'N/A')[:8]}...)"
+        elif event == TrainingEvent.PIPELINE_COMPLETE:
+            log_message = f"\n{'=' * 60}\n🎉 PIPELINE CONCLUÍDO COM SUCESSO em {data.get('total_time', -1):.2f}s\n{'=' * 60}"
+        elif event == TrainingEvent.PIPELINE_FAILED:
+            log_message = f"❌ ERRO CRÍTICO NO PIPELINE: {data.get('error', 'Erro desconhecido')}"
+
+        if log_message:
+            self.logger.log(logging.INFO, log_message)
 
 
 class MLflowObserver(TrainingObserver):
@@ -226,8 +237,8 @@ class ParquetDataRepository(DataRepository):
         self.project_root = project_root
         self.use_dask = use_dask
 
-    # CORREÇÃO: Adicionado ignore=['self'] para o cache funcionar corretamente em métodos de instância.
-    @memory.cache(ignore=['self'])
+    # --- CORREÇÃO APLICADA AQUI ---
+    # O decorador @memory.cache foi removido para evitar erros internos do joblib.
     def get_prepared_data(self) -> Tuple[Union[pd.DataFrame, dd.DataFrame], Union[pd.DataFrame, dd.DataFrame]]:
         data_path = self.project_root / self.config['paths']['data']['featured_dataset']
         df = dd.read_parquet(data_path) if self.use_dask else pd.read_parquet(data_path)
@@ -268,27 +279,32 @@ class AdvancedTrustShieldTrainer(Subject):
         self.project_root = Path(__file__).resolve().parents[2]
         self.config_path = config_path
         self.config = self._load_and_validate_config(config_path)
-        self.experiment_id = str(uuid.uuid4())
         self.use_dask = use_dask
         self.logger = AdvancedLogger('TrustShield')
         self.data_repository = ParquetDataRepository(self.config, self.project_root, use_dask=self.use_dask)
         self.attach(ConsoleLogObserver(self.logger))
         self.attach(MLflowObserver())
-        self._setup_environment()
+        self.mlflow_experiment_id = self._setup_environment()
 
     def _load_and_validate_config(self, config_path: str) -> Dict[str, Any]:
         with open(self.project_root / config_path, 'r') as f: config = yaml.safe_load(f)
         validate(instance=config, schema=CONFIG_SCHEMA)
         return config
 
-    def _setup_environment(self):
+    def _setup_environment(self) -> str:
         mlflow.set_tracking_uri("http://mlflow:5000")
-        mlflow.set_experiment(self.config.get('mlflow', {}).get('experiment_name', 'TrustShield'))
+        experiment_name = self.config.get('mlflow', {}).get('experiment_name', 'TrustShield-Advanced')
+        mlflow.set_experiment(experiment_name)
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if not experiment:
+            raise RuntimeError(f"Falha ao criar ou obter o experimento do MLflow: {experiment_name}")
+        return experiment.experiment_id
 
     def run_pipeline(self, model_types_str: List[str]):
         start_time = time.time()
         try:
-            self.notify(TrainingEvent.PIPELINE_START, {"experiment_id": self.experiment_id})
+            self.notify(TrainingEvent.PIPELINE_START, {"experiment_id": self.mlflow_experiment_id})
+
             self.notify(TrainingEvent.DATA_LOADING_START, {})
             X_train, X_test = self.data_repository.get_prepared_data()
             train_samples = len(X_train) if isinstance(X_train, pd.DataFrame) else X_train.shape[0].compute()
