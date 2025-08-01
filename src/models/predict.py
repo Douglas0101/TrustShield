@@ -149,28 +149,17 @@ class TrustShieldPredictor:
         except Exception as e:
             self.logger.warning(f"⚠️ Não foi possível obter informações detalhadas do sistema: {e}")
 
-    def _auto_detect_paths(self) -> Path:
-        """Detecta automaticamente o caminho do modelo mais recente."""
-        try:
-            project_root = Path(__file__).resolve().parents[2]
-            model_dir = project_root / "outputs" / "models"
+    def _auto_detect_paths(self) -> str:
+        model_dir = Path("/home/trustshield/outputs/models")
+        if not model_dir.exists():
+            raise FileNotFoundError(f"Diretório de modelos não encontrado: {model_dir}")
 
-            # Prioriza modelos 'isolation_forest' e depois busca o mais recente
-            model_patterns = ["*isolation_forest*.joblib", "*.joblib"]
-            latest_model = None
+        latest_model = max(model_dir.glob("*.joblib"), key=lambda p: p.stat().st_mtime, default=None)
 
-            for pattern in model_patterns:
-                models = list(model_dir.glob(pattern))
-                if models:
-                    latest_model = max(models, key=lambda p: p.stat().st_mtime)
-                    self.logger.info(f"📁 Modelo detectado automaticamente: {latest_model.name}")
-                    return latest_model
-
+        if not latest_model:
             raise FileNotFoundError(f"Nenhum modelo encontrado no diretório: {model_dir}")
 
-        except Exception as e:
-            self.logger.error(f"❌ Falha na detecção automática de caminhos: {e}")
-            raise
+        return str(latest_model)
 
     def _load_artifacts(self):
         """
