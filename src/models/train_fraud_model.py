@@ -54,7 +54,10 @@ from joblib import Memory
 warnings.filterwarnings('ignore')
 
 # Configuração de cache para dados
+# A cache é persistente entre execuções. Remova o diretório
+# 'cache/' ou utilize `memory.clear()` se o caminho do dataset mudar.
 cachedir = Path('cache')
+cachedir.mkdir(exist_ok=True)
 memory = Memory(cachedir, verbose=0)
 
 # Schema para validação de config.yaml (permanece o mesmo)
@@ -260,7 +263,13 @@ class ParquetDataRepository(DataRepository):
         self.project_root = project_root
         self.use_dask = use_dask
 
+    @memory.cache
     def get_prepared_data(self) -> Tuple[Union[pd.DataFrame, dd.DataFrame], Union[pd.DataFrame, dd.DataFrame]]:
+        """Carrega o dataset em Parquet e aplica todas as transformações.
+
+        O resultado é memorizado em disco para acelerar execuções futuras.
+        Limpe o diretório ``cache/`` caso o caminho do dataset mude.
+        """
         # A lógica de carregamento e preparação de dados permanece a mesma.
         data_path = self.project_root / self.config['paths']['data']['featured_dataset']
         df = dd.read_parquet(data_path) if self.use_dask else pd.read_parquet(data_path)
