@@ -23,6 +23,7 @@ O sistema foi concebido com uma arquitetura de nível empresarial, focada em rob
   - [Configuração do Ambiente](#configuração-do-ambiente)
   - [Executando o Pipeline Completo](#executando-o-pipeline-completo)
 - [Fluxo do Pipeline de Dados e ML](#fluxo-do-pipeline-de-dados-e-ml)
+- [Cache de Dados](#cache-de-dados)
 - [Roadmap e Próximos Passos](#roadmap-e-próximos-passos)
 - [Como Contribuir](#como-contribuir)
 - [Licença](#licença)
@@ -152,6 +153,8 @@ Quando `make docker-run` é executado, o seguinte pipeline é orquestrado dentro
     -   Carrega o *dataset* de *features*.
     -   Treina o modelo campeão (**Isolation Forest**).
     -   Regista parâmetros, métricas e o artefacto do modelo no MLflow.
+## **Cache de Dados**
+O carregamento do dataset é memorizado no diretório `cache/`. Limpe este diretório caso o caminho do ficheiro Parquet seja alterado.
 
 ## **Roadmap e Próximos Passos**
 
