@@ -653,4 +653,7 @@
  │    [::]:9000-9001->9000-9001/tcp                                                                                                                                                                    │
  │    trustshield-mlflow     trustshield-mlflow            "mlflow server --hos…"   mlflow            20 hours ago   Up 20 hours                            0.0.0.0:5000->5000/tcp,                    │
  │    [::]:5000->5000/tcp                                                                                                                                                                              │
- │    trustshield-postgres   postgres:13.12                "docker-entrypoint.s…"   postgres          20 hours ago   Up 20 hours (healthy)                  0.0.0.0:5432->5432/tcp,  
+ │    trustshield-postgres   postgres:13.12                "docker-entrypoint.s…"   postgres          20 hours ago   Up 20 hours (healthy)                  0.0.0.0:5432->5432/tcp,                              │
+ │    [::]:5432->5432/tcp                                                                                                                                                                                        │
+ │                                                                                                                                                                                                               │
+ ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
