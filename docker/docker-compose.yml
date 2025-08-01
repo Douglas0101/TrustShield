@@ -1,0 +1,116 @@
+# docker/docker-compose.yml (Versão 9.4.0 - Orquestração Robusta)
+services:
+  postgres:
+    image: postgres:13.12
+    container_name: trustshield-postgres
+    ports: ["5432:5432"]
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks: [trustshield-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: trustshield-minio
+    ports: ["9000:9000", "9001:9001"]
+    environment:
+      - MINIO_ROOT_USER_FILE=/run/secrets/minio_root_user
+      - MINIO_ROOT_PASSWORD_FILE=/run/secrets/minio_root_password
+    secrets: [minio_root_user, minio_root_password]
+    command: server /data --console-address ":9001"
+    volumes: [minio_data:/data]
+    networks: [trustshield-net]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    restart: unless-stopped
+
+  create-buckets:
+    image: minio/mc:latest
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+      mc ls myminio/mlflow > /dev/null 2>&1 || mc mb myminio/mlflow;
+      exit 0;
+      "
+    networks: [trustshield-net]
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: mlflow.Dockerfile
+    container_name: trustshield-mlflow
+    ports: ["5000:5000"]
+    environment:
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+    secrets: [postgres_password]
+    command: >
+      sh -c "
+      echo 'Serviço MLflow: Aguardando pelo PostgreSQL em postgres:5432...'
+      until nc -z postgres 5432; do sleep 2; done;
+      echo 'PostgreSQL pronto! Iniciando o servidor MLflow...'
+      mlflow server
+        --host 0.0.0.0 --port 5000
+        --backend-store-uri postgresql://${POSTGRES_USER}:$$(cat /run/secrets/postgres_password)@postgres/${POSTGRES_DB}
+        --default-artifact-root s3://mlflow/
+      "
+    depends_on:
+      postgres: { condition: service_healthy }
+      create-buckets: { condition: service_completed_successfully }
+    networks: [trustshield-net]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  trustshield-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: trustshield-api
+    ports: ["8000:8000"]
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - ../src:/home/trustshield/src
+      - ../config:/home/trustshield/config
+      - ../outputs:/home/trustshield/outputs
+    depends_on:
+      mlflow: { condition: service_healthy }
+    networks: [trustshield-net]
+    restart: unless-stopped
+    # CORREÇÃO: Removido o entrypoint daqui, pois ele será usado apenas para a tarefa de treino.
+    # A API de longa duração não precisa de esperar, pois o depends_on já faz isso.
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+networks:
+  trustshield-net: { driver: bridge }
+
+volumes:
+  postgres_data:
+  minio_data:
+
+secrets:
+  postgres_password: { file: ../secrets/postgres_password.txt }
+  minio_root_user: { file: ../secrets/minio_root_user.txt }
+  minio_root_password: { file: ../secrets/minio_root_password.txt }
