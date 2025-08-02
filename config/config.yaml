@@ -1,130 +1,101 @@
 # Configuração Avançada TrustShield Enterprise
-# Versão: 4.0.0-enterprise
+# Versão: 10.0.0 (com suporte a Forecast Otimizado)
 
 project:
   name: "TrustShield-Advanced"
-  version: "4.0.0"
+  version: "10.0.0"
   random_state: 42
 
-# === PATHS ===
-# config/config.yaml
+# === CAMINHOS E ARTEFATOS ===
 paths:
   data:
     featured_dataset: "data/features/featured_dataset.parquet"
-    raw_data: "data/raw"
-    processed: "data/processed"
-  models:
-    output_dir: "outputs/models"
-    registry: "models/registry"
-  logs:
-    output_dir: "logs"
+    # Novo: Caminho para o dataset agregado para séries temporais
+    time_series_dataset: "data/processed/time_series_anomalies.parquet"
+  config: "config/config.yaml"
 
-# === PREPROCESSING ===
-# config/config.yaml
-# config/config.yaml
-# config/config.yaml
+# === SÉRIES TEMPORAIS (FORECAST) ===
+time_series:
+  time_column: "date" # Coluna de data/hora no dataset de features
+  aggregation_freq: "D" # 'D' para diário, 'W' para semanal, 'M' para mensal
+  forecast_horizon_end_date: "2040-12-31"
+  prophet_params:
+    daily_seasonality: true
+    weekly_seasonality: true
+    yearly_seasonality: true
+    seasonality_mode: 'multiplicative'
+  arima_params:
+    order: [5, 1, 0] # Ordem (p,d,q) para o modelo ARIMA
+
+# === PRÉ-PROCESSAMENTO E DADOS ===
 preprocessing:
-  features_to_drop:
-    - "timestamp"
-    - "user_id"
-    - "transaction_id"
-    - "date"
-    - "merchant_city"
-    - "merchant_state"
-    - "zip"
-    - "address"
-    - "card_id"
-    - "merchant_id"
-    - "errors" # <-- ADICIONE ESTA LINHA
-  categorical_features:
-    - "use_chip"
-    - "gender"
-  feature_store_version: "v2.0"
-  enable_feature_engineering: true
-  memory_optimization: true
+  sample_frac: 0.1 # Fração dos dados a ser usada. 1.0 para dataset completo.
+  scaler: "standard" # Opções: 'standard' ou 'robust'
 
-# === MODELS ===
+# === MODELAGEM (DETECÇÃO DE ANOMALIAS) ===
 models:
   isolation_forest:
-    params:
-      n_estimators: 150
-      contamination: 0.1
-      max_features: 0.8
-      bootstrap: true
-      n_jobs: 4
-      random_state: 42
+    features:
+      - amount
+      - current_age
+      - retirement_age
+      - birth_year
+      - birth_month
+      - latitude
+      - longitude
+      - per_capita_income
+      - yearly_income
+      - total_debt
+      - credit_score
+      - num_credit_cards
+      - transaction_hour
+      - day_of_week
+      - month
+      - is_weekend
+      - is_night_transaction
+      - amount_vs_avg
 
-  lof:
-    params:
-      n_neighbors: 25
-      algorithm: "auto"
-      contamination: 0.1
-      n_jobs: 4
-
-  one_class_svm:
-    params:
-      nu: 0.1
-      learning_rate: "adaptive"
-      eta0: 0.01
-      random_state: 42
-
-  hierarchical_lof:
-    params:
-      n_clusters: 50
-      n_neighbors: 20
-      contamination: 0.1
-
-# === TRAINING ===
+# === TREINAMENTO E HPO ===
 training:
-  model_types: ["isolation_forest"] # Foco total no modelo campeão
   test_size: 0.15
-  cross_validation_folds: 5
-  max_training_time: 3600  # segundos
-  target_inference_time_ms: 200.0
-  intel_optimization: true
-  batch_size_auto: true
+  validation_size: 0.15
 
-# === VALIDATION ===
+hyper_optimization:
+  n_trials: 50
+  fixed_contamination: 0.01
+  space:
+    n_estimators: [50, 200]
+    max_samples: [0.5, 1.0]
+    max_features: [0.5, 1.0]
+
+# === MLFLOW E REGISTRO DE MODELOS ===
+mlflow:
+  experiment_name: "TrustShield-Fraud-Detection"
+
+model_registry:
+  model_name: "TrustShield-IsolationForest-Prod"
+  promotion_threshold: 0.15
+  latency_p95_guard_s_per_row: 0.1
+
+# === PERFORMANCE E ROBUSTEZ ===
+performance:
+  batch_size: 100000 # Tamanho do batch para pontuação de anomalias
+  n_jobs: -1         # -1 para usar todos os núcleos de CPU
+
+robustness:
+  retry_attempts: 3  # Tentativas para carregar o modelo do MLflow
+
+# === OUTRAS SEÇÕES EMPRESARIAIS ===
 validation:
-  enable_cross_validation: true
-  stratified: false
-  shuffle: true
-  performance_tests: true
-  memory_tests: true
-
-# === SLA & PERFORMANCE ===
+  enable_performance_tests: true
+  enable_memory_tests: true
 sla:
   inference_time_ms: 200
   availability_percent: 99.9
-  detection_recall_min: 0.90
-  detection_precision_min: 0.85
-  false_positive_rate_max: 0.02
-
-# === MLFLOW ===
-mlflow:
-  experiment_name: "TrustShield-Advanced"
-  tracking_uri: "file://./mlruns"
-  artifact_store: "file://./mlruns"
-  enable_model_registry: true
-  enable_auto_logging: true
-
-# === HARDWARE ===
 hardware:
   target_platform: "Intel-i3-1115G4"
   cpu_cores: 4
-  memory_gb: 20
-  enable_optimization: true
-  mkl_threads: 4
-
-# === SECURITY ===
 security:
   enable_audit_log: true
-  encrypt_models: false
-  secure_memory: true
-
-# === OBSERVABILITY ===
 observability:
   structured_logging: true
-  metrics_collection: true
-  resource_monitoring: true
-  performance_profiling: true

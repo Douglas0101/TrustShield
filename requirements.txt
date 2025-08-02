@@ -19,6 +19,7 @@ mlflow         # Plataforma de ciclo de vida de ML (tracking, registry).
 optuna         # Framework de otimização de hiperparâmetros.
 optuna-integration[mlflow]
 jsonschema     # Para validar a estrutura do ficheiro de configuração.
+pandera
 
 # --- ARMAZENAMENTO E MANIPULAÇÃO DE DADOS ---
 # Drivers e bibliotecas para interagir com formatos de ficheiro e storage.
