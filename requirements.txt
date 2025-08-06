@@ -1,5 +1,5 @@
 # ==============================================================================
-# TrustShield Advanced Requirements (Versão 8.0.1-aligned)
+# TrustShield Advanced Requirements (Versão 8.0.0-robust)
 #
 # Este ficheiro define as dependências Python para o projeto TrustShield.
 # Está organizado por funcionalidade para clareza e manutenibilidade.
@@ -32,14 +32,6 @@ numba          # Compilador JIT que acelera código Python numérico.
 joblib         # Para serialização eficiente de objetos Python (modelos).
 dask           # Para computação paralela em datasets maiores que a memória.
 
-# --- IA AVANÇADA: INTERPRETABILIDADE, EQUIDADE E ROBUSTEZ (CORRIGIDO) ---
-# Bibliotecas essenciais para o pipeline de treino avançado.
-shap           # Para interpretabilidade de modelos (SHAP values).
-tenacity       # Para a implementação de retries robustos em operações críticas.
-torch          # Necessário para o modelo substituto (AdvancedSurrogateModel).
-aif360         # Toolkit para análise de equidade (fairness) e mitigação de viés.
-art   # Adversarial Robustness Toolbox (ART) para testes de segurança do modelo.
-
 # --- MONITORIZAÇÃO E AVALIAÇÃO ---
 # Ferramentas para monitorizar recursos e visualizar resultados.
 psutil         # Para aceder a informações do sistema (CPU, memória).
@@ -71,5 +63,3 @@ pre-commit
 pytest
 pytest-cov
 pytest-mock
-dvc            # Para versionamento de dados na linha de comando.
-aif360

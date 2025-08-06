@@ -1,93 +1,82 @@
-# Makefile - TrustShield Advanced (Versão 10.0.0 - com Pipeline de Forecast)
-.PHONY: help install test lint format clean services-up services-down services-up-fresh train train-forecast logs purge build-force
+# Makefile - TrustShield Advanced (Versão 7.0.0 - Compose V2 Fix)
+# CORREÇÃO: Usa 'docker compose' (V2, com espaço) em vez do obsoleto 'docker-compose' (V1, com hífen).
+.PHONY: help install test lint format clean services-up services-down services-up-fresh train logs purge
 
-# --- CONFIGURAÇÃO E PRÉ-REQUISITOS ---
-DOCKER_COMPOSE_CMD = docker compose --env-file ./.env
-API_SERVICE_NAME=trustshield-api
-
-# Cores para o output
-GREEN=\033[0;32m
-YELLOW=\033[0;33m
-NC=\033[0m # No Color
-
-# Argumentos default para os pipelines, podem ser sobrescritos
-# Ex: make train args="--outro-argumento"
-train_args ?= --model isolation_forest
-# Ex: make train-forecast ts_args="--model-type arima"
-ts_args ?= --model-type prophet
-
-# =====================================================================================
-# === PIPELINES PRINCIPAIS ===
-# =====================================================================================
-
-train: build-force services-up process-data
-	@echo "${YELLOW}🧠 Executando o pipeline de treino de deteção de anomalias...${NC}"
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/models/train_fraud_model.py $(train_args)
-	@echo "${GREEN}✅ Pipeline de treino de deteção de anomalias concluído.${NC}"
-
-train-forecast: train aggregate-ts-data
-	@echo "${YELLOW}📈 Executando o pipeline de treino do modelo de forecast...${NC}"
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/models/train_ts_model.py $(ts_args)
-	@echo "${GREEN}✅ Pipeline de forecast de séries temporais concluído com sucesso.${NC}"
+# === AJUDA ===
+help:
+	@echo "TrustShield Advanced - Comandos Disponíveis:"
+	@echo ""
+	@echo "--- GESTÃO DE SERVIÇOS (PERSISTENTES) ---"
+	@echo "  services-up         - Inicia todos os serviços (API, Postgres, MinIO, MLflow) em segundo plano."
+	@echo "  services-down       - Para os serviços de backend sem apagar os dados."
+	@echo "  services-up-fresh   - Reconstrói a imagem unificada e reinicia os serviços. Use para aplicar grandes mudanças."
+	@echo "  logs [service]      - Mostra os logs de um serviço (ex: make logs service=mlflow). Padrão: trustshield-api."
+	@echo ""
+	@echo "--- PIPELINE & TAREFAS (EFÊMERAS) ---"
+	@echo "  train [args]        - Executa o pipeline de treino completo dentro do Docker (ex: make train args='--model lof'). Requer 'services-up'."
+	@echo ""
+	@echo "--- LIMPEZA COMPLETA (DESTRUTIVO) ---"
+	@echo "  purge               - PARA TUDO e APAGA TODOS os dados (contêineres, volumes, redes). Use com cuidado!"
+	@echo ""
+	@echo "--- DESENVOLVIMENTO LOCAL ---"
+	@echo "  install             - Instalar dependências locais e pre-commit."
+	@echo "  test                - Executar testes locais."
+	@echo "  lint                - Verificar o estilo do código localmente."
+	@echo "  format              - Formatar o código localmente."
+	@echo "  clean               - Limpar ficheiros temporários do Python."
 
 # =====================================================================================
-# === SUB-TARGETS E ORQUESTRAÇÃO ===
+# === SEÇÃO DOCKER: O CORAÇÃO DA OPERAÇÃO ===
 # =====================================================================================
 
-process-data:
-	@echo "${YELLOW}🔧 Executando o pipeline de processamento de dados...${NC}"
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/data/make_dataset.py
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/features/build_features.py
-	@echo "${GREEN}✅ Processamento de dados concluído.${NC}"
-
-aggregate-ts-data:
-	@echo "${YELLOW}📊 Agregando dados para a série temporal...${NC}"
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/data/aggregate_for_ts.py
-
-# =====================================================================================
-# === GESTÃO DE SERVIÇOS DOCKER ===
-# =====================================================================================
-
-build-force:
-	@echo "${YELLOW}🏗️  Reconstruindo a imagem Docker '${API_SERVICE_NAME}' para garantir que as dependências estão atualizadas...${NC}"
-	$(DOCKER_COMPOSE_CMD) build --no-cache $(API_SERVICE_NAME)
-
+# ATUALIZAÇÃO: Trocado 'docker-compose' por 'docker compose' em todos os comandos.
 services-up:
-	@echo "${YELLOW}🚀 Subindo todos os serviços de suporte e aguardando que fiquem saudáveis...${NC}"
-	$(DOCKER_COMPOSE_CMD) up -d --wait
-	@echo "${GREEN}✅ Todos os serviços estão prontos e saudáveis.${NC}"
+	@echo "🚀 Subindo todos os serviços (API, Postgres, MinIO, MLflow)..."
+	docker compose -f docker/docker-compose.yml up -d --remove-orphans
 
 services-down:
-	@echo "${YELLOW}🛑 Parando todos os serviços...${NC}"
-	$(DOCKER_COMPOSE_CMD) down --remove-orphans
+	@echo "🛑 Parando todos os serviços..."
+	docker compose -f docker/docker-compose.yml down --remove-orphans
 
-services-up-fresh: build-force services-up
+services-up-fresh:
+	@echo "🧼 Reconstruindo a imagem unificada e subindo todos os serviços do zero..."
+	docker compose -f docker/docker-compose.yml up -d --build --force-recreate --remove-orphans
 
-purge:
-	@echo "${YELLOW}🔥🔥🔥 ATENÇÃO: Parando e APAGANDO TODOS OS DADOS! 🔥🔥🔥${NC}"
-	$(DOCKER_COMPOSE_CMD) down --volumes
-	@echo "${YELLOW}🧹 Limpando recursos do Docker (cache de build e imagens não utilizadas)...${NC}"
-	docker builder prune -a -f
-	docker system prune -f
-	@echo "${GREEN}🧼 Limpeza completa.${NC}"
-
-# =====================================================================================
-# === COMANDOS DE DESENVOLVIMENTO ===
-# =====================================================================================
-service ?= mlflow
+service ?= trustshield-api
 logs:
-	@echo "🔎 Acompanhando os logs do serviço: $(service)... (Pressione Ctrl+C para sair)"
-	$(DOCKER_COMPOSE_CMD) logs -f $(service)
+	@echo "🔎 Acompanhando os logs do serviço: $(service)..."
+	docker compose -f docker/docker-compose.yml logs -f $(service)
 
+# --- PIPELINE & TAREFAS (EFÊMERAS) ---
+args ?= --model isolation_forest
+train:
+	@echo "🧠 Executando o pipeline de treino no ambiente unificado..."
+	@echo "   Comando: python /home/trustshield/src/models/train_fraud_model.py $(args)"
+	docker compose -f docker/docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py $(args)
+
+# --- LIMPEZA COMPLETA (DESTRUTIVO) ---
+purge:
+	@echo "🔥🔥🔥 ATENÇÃO: Parando todos os serviços e APAGANDO TODOS OS VOLUMES DE DADOS! 🔥🔥🔥"
+	docker compose -f docker/docker-compose.yml down --volumes
+	@echo "🧹 Limpando cache do builder do Docker..."
+	docker builder prune -a -f
+	@echo "🧹 Limpando outros recursos do Docker..."
+	docker system prune -f
+
+
+# =====================================================================================
+# === SEÇÃO DE DESENVOLVIMENTO LOCAL (Não usa Docker) ===
+# =====================================================================================
 install:
 	pip install -r requirements.txt
 	pre-commit install
 
 test:
-	pytest tests/ -v
+	pytest tests/test_advanced.py -v
 
 lint:
 	flake8 src/ tests/
+	mypy src/
 
 format:
 	black src/ tests/
@@ -95,3 +84,4 @@ format:
 clean:
 	find . -type f -name "*.pyc" -delete
 	find . -type d -name "__pycache__" -delete
+	rm -rf .coverage htmlcov/ .pytest_cache/
