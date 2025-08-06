@@ -1,97 +1,87 @@
-# Makefile - TrustShield Advanced (Versão 10.0.0 - com Pipeline de Forecast)
-.PHONY: help install test lint format clean services-up services-down services-up-fresh train train-forecast logs purge build-force
+# ==============================================================================
+# Makefile - TrustShield Enterprise Grade
+# Versão: 9.0.0 (Robust Build Flow)
+#
+# Otimizações e Melhores Práticas Implementadas:
+# - ROBUSTEZ: O comando 'fresh' agora depende do 'purge', garantindo uma
+#   limpeza completa antes de cada reconstrução para evitar conflitos.
+# - CLAREZA: Comandos simplificados e ajuda detalhada.
+# - MODERNIZAÇÃO: Uso exclusivo de 'docker compose' (sintaxe V2).
+# ==============================================================================
 
-# --- CONFIGURAÇÃO E PRÉ-REQUISITOS ---
-DOCKER_COMPOSE_CMD = docker compose --env-file ./.env
-API_SERVICE_NAME=trustshield-api
+# Define o nome do arquivo compose para não repetir.
+COMPOSE_FILE := docker/docker-compose.yml
 
-# Cores para o output
-GREEN=\033[0;32m
-YELLOW=\033[0;33m
-NC=\033[0m # No Color
+# Evita que o make confunda um alvo com um nome de arquivo.
+.PHONY: help up down fresh logs train purge
 
-# Argumentos default para os pipelines, podem ser sobrescritos
-# Ex: make train args="--outro-argumento"
-train_args ?= --model isolation_forest
-# Ex: make train-forecast ts_args="--model-type arima"
-ts_args ?= --model-type prophet
+# --- ALVO PADRÃO ---
+# Executado quando 'make' é chamado sem argumentos.
+default: help
 
-# =====================================================================================
-# === PIPELINES PRINCIPAIS ===
-# =====================================================================================
+# === AJUDA ===
+help:
+	@echo "=============== TrustShield MLOps Control Panel ================"
+	@echo "Uso: make [comando]"
+	@echo ""
+	@echo "--- Gestão do Ambiente Docker ---"
+	@echo "  up                  - Inicia todos os serviços em background."
+	@echo "  down                - Para todos os serviços (sem apagar dados)."
+	@echo "  fresh               - (RECOMENDADO) Limpa TUDO e reconstrói o ambiente do zero."
+	@echo "  logs [service=...]  - Mostra os logs de um serviço (padrão: trustshield-api)."
+	@echo ""
+	@echo "--- Pipeline de Machine Learning ---"
+	@echo "  train [args=...]    - Executa o pipeline de treino completo (ex: make train args='--config config/alternative.yaml')."
+	@echo ""
+	@echo "--- Limpeza Completa (AÇÃO DESTRUTIVA) ---"
+	@echo "  purge               - PARA e APAGA todos os contêineres, redes e VOLUMES DE DADOS."
 
-train: build-force services-up process-data
-	@echo "${YELLOW}🧠 Executando o pipeline de treino de deteção de anomalias...${NC}"
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/models/train_fraud_model.py $(train_args)
-	@echo "${GREEN}✅ Pipeline de treino de deteção de anomalias concluído.${NC}"
+# ==============================================================================
+# === Gestão do Ambiente Docker
+# ==============================================================================
+up:
+	@echo "🚀 Iniciando todos os serviços do TrustShield em background..."
+	docker compose -f $(COMPOSE_FILE) up -d
 
-train-forecast: train aggregate-ts-data
-	@echo "${YELLOW}📈 Executando o pipeline de treino do modelo de forecast...${NC}"
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/models/train_ts_model.py $(ts_args)
-	@echo "${GREEN}✅ Pipeline de forecast de séries temporais concluído com sucesso.${NC}"
+down:
+	@echo "🛑 Parando todos os serviços do TrustShield..."
+	docker compose -f $(COMPOSE_FILE) down
 
-# =====================================================================================
-# === SUB-TARGETS E ORQUESTRAÇÃO ===
-# =====================================================================================
+# OTIMIZAÇÃO: Este comando agora executa 'purge' primeiro, garantindo um ambiente limpo.
+fresh: purge
+	@echo "🔄 Reconstruindo imagens e reiniciando todos os serviços..."
+	docker compose -f $(COMPOSE_FILE) up -d --build --force-recreate
 
-process-data:
-	@echo "${YELLOW}🔧 Executando o pipeline de processamento de dados...${NC}"
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/data/make_dataset.py
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/features/build_features.py
-	@echo "${GREEN}✅ Processamento de dados concluído.${NC}"
+# Permite especificar o serviço para os logs, ex: make logs service=mlflow
+service ?= trustshield-api
+logs:
+	@echo "🔎 Acompanhando logs do serviço: $(service)... (Pressione Ctrl+C para sair)"
+	docker compose -f $(COMPOSE_FILE) logs -f $(service)
 
-aggregate-ts-data:
-	@echo "${YELLOW}📊 Agregando dados para a série temporal...${NC}"
-	$(DOCKER_COMPOSE_CMD) exec $(API_SERVICE_NAME) python /home/trustshield/src/data/aggregate_for_ts.py
+# ==============================================================================
+# === Pipeline de Machine Learning
+# ==============================================================================
 
-# =====================================================================================
-# === GESTÃO DE SERVIÇOS DOCKER ===
-# =====================================================================================
+# Permite passar argumentos para o script, ex: make train args="--config config/other.yaml"
+args ?= --config config/config.yaml
+train: up
+	@echo "🧠 Executando o pipeline de treino do TrustShield..."
+	@echo "   Comando a ser executado no container:"
+	@echo "   python src/models/train_fraud_model.py $(args)"
+	# Usa 'run --rm' para criar um container efêmero para a tarefa de treino.
+	docker compose -f $(COMPOSE_FILE) run --rm trustshield-api python src/models/train_fraud_model.py $(args)
 
-build-force:
-	@echo "${YELLOW}🏗️  Reconstruindo a imagem Docker '${API_SERVICE_NAME}' para garantir que as dependências estão atualizadas...${NC}"
-	$(DOCKER_COMPOSE_CMD) build --no-cache $(API_SERVICE_NAME)
-
-services-up:
-	@echo "${YELLOW}🚀 Subindo todos os serviços de suporte e aguardando que fiquem saudáveis...${NC}"
-	$(DOCKER_COMPOSE_CMD) up -d --wait
-	@echo "${GREEN}✅ Todos os serviços estão prontos e saudáveis.${NC}"
-
-services-down:
-	@echo "${YELLOW}🛑 Parando todos os serviços...${NC}"
-	$(DOCKER_COMPOSE_CMD) down --remove-orphans
-
-services-up-fresh: build-force services-up
-
+# ==============================================================================
+# === Limpeza Completa
+# ==============================================================================
 purge:
-	@echo "${YELLOW}🔥🔥🔥 ATENÇÃO: Parando e APAGANDO TODOS OS DADOS! 🔥🔥🔥${NC}"
-	$(DOCKER_COMPOSE_CMD) down --volumes
-	@echo "${YELLOW}🧹 Limpando recursos do Docker (cache de build e imagens não utilizadas)...${NC}"
+	@echo "🔥🔥🔥 AVISO: Ação destrutiva! Parando e apagando todos os contêineres, redes e volumes... 🔥🔥🔥"
+	@echo "--> Forçando a parada e remoção de contêineres conhecidos para evitar conflitos..."
+	@-docker stop trustshield-api trustshield-mlflow trustshield-bucket-creator trustshield-minio trustshield-postgres >/dev/null 2>&1
+	@-docker rm -f trustshield-api trustshield-mlflow trustshield-bucket-creator trustshield-minio trustshield-postgres >/dev/null 2>&1
+	@echo "--> Executando o 'down' do compose para limpar a rede e os volumes..."
+	docker compose -f $(COMPOSE_FILE) down --volumes
+	@echo "🧹 Limpando cache de build e outros recursos não utilizados do Docker..."
 	docker builder prune -a -f
 	docker system prune -f
-	@echo "${GREEN}🧼 Limpeza completa.${NC}"
-
-# =====================================================================================
-# === COMANDOS DE DESENVOLVIMENTO ===
-# =====================================================================================
-service ?= mlflow
-logs:
-	@echo "🔎 Acompanhando os logs do serviço: $(service)... (Pressione Ctrl+C para sair)"
-	$(DOCKER_COMPOSE_CMD) logs -f $(service)
-
-install:
-	pip install -r requirements.txt
-	pre-commit install
-
-test:
-	pytest tests/ -v
-
-lint:
-	flake8 src/ tests/
-
-format:
-	black src/ tests/
-
-clean:
-	find . -type f -name "*.pyc" -delete
-	find . -type d -name "__pycache__" -delete
+	@echo "✨ Ambiente limpo."

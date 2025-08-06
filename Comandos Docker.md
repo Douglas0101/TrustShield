@@ -9,3 +9,9 @@ make services-up
 
 # 4. Executar o treino
 make train
+
+# Novos comandos
+
+make fresh 
+
+make train

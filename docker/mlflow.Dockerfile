@@ -1,11 +1,18 @@
-# docker/mlflow.Dockerfile (Final e Verificado)
-# Imagem personalizada para o serviço MLflow para incluir dependências.
+# ==============================================================================
+# mlflow.Dockerfile - TrustShield Enterprise Grade
+# Versão: 4.0.0
+#
+# Otimizações e Melhores Práticas Implementadas:
+# - ATUALIZAÇÃO: Uso da imagem oficial e versionada do MLflow para estabilidade.
+# - Pré-instalação de dependências para um startup de serviço mais rápido.
+# ==============================================================================
 
-# ATUALIZAÇÃO: Usa a versão estável mais recente e oficial do MLflow,
-# verificada diretamente do repositório GitHub.
-FROM ghcr.io/mlflow/mlflow:v3.1.4
+# SEGURANÇA E ESTABILIDADE: Use uma tag de versão específica da imagem oficial.
+# ATUALIZADO para a versão mais recente conforme solicitado.
+FROM ghcr.io/mlflow/mlflow:v3.2.0
 
-# Instala as dependências necessárias para a conexão com PostgreSQL (backend) e MinIO (artifacts).
-# Fazer isso no build da imagem é muito mais eficiente do que no runtime,
-# resultando em um startup mais rápido e confiável do serviço.
-RUN pip install boto3 psycopg2-binary
+# Instala as dependências necessárias para a conexão com:
+# - PostgreSQL (usado como backend-store)
+# - MinIO/S3 (usado como artifact-store)
+# Fazer isso no build da imagem é a prática recomendada para performance e confiabilidade.
+RUN pip install --no-cache-dir boto3 psycopg2-binary
