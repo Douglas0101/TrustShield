@@ -12,7 +12,6 @@ scikit-learn
 numpy
 pandas
 scipy
-scikit-learn
 
 # --- MLOPS: EXPERIMENTAÇÃO E GOVERNANÇA ---
 # Ferramentas para rastreamento, versionamento e otimização de modelos.
@@ -64,6 +63,4 @@ pre-commit
 pytest
 pytest-cov
 pytest-mock
-shap
-structlog
-xgboost
+psutil

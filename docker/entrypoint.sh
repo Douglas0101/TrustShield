@@ -80,4 +80,4 @@ log_info "Todos os serviços dependentes estão operacionais. Executando o coman
 
 # 'exec' substitui o processo do shell pelo comando passado como argumento ($@).
 # Esta é a melhor prática para gestão de sinais e processos em containers.
-exec /home/trustshield/.local/bin/uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+exec "$@"

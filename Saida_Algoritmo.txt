@@ -1,109 +1,283 @@
-(rapids-25.06) douglasdesouza@douglasdesouza-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make services-up-fresh
-🧼 Reconstruindo a imagem unificada e subindo todos os serviços do zero...
-docker compose -f docker/docker-compose.yml up -d --build --force-recreate --remove-orphans
-[+] Building 132.4s (25/25) FINISHED
- => [internal] load local bake definitions                                                                                                                                                                            0.0s
- => => reading from stdin 764B                                                                                                                                                                                        0.0s
- => [mlflow internal] load build definition from mlflow.Dockerfile                                                                                                                                                    0.0s
- => => transferring dockerfile: 607B                                                                                                                                                                                  0.0s
- => [trustshield-api internal] load build definition from Dockerfile                                                                                                                                                  0.0s
- => => transferring dockerfile: 1.71kB                                                                                                                                                                                0.0s
- => WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 3)                                                                                                                                        0.0s
- => WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 25)                                                                                                                                       0.0s
- => [mlflow internal] load metadata for ghcr.io/mlflow/mlflow:v3.1.4                                                                                                                                                  2.1s
- => [trustshield-api internal] load metadata for docker.io/library/python:3.10-slim                                                                                                                                   1.8s
- => [trustshield-api internal] load .dockerignore                                                                                                                                                                     0.0s
- => => transferring context: 3.54kB                                                                                                                                                                                   0.0s
- => CACHED [trustshield-api builder 1/6] FROM docker.io/library/python:3.10-slim@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5                                                              0.0s
- => [trustshield-api internal] load build context                                                                                                                                                                     0.0s
- => => transferring context: 544B                                                                                                                                                                                     0.0s
- => [trustshield-api builder 2/6] RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*                                                                                15.8s
- => [trustshield-api final 2/6] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                               0.2s
- => [trustshield-api final 3/6] WORKDIR /home/trustshield                                                                                                                                                             0.0s
- => [mlflow internal] load .dockerignore                                                                                                                                                                              0.0s
- => => transferring context: 2B                                                                                                                                                                                       0.0s
- => [mlflow 1/2] FROM ghcr.io/mlflow/mlflow:v3.1.4@sha256:a6c8c65bce6d46c6cf6fb46489c23d5b587c3ca01be05447b55111cee18c4de8                                                                                            0.0s
- => => resolve ghcr.io/mlflow/mlflow:v3.1.4@sha256:a6c8c65bce6d46c6cf6fb46489c23d5b587c3ca01be05447b55111cee18c4de8                                                                                                   0.0s
- => => sha256:a6c8c65bce6d46c6cf6fb46489c23d5b587c3ca01be05447b55111cee18c4de8 1.61kB / 1.61kB                                                                                                                        0.0s
- => => sha256:7a72996c8e5d5ff1b2e148228ad8ab20ceb229609f405e133ccd3b7f0b29183a 1.25kB / 1.25kB                                                                                                                        0.0s
- => => sha256:7d125d23d442cee2ffff5fe60d718d59a848788d3eeac9d5ac391bbb0df45220 5.77kB / 5.77kB                                                                                                                        0.0s
- => [mlflow 2/2] RUN pip install boto3 psycopg2-binary                                                                                                                                                                7.2s
- => [mlflow] exporting to image                                                                                                                                                                                       0.2s
- => => exporting layers                                                                                                                                                                                               0.2s
- => => writing image sha256:e7190463fd15f9ae483410d8b2647e13123b017205d37e68a41b628bb5c2aac3                                                                                                                          0.0s
- => => naming to docker.io/library/docker-mlflow                                                                                                                                                                      0.0s
- => [mlflow] resolving provenance for metadata file                                                                                                                                                                   0.0s
- => [trustshield-api builder 3/6] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                             0.1s
- => [trustshield-api builder 4/6] WORKDIR /home/trustshield                                                                                                                                                           0.0s
- => [trustshield-api builder 5/6] COPY --chown=trustshield:trustshield requirements.txt .                                                                                                                             0.0s
- => [trustshield-api builder 6/6] RUN pip install --user -r requirements.txt                                                                                                                                        102.6s
- => [trustshield-api final 4/6] COPY --from=builder --chown=trustshield:trustshield /home/trustshield/.local /home/trustshield/.local                                                                                 6.7s
- => [trustshield-api final 5/6] COPY --chown=trustshield:trustshield src ./src                                                                                                                                        0.0s
- => [trustshield-api final 6/6] COPY --chown=trustshield:trustshield config ./config                                                                                                                                  0.0s
- => [trustshield-api] exporting to image                                                                                                                                                                              3.2s
- => => exporting layers                                                                                                                                                                                               3.2s
- => => writing image sha256:bb828c364aad96f5743d167ed55bd3d4b7d8b8f612877640f87cc51786fce37b                                                                                                                          0.0s
- => => naming to docker.io/library/docker-trustshield-api                                                                                                                                                             0.0s
- => [trustshield-api] resolving provenance for metadata file                                                                                                                                                          0.0s
-[+] Running 10/10
- ✔ mlflow                             Built                                                                                                                                                                           0.0s
- ✔ trustshield-api                    Built                                                                                                                                                                           0.0s
- ✔ Network docker_trustshield-net     Created                                                                                                                                                                         0.0s
- ✔ Volume "docker_postgres_data"      Created                                                                                                                                                                         0.0s
- ✔ Volume "docker_minio_data"         Created                                                                                                                                                                         0.0s
- ✔ Container trustshield-minio        Healthy                                                                                                                                                                         5.8s
- ✔ Container trustshield-postgres     Healthy                                                                                                                                                                         6.5s
- ✔ Container docker-create-buckets-1  Exited                                                                                                                                                                          6.4s
- ✔ Container trustshield-mlflow       Started                                                                                                                                                                         6.5s
- ✔ Container trustshield-api          Started                                                                                                                                                                         6.6s
-(rapids-25.06) douglasdesouza@douglasdesouza-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make train
+(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make purge
+🔥🔥🔥 ATENÇÃO: Parando todos os serviços e APAGANDO TODOS OS VOLUMES DE DADOS! 🔥🔥🔥
+🔥 Esta ação é irreversível. Pressione Enter para continuar ou Ctrl+C para cancelar.
+Confirmação:
+[+] Running 8/8
+ ✔ Container trustshield-api             Removed                                                                                                                                                                               0.0s
+ ✔ Container trustshield-mlflow          Removed                                                                                                                                                                              10.2s
+ ✔ Container trustshield-bucket-creator  Removed                                                                                                                                                                               0.0s
+ ✔ Container trustshield-postgres        Removed                                                                                                                                                                               0.1s
+ ✔ Container trustshield-minio           Removed                                                                                                                                                                               0.2s
+ ✔ Volume trustshield-minio-data         Removed                                                                                                                                                                               0.0s
+ ✔ Volume trustshield-postgres-data      Removed                                                                                                                                                                               0.0s
+ ✔ Network trustshield-network           Removed                                                                                                                                                                               0.1s
+🧹 Limpando cache do builder do Docker...
+docker builder prune -a -f
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Deleted build cache objects:
+2ibdk94l0un1ec0usnqp7lvs1
+5e4snd0nuygva1h5hfw2zuto2
+v9k2vwph26bz17ri5wumneuaa
+o8b9r8pps1x3c5f9ji974eneu
+pwzrimmljfmho7vass0h4s05q
+sb91bct6295m84boupzgow6j2
+wie3o6nequy1d3mtv6ox15hqh
+p4nntpvrxmuhiapeaptxkpbt0
+9i745umavsv4h5w9ivmfowimx
+95gttuu1x1gdljflwn90216ex
+lakbieu4if0c83h8wocwhp0sy
+w59lvat18owth1q6xkfak8zcv
+uuinamzswdupdgepcnuc693zj
+p1yf39s5tzdgfx57fbo6cg0eg
+1s262ujikhp7owh3p9nknpjcm
+rhs72izud11vvlqo5gyf8baus
+czz2q2v967hf3pjq7o71m6188
+pt9loitric5x6ankzuegyxjlp
+mg4x6flknu0gr0p2zzqjncycf
+fkzhykj6tb8qcb77hfxumozqo
+xeur8mnchdmebjokz2bm0twzi
+vzgpwmcbsfnhyxpoej6aybgix
+wt69ekddukc52xegzg6x8t29q
+mirfp4aeg1u92kvnsycerqwqc
+lrkn4mna4iypp5fk02t2e0063
+upvhe1a9y9u9kh9gx65xq3kb0
+scvk62s4xtzcdecvebnv10mrr
+hqt1wa75qlabnqohof1v788v5
+
+Total reclaimed space: 4.144GB
+🧹 Limpando outros recursos do Docker...
+docker system prune -a -f
+Deleted Images:
+untagged: postgres:14-alpine
+untagged: postgres@sha256:df0caf4fa0e8ce4144ae2c9649ef2386a8b88532078dd8cf5af8508cb07d5df5
+deleted: sha256:85d838f07d62b98415901578437fd8c3fbdb1815899ea2cf2311af2e7ae08c34
+deleted: sha256:d68a0ad18470e82acbc5c310f0c0dda77d7b6f3fd6cae91faa7e49500891a2d2
+deleted: sha256:efcd484d2fe16a2e57068afa3b0eff8707b8627860d6c9ea2f5a1de047c12fcd
+deleted: sha256:15b1972a04b9feb77ac68e27ae7de2cb64425e2c5d066a9df73e6e6626fc1ad3
+deleted: sha256:4221591e2c38f985372aceaf9c97e49f25f1af6acac1c94898efdbf1fdd7cb30
+deleted: sha256:969a187f64b9b3b4658943dbb8ac97e1fc790fdf7e42fe97b7509a314e03ef71
+deleted: sha256:1dc07b767cb0643c77dde89b5f902e655abe8b7e4f50d0000afa5280688c7760
+deleted: sha256:282db8cab9aeed5d00c8eaa024abc6b418bd7240109284a08d0f3ef755f4dcbf
+deleted: sha256:8b5f8254e4fde398f0fb040593f5b85bae70dcc1efdc099f9a765c4f0c7e5ab6
+deleted: sha256:507371e5c8e61ef846fcefe94e968de61632483ca8c49a291a56319db21fa7a5
+deleted: sha256:5d69658ad6aa465f62fade1d6282626e7dc4cd230a8263e8b3f722c92e739845
+deleted: sha256:418dccb7d85a63a6aa574439840f7a6fa6fd2321b3e2394568a317735e867d35
+deleted: sha256:f1d22392005c7599759e1195efcbbc23128799796ba2f3f7a83a4c5cb51842a9
+deleted: sha256:95e1511890bb8a7430ad21ed64ba010b101c23ffebaf1c5b51eecb75dde33818
+untagged: docker-trustshield-api:latest
+deleted: sha256:b94401ec0ea12dfda321a22041bd2c1f3cd05a50f35c5e0ae60a407da503edad
+deleted: sha256:ee6a7791ce5faea82a049fddc5842c0ccc48e8386a0ee478bd5f8c5f2c98ca2a
+deleted: sha256:df8c94b29ce49dafb5beaaa9d7484c3e19c27e0eebae41ce6f56050ac1ec01e9
+deleted: sha256:1edda604c993e0da1607e8c1a9b032f7a36c7b5194cf12a66ba4bee61bd7f854
+deleted: sha256:d9bb756deffd323bc36ea46e37f48e0dce9b561af19a197a55ec4b2de245c736
+deleted: sha256:7258a828b43d915b3871daa7265706629b6e40965f2d88723b3d1dab42fbe735
+deleted: sha256:6fc70c87c444e815b5e3d1cf3c8c0be651b8d03bd3a26cced6de971a3808e806
+deleted: sha256:c965386f9068ed22b37d529442fb78b002f7fe2d280364a09611e47ce5d0d382
+deleted: sha256:a7e8e347905e27ead8b8277ffa34c06ea37389731c31f0aa650d655c44db3f83
+untagged: trustshield-mlflow:latest
+deleted: sha256:0c294cf2854112b9d2ce70938a2730683e6bc8ee49f15c54274dd6364fd8ee5b
+deleted: sha256:6142a968687d5fb3210e7474c3135ba011dabbad27689c6bb61f49ab55799fc1
+deleted: sha256:5a07bbb7289a596b477aa5e860dc99603872f71709346e05a4fdbfde4454b10b
+untagged: minio/mc:latest
+untagged: minio/mc@sha256:fb8f773eac8ef9d6da0486d5dec2f42f219358bcb8de579d1623d518c9ebd4cc
+deleted: sha256:e1497f813d2de5084b2bd38df37f8e68a999be6af10b4c495ae7c3eaf081a9ce
+deleted: sha256:9b27c7c0df5b833e9c664b4daffbe5f90c9f34fdb4515e3bdc6c195dd89bc219
+deleted: sha256:2406f5ec1abc48ada12c5d1580aa6f747587b219259c5df38fcd969330e985a7
+deleted: sha256:5b48da35e45557a109d1221656cfbefe22655e28f5e634de800012b0b7b6b0ae
+deleted: sha256:b01114d07d0a13204919413a12dbe09d5faef647e99a876b5c6c4ae74946d27f
+deleted: sha256:dee864263aaf08d97788563b9eaf2d6302e9d59feb9b09f0fdf7904f2fd2f37b
+untagged: postgres:13.12
+untagged: postgres@sha256:ced3ba927f4cf06e03eac7760f426a95367076fb31fe4e31b679f82d119a3519
+deleted: sha256:09eb2c829e45053a53b6772001eb706e39c39b4fd2c66105d3bb7d6149a13bf4
+deleted: sha256:81cc1dbf679e16e42cdd8ae2ba5b7601d517a8765ea90d46bd9cbcb66ffebf32
+deleted: sha256:3ce96e9e9a6eff3531ac01b59f2648fb09f996f85b30881870096e8cf2f753de
+deleted: sha256:ef402b6c97e47129da88578700f8e2239ad0b2ba268867a5896575d0b63f5309
+deleted: sha256:5a2d5eea38c12a30a090178262e72fe5966ffd428a641e1edbd76672e36dd273
+deleted: sha256:538b1430b65ab38ea3fa608d2cd96813ebd73bf70da53867166ffbf70c7328ae
+deleted: sha256:ac0621a34abe39642df219fa5689d6aa71f4498f3335434f4225fcfedb0c2ee3
+deleted: sha256:d119577674793ca5b93478b72b172bd394f70a0563d51a498cc5cd330b019029
+deleted: sha256:612b6a8866a1fa20cb0a118468f3cbc9d86ff543c99ae4874f79b688fc2738b5
+deleted: sha256:77fef1dbac35d2a8fde3fe66851f485e095cbffb7373e9906fcf50555f4fda10
+deleted: sha256:49b28489158c6db4633c2cd2d1fb5be3e30afb24131f9db8cccfe35ca64d0ff4
+deleted: sha256:71a59a531d48bd15c573c5906dfdc99b29c8934aa587d6c7007fcd2fbf1839d4
+deleted: sha256:fbf238b9c5744a1182549284752aa18eab41f1c46762cc5833bbc75e8a1021fb
+deleted: sha256:ec983b16636050e69677eb81537e955ab927757c23aaf73971ecf5f71fcc262a
+untagged: docker-mlflow:latest
+deleted: sha256:d1532a138bc8d5cd3f6d1b79500095adaae1de1a771e42002055704df69144d2
+deleted: sha256:63e6905f66bb5655c42d1e65bac56ddd9b812543df4f980713ba7370f64c1f91
+deleted: sha256:1c51736e9fba0e1b5e9928fac2a9af37f070ab6ba8767e21bddd41ac1bf1676f
+deleted: sha256:a22f3bc0a4a07f753fff0d94a6bd3e91e6bf60ac99030384edec379f1bf12eb5
+deleted: sha256:1a93a9830c9644a832fbdbf9edb0d87ceaa9da41d488ae25d8156b3e45739364
+deleted: sha256:870268823dbb8081569311e19a374ec8aa5bcc55e20e2257f02f337edf97b9ae
+deleted: sha256:a07f4ed3adbe9f3131e7531782871ac8e2bd4abf9faf2292dbbf24e2e5746314
+deleted: sha256:1a909edd508b32f231c45733fc74d3303c708f60bb1f37693e58549ad13d7f80
+deleted: sha256:023119c92333cfd55bdb0495523db8822b5141ab0446ba411dee829e4f479edc
+deleted: sha256:5f94a5cc94cf1a5bbe95204f3f9d6529a8876ba7b600a9115489a4d1d0963bcc
+deleted: sha256:ac20ef4ee91e5ded19523ccbad5ff92fbabd4bf93cb5cb424bc64462e040e4d8
+deleted: sha256:5a1b12165541cde5c1a66179c5b8e697ba8999a60d4d42e72c379699d25b3b8a
+deleted: sha256:0e624595591041221a44f9af44e26d24e4528390091fe74782358b14129fbc4b
+deleted: sha256:d82fc6e58334d5a9b744b993af2981da9c9dd9c6add2e7339dada337cfab114e
+deleted: sha256:14c9cacfe7d19a66000d188aa39749cd95c79222b59fe468eddfc1d7367a141d
+deleted: sha256:a43ad3c21d040275f401d2717758401e01281bd37355d2c101fbcaa7c44e9f9a
+untagged: minio/minio:latest
+untagged: minio/minio@sha256:d249d1fb6966de4d8ad26c04754b545205ff15a62e4fd19ebd0f26fa5baacbc0
+deleted: sha256:a98a9d647e700e45c1d3d2e44709f23952a39c199731d84e623eb558fd5501f4
+deleted: sha256:b5c9b25c790b4f307be75ce5ef87ea7f82e7152e3f82a8b551d78662e75fb473
+deleted: sha256:8e7275df92b58309af9b1c32713974a099edcbc86abd064ea70f23eac8e0170d
+deleted: sha256:794287e53b404e8fce74d0240887774a9926368951d5eff7e761fb23cd8c5cbe
+deleted: sha256:a04e6da38d3b2a06f8c0ccd54977b623882fb1a69edfba70bf48b980afc20be9
+deleted: sha256:160bcb1de5076516be1e244da0ef3a20529597142b2d656508e0cc81e06e2649
+deleted: sha256:9545a158142456b506c9eb17459b8c60a424c96cd60ccf138eb51d82e657c565
+deleted: sha256:651200f2941b658be3c275b1d6b3134107d73e86fee40bbac0b6b85f2a003a0b
+deleted: sha256:4937fca89967f254325642431a2b55afa05ff9cf065e79b33e8756ad01476619
+deleted: sha256:ff59c129bdee8355d5b47559167f5f7c893dc99d9779a2b3194fa59152e90110
+untagged: trustshield-trustshield-api:latest
+deleted: sha256:c67a07e94928d1eec4b4dc5216b56fd6a5af51563b4bebdce59f9cd56e5d0669
+deleted: sha256:b27f2e283073e79e7a064c7c4b620fc439619047a5f95b027e97e475234cf096
+deleted: sha256:afd3d3aadc1224c34951f3bc49462946f897795d3fd61b7a2d7cd761851202c1
+deleted: sha256:1df9a6bf3b321a3967d193d929ca33cdc05a22982ac60776df5aa394375b29ea
+deleted: sha256:db61d263de6cde060ab81c4f6df24f0ede011ee235ae0869b0e23dc74d830246
+deleted: sha256:fdc51e339d416e859930cacf0f89c8fa153b77543180f4aadc774baa62678997
+deleted: sha256:fb284c21ff136fd284b879aecbf0a37a1531097e259565f3912b8da265276943
+deleted: sha256:c47db2c4f4ecbb02bbb31f2a381c022e17738f83e0755ff951dd1fde6419e6dd
+deleted: sha256:a29600bd667d626b7d04273b224a891af1777d6a173a95ec3fc8f0387833ab85
+deleted: sha256:6389c18f7ffc7aa17ac92402dec4d8295f69fe2b11b60c7bf14695ee0ec8e90c
+deleted: sha256:5905f8c4f4e58a273ef208c08e779407ec536b5cc146c2fdd6eefc9faaa17ec0
+deleted: sha256:27b9bd77a8e39d551986efc3910d08a35835a7f79811a5d7e6e9d2ddef4eba43
+deleted: sha256:7cc7fe68eff66f19872441a51938eecc4ad33746d2baa3abc081c1e6fe25988e
+
+Total reclaimed space: 13.01GB
+✅ Limpeza completa finalizada.
+(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make build
+🛠️  Reconstruindo a imagem do serviço: trustshield-api...
+docker compose -f docker/docker-compose.yml build trustshield-api
+WARN[0000] Docker Compose is configured to build using Bake, but buildx isn't installed
+[+] Building 97.4s (20/20) FINISHED                                                                                                                                                                                  docker:default
+ => [trustshield-api internal] load build definition from Dockerfile                                                                                                                                                           0.0s
+ => => transferring dockerfile: 3.25kB                                                                                                                                                                                         0.0s
+ => WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 15)                                                                                                                                                0.0s
+ => WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 43)                                                                                                                                                0.0s
+ => [trustshield-api internal] load metadata for docker.io/library/python:3.10-slim-bookworm                                                                                                                                   3.8s
+ => [trustshield-api internal] load .dockerignore                                                                                                                                                                              0.0s
+ => => transferring context: 3.54kB                                                                                                                                                                                            0.0s
+ => [trustshield-api internal] load build context                                                                                                                                                                              0.0s
+ => => transferring context: 111.13kB                                                                                                                                                                                          0.0s
+ => [trustshield-api builder 1/6] FROM docker.io/library/python:3.10-slim-bookworm@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5                                                                     3.9s
+ => => resolve docker.io/library/python:3.10-slim-bookworm@sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5                                                                                             0.0s
+ => => sha256:81f1cdb3770d54ecfdbddcc52c2125fce674c14a1d976dfd8f65dc0734f9c3c5 9.13kB / 9.13kB                                                                                                                                 0.0s
+ => => sha256:5b73bbad254f55db4a64a6d5b4f237327f8be74d0b3caa953c59be1f9d21151f 1.75kB / 1.75kB                                                                                                                                 0.0s
+ => => sha256:13839a48c354366e5535d8d9d6b5540b5d06814ca2befbee62af385cd0d121a4 5.37kB / 5.37kB                                                                                                                                 0.0s
+ => => sha256:59e22667830bf04fb35e15ed9c70023e9d121719bb87f0db7f3159ee7c7e0b8d 28.23MB / 28.23MB                                                                                                                               2.6s
+ => => sha256:12b8240e46e9f448e7eba19870e233d03c7160ca9b1777ab3ec2eeddf4349fa8 3.51MB / 3.51MB                                                                                                                                 2.1s
+ => => sha256:3fa1124e7cf3ed5061a51b47c3e7a138e1b25dce3c94e9967a6b2a9acfe36402 15.65MB / 15.65MB                                                                                                                               3.1s
+ => => sha256:00aa2453f38062a311a828d4d0790d1911a81372ad928c8856387ceccc7a6c12 250B / 250B                                                                                                                                     2.6s
+ => => extracting sha256:59e22667830bf04fb35e15ed9c70023e9d121719bb87f0db7f3159ee7c7e0b8d                                                                                                                                      0.7s
+ => => extracting sha256:12b8240e46e9f448e7eba19870e233d03c7160ca9b1777ab3ec2eeddf4349fa8                                                                                                                                      0.1s
+ => => extracting sha256:3fa1124e7cf3ed5061a51b47c3e7a138e1b25dce3c94e9967a6b2a9acfe36402                                                                                                                                      0.4s
+ => => extracting sha256:00aa2453f38062a311a828d4d0790d1911a81372ad928c8856387ceccc7a6c12                                                                                                                                      0.0s
+ => [trustshield-api final 2/9] RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd && rm -rf /var/lib/apt/lists/*                                                                                 4.1s
+ => [trustshield-api builder 2/6] RUN apt-get update && apt-get install -y --no-install-recommends gcc build-essential && rm -rf /var/lib/apt/lists/*                                                                         11.4s
+ => [trustshield-api final 3/9] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                                        0.2s
+ => [trustshield-api final 4/9] WORKDIR /home/trustshield                                                                                                                                                                      0.0s
+ => [trustshield-api builder 3/6] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                                      0.2s
+ => [trustshield-api builder 4/6] WORKDIR /home/trustshield                                                                                                                                                                    0.1s
+ => [trustshield-api builder 5/6] COPY --chown=trustshield:trustshield requirements.txt .                                                                                                                                      0.1s
+ => [trustshield-api builder 6/6] RUN pip install --user -r requirements.txt                                                                                                                                                  69.0s
+ => [trustshield-api final 5/9] COPY --from=builder --chown=trustshield:trustshield /home/trustshield/.local /home/trustshield/.local                                                                                          3.1s
+ => [trustshield-api final 6/9] COPY --chown=trustshield:trustshield src ./src                                                                                                                                                 0.0s
+ => [trustshield-api final 7/9] COPY --chown=trustshield:trustshield config ./config                                                                                                                                           0.0s
+ => [trustshield-api final 8/9] COPY --chown=trustshield:trustshield docker/entrypoint.sh ./docker/entrypoint.sh                                                                                                               0.0s
+ => [trustshield-api final 9/9] RUN chmod +x ./docker/entrypoint.sh                                                                                                                                                            0.1s
+ => [trustshield-api] exporting to image                                                                                                                                                                                       3.2s
+ => => exporting layers                                                                                                                                                                                                        3.1s
+ => => writing image sha256:f8e271a3c11d58936b0a06ff492b2b78239a75a343fe45a86def62ca9e9ce349                                                                                                                                   0.0s
+ => => naming to docker.io/library/docker-trustshield-api                                                                                                                                                                      0.0s
+ => [trustshield-api] resolving provenance for metadata file                                                                                                                                                                   0.0s
+[+] Building 1/1
+ ✔ trustshield-api  Built                                                                                                                                                                                                      0.0s
+(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make services-up
+🚀 Iniciando todos os serviços do TrustShield em segundo plano...
+docker compose -f docker/docker-compose.yml up -d
+[+] Running 28/28
+ ✔ postgres Pulled                                                                                                                                                                                                             9.8s
+ ✔ create-buckets Pulled                                                                                                                                                                                                      13.4s
+ ✔ minio Pulled                                                                                                                                                                                                               11.2s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+WARN[0013] Docker Compose is configured to build using Bake, but buildx isn't installed
+[+] Building 23.4s (7/7) FINISHED                                                                                                                                                                                    docker:default
+ => [mlflow internal] load build definition from mlflow.Dockerfile                                                                                                                                                             0.0s
+ => => transferring dockerfile: 965B                                                                                                                                                                                           0.0s
+ => [mlflow internal] load metadata for ghcr.io/mlflow/mlflow:v3.2.0                                                                                                                                                           1.7s
+ => [mlflow internal] load .dockerignore                                                                                                                                                                                       0.0s
+ => => transferring context: 2B                                                                                                                                                                                                0.0s
+ => [mlflow 1/2] FROM ghcr.io/mlflow/mlflow:v3.2.0@sha256:843538b0e56aa83cb5b1367ed05ee68c83e907332702760399c5f6ce8ee5b502                                                                                                    13.9s
+ => => resolve ghcr.io/mlflow/mlflow:v3.2.0@sha256:843538b0e56aa83cb5b1367ed05ee68c83e907332702760399c5f6ce8ee5b502                                                                                                            0.0s
+ => => sha256:954774345a619d861c3805b1b0100b7319d4eaf3108b2659e6f1bf2e4f095394 14.85MB / 14.85MB                                                                                                                               3.0s
+ => => sha256:843538b0e56aa83cb5b1367ed05ee68c83e907332702760399c5f6ce8ee5b502 1.61kB / 1.61kB                                                                                                                                 0.0s
+ => => sha256:bb95a1505603fdd1711dd112242081d5c2dff00503a94f9264328413caa6d4ec 1.25kB / 1.25kB                                                                                                                                 0.0s
+ => => sha256:3c52e08d1697a23a48bc327afc510348b5892c168556777cfc1612b9b6a0f5b2 5.77kB / 5.77kB                                                                                                                                 0.0s
+ => => sha256:ccaf924377f936af2c0396fce237145b7d1ecc0b8196916667fc6d5ff4866e2d 30.26MB / 30.26MB                                                                                                                               1.3s
+ => => sha256:5e584f8f28c34b1709b431a08b1ae3892c8ab2c82c8da1f98148f589a2a664f1 1.08MB / 1.08MB                                                                                                                                 1.2s
+ => => sha256:7360b233c86094e10bc61af00bf28bd367deb30a63c6a54ad91429cf7db86de1 250B / 250B                                                                                                                                     1.7s
+ => => extracting sha256:ccaf924377f936af2c0396fce237145b7d1ecc0b8196916667fc6d5ff4866e2d                                                                                                                                      0.8s
+ => => sha256:a01fd3511ac8c98ac499dd93b78a39691689fa342872daf6ef9d47d42e2c2f52 214.35MB / 214.35MB                                                                                                                             8.9s
+ => => extracting sha256:5e584f8f28c34b1709b431a08b1ae3892c8ab2c82c8da1f98148f589a2a664f1                                                                                                                                      0.1s
+ => => extracting sha256:954774345a619d861c3805b1b0100b7319d4eaf3108b2659e6f1bf2e4f095394                                                                                                                                      0.4s
+ => => extracting sha256:7360b233c86094e10bc61af00bf28bd367deb30a63c6a54ad91429cf7db86de1                                                                                                                                      0.0s
+ => => extracting sha256:a01fd3511ac8c98ac499dd93b78a39691689fa342872daf6ef9d47d42e2c2f52                                                                                                                                      4.8s
+ => [mlflow 2/2] RUN pip install --no-cache-dir boto3 psycopg2-binary                                                                                                                                                          7.5s
+ => [mlflow] exporting to image                                                                                                                                                                                                0.2s
+ => => exporting layers                                                                                                                                                                                                        0.2s
+ => => writing image sha256:d4e96bcf521f1431e92f93c9ffefb7a76086a96b8bf581a90faf75a7921f9d0e                                                                                                                                   0.0s
+ => => naming to docker.io/library/docker-mlflow                                                                                                                                                                               0.0s
+ => [mlflow] resolving provenance for metadata file                                                                                                                                                                            0.0s
+[+] Running 9/9
+ ✔ mlflow                                Built                                                                                                                                                                                 0.0s
+ ✔ Network trustshield-network           Created                                                                                                                                                                               0.1s
+ ✔ Volume "trustshield-postgres-data"    Created                                                                                                                                                                               0.0s
+ ✔ Volume "trustshield-minio-data"       Created                                                                                                                                                                               0.0s
+ ✔ Container trustshield-minio           Healthy                                                                                                                                                                               5.9s
+ ✔ Container trustshield-postgres        Healthy                                                                                                                                                                               6.5s
+ ✔ Container trustshield-bucket-creator  Exited                                                                                                                                                                                6.5s
+ ✔ Container trustshield-mlflow          Started                                                                                                                                                                               6.6s
+ ✔ Container trustshield-api             Started                                                                                                                                                                               6.8s
+(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make train
 🧠 Executando o pipeline de treino no ambiente unificado...
    Comando: python /home/trustshield/src/models/train_fraud_model.py --model isolation_forest
-docker compose -f docker/docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py --model isolation_forest
+docker compose -f docker/docker-compose.yml run --rm --entrypoint="" trustshield-api python /home/trustshield/src/models/train_fraud_model.py --model isolation_forest
 [+] Creating 3/3
- ✔ Container trustshield-minio     Running                                                                                                                                                                            0.0s
- ✔ Container trustshield-postgres  Running                                                                                                                                                                            0.0s
- ✔ Container trustshield-mlflow    Recreated                                                                                                                                                                         10.2s
-[+] Running 4/4
- ✔ Container trustshield-minio        Healthy                                                                                                                                                                         0.5s
- ✔ Container docker-create-buckets-1  Exited                                                                                                                                                                          0.6s
- ✔ Container trustshield-postgres     Healthy                                                                                                                                                                         0.5s
- ✔ Container trustshield-mlflow       Started                                                                                                                                                                         0.1s
+ ✔ Container trustshield-minio     Running                                                                                                                                                                                     0.0s
+ ✔ Container trustshield-postgres  Running                                                                                                                                                                                     0.0s
+ ✔ Container trustshield-mlflow    Running                                                                                                                                                                                     0.0s
+[+] Running 3/3
+ ✔ Container trustshield-minio           Healthy                                                                                                                                                                               0.5s
+ ✔ Container trustshield-bucket-creator  Exited                                                                                                                                                                                0.7s
+ ✔ Container trustshield-postgres        Healthy                                                                                                                                                                               0.5s
 Traceback (most recent call last):
-  File "/home/trustshield/.local/lib/python3.10/site-packages/optuna/integration/mlflow.py", line 5, in <module>
-    from optuna_integration.mlflow import MLflowCallback
-ModuleNotFoundError: No module named 'optuna_integration'
+  File "/home/trustshield/src/models/train_fraud_model.py", line 24, in <module>
+    import psutil
+ModuleNotFoundError: No module named 'psutil'
 
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/trustshield/.local/lib/python3.10/site-packages/optuna/integration/__init__.py", line 132, in _get_module
-    return importlib.import_module("." + module_name, self.__name__)
-  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
-  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
-  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
-  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
-  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
-  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-  File "/home/trustshield/.local/lib/python3.10/site-packages/optuna/integration/mlflow.py", line 7, in <module>
-    raise ModuleNotFoundError(_INTEGRATION_IMPORT_ERROR_TEMPLATE.format("mlflow"))
-ModuleNotFoundError:
-Could not find `optuna-integration` for `mlflow`.
-Please run `pip install optuna-integration[mlflow]`.
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/home/trustshield/src/models/train_fraud_model.py", line 50, in <module>
-    from optuna.integration import MLflowCallback
-  File "/home/trustshield/.local/lib/python3.10/site-packages/optuna/integration/__init__.py", line 120, in __getattr__
-    module = self._get_module(self._class_to_module[name])
-  File "/home/trustshield/.local/lib/python3.10/site-packages/optuna/integration/__init__.py", line 134, in _get_module
-    raise ModuleNotFoundError(_INTEGRATION_IMPORT_ERROR_TEMPLATE.format(module_name))
-ModuleNotFoundError:
-Could not find `optuna-integration` for `mlflow`.
-Please run `pip install optuna-integration[mlflow]`.
-
-make: *** [Makefile:55: train] Erro 1
+make: *** [Makefile:59: train] Erro 1
