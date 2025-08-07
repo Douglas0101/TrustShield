@@ -1,87 +1,87 @@
-# ==============================================================================
-# Makefile - TrustShield Enterprise Grade
-# Versão: 9.0.0 (Robust Build Flow)
-#
-# Otimizações e Melhores Práticas Implementadas:
-# - ROBUSTEZ: O comando 'fresh' agora depende do 'purge', garantindo uma
-#   limpeza completa antes de cada reconstrução para evitar conflitos.
-# - CLAREZA: Comandos simplificados e ajuda detalhada.
-# - MODERNIZAÇÃO: Uso exclusivo de 'docker compose' (sintaxe V2).
-# ==============================================================================
-
-# Define o nome do arquivo compose para não repetir.
-COMPOSE_FILE := docker/docker-compose.yml
-
-# Evita que o make confunda um alvo com um nome de arquivo.
-.PHONY: help up down fresh logs train purge
-
-# --- ALVO PADRÃO ---
-# Executado quando 'make' é chamado sem argumentos.
-default: help
+# Makefile - TrustShield Advanced (Versão 7.0.0 - Compose V2 Fix)
+# CORREÇÃO: Usa 'docker compose' (V2, com espaço) em vez do obsoleto 'docker-compose' (V1, com hífen).
+.PHONY: help install test lint format clean services-up services-down services-up-fresh train logs purge
 
 # === AJUDA ===
 help:
-	@echo "=============== TrustShield MLOps Control Panel ================"
-	@echo "Uso: make [comando]"
+	@echo "TrustShield Advanced - Comandos Disponíveis:"
 	@echo ""
-	@echo "--- Gestão do Ambiente Docker ---"
-	@echo "  up                  - Inicia todos os serviços em background."
-	@echo "  down                - Para todos os serviços (sem apagar dados)."
-	@echo "  fresh               - (RECOMENDADO) Limpa TUDO e reconstrói o ambiente do zero."
-	@echo "  logs [service=...]  - Mostra os logs de um serviço (padrão: trustshield-api)."
+	@echo "--- GESTÃO DE SERVIÇOS (PERSISTENTES) ---"
+	@echo "  services-up         - Inicia todos os serviços (API, Postgres, MinIO, MLflow) em segundo plano."
+	@echo "  services-down       - Para os serviços de backend sem apagar os dados."
+	@echo "  services-up-fresh   - Reconstrói a imagem unificada e reinicia os serviços. Use para aplicar grandes mudanças."
+	@echo "  logs [service]      - Mostra os logs de um serviço (ex: make logs service=mlflow). Padrão: trustshield-api."
 	@echo ""
-	@echo "--- Pipeline de Machine Learning ---"
-	@echo "  train [args=...]    - Executa o pipeline de treino completo (ex: make train args='--config config/alternative.yaml')."
+	@echo "--- PIPELINE & TAREFAS (EFÊMERAS) ---"
+	@echo "  train [args]        - Executa o pipeline de treino completo dentro do Docker (ex: make train args='--model lof'). Requer 'services-up'."
 	@echo ""
-	@echo "--- Limpeza Completa (AÇÃO DESTRUTIVA) ---"
-	@echo "  purge               - PARA e APAGA todos os contêineres, redes e VOLUMES DE DADOS."
+	@echo "--- LIMPEZA COMPLETA (DESTRUTIVO) ---"
+	@echo "  purge               - PARA TUDO e APAGA TODOS os dados (contêineres, volumes, redes). Use com cuidado!"
+	@echo ""
+	@echo "--- DESENVOLVIMENTO LOCAL ---"
+	@echo "  install             - Instalar dependências locais e pre-commit."
+	@echo "  test                - Executar testes locais."
+	@echo "  lint                - Verificar o estilo do código localmente."
+	@echo "  format              - Formatar o código localmente."
+	@echo "  clean               - Limpar ficheiros temporários do Python."
 
-# ==============================================================================
-# === Gestão do Ambiente Docker
-# ==============================================================================
-up:
-	@echo "🚀 Iniciando todos os serviços do TrustShield em background..."
-	docker compose -f $(COMPOSE_FILE) up -d
+# =====================================================================================
+# === SEÇÃO DOCKER: O CORAÇÃO DA OPERAÇÃO ===
+# =====================================================================================
 
-down:
-	@echo "🛑 Parando todos os serviços do TrustShield..."
-	docker compose -f $(COMPOSE_FILE) down
+# ATUALIZAÇÃO: Trocado 'docker-compose' por 'docker compose' em todos os comandos.
+services-up:
+	@echo "🚀 Subindo todos os serviços (API, Postgres, MinIO, MLflow)..."
+	docker compose -f docker/docker-compose.yml up -d --remove-orphans
 
-# OTIMIZAÇÃO: Este comando agora executa 'purge' primeiro, garantindo um ambiente limpo.
-fresh: purge
-	@echo "🔄 Reconstruindo imagens e reiniciando todos os serviços..."
-	docker compose -f $(COMPOSE_FILE) up -d --build --force-recreate
+services-down:
+	@echo "🛑 Parando todos os serviços..."
+	docker compose -f docker/docker-compose.yml down --remove-orphans
 
-# Permite especificar o serviço para os logs, ex: make logs service=mlflow
+services-up-fresh:
+	@echo "🧼 Reconstruindo a imagem unificada e subindo todos os serviços do zero..."
+	docker compose -f docker/docker-compose.yml up -d --build --force-recreate --remove-orphans
+
 service ?= trustshield-api
 logs:
-	@echo "🔎 Acompanhando logs do serviço: $(service)... (Pressione Ctrl+C para sair)"
-	docker compose -f $(COMPOSE_FILE) logs -f $(service)
+	@echo "🔎 Acompanhando os logs do serviço: $(service)..."
+	docker compose -f docker/docker-compose.yml logs -f $(service)
 
-# ==============================================================================
-# === Pipeline de Machine Learning
-# ==============================================================================
+# --- PIPELINE & TAREFAS (EFÊMERAS) ---
+args ?= --model isolation_forest
+train:
+	@echo "🧠 Executando o pipeline de treino no ambiente unificado..."
+	@echo "   Comando: python /home/trustshield/src/models/train_fraud_model.py $(args)"
+	docker compose -f docker/docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py $(args)
 
-# Permite passar argumentos para o script, ex: make train args="--config config/other.yaml"
-args ?= --config config/config.yaml
-train: up
-	@echo "🧠 Executando o pipeline de treino do TrustShield..."
-	@echo "   Comando a ser executado no container:"
-	@echo "   python src/models/train_fraud_model.py $(args)"
-	# Usa 'run --rm' para criar um container efêmero para a tarefa de treino.
-	docker compose -f $(COMPOSE_FILE) run --rm trustshield-api python src/models/train_fraud_model.py $(args)
-
-# ==============================================================================
-# === Limpeza Completa
-# ==============================================================================
+# --- LIMPEZA COMPLETA (DESTRUTIVO) ---
 purge:
-	@echo "🔥🔥🔥 AVISO: Ação destrutiva! Parando e apagando todos os contêineres, redes e volumes... 🔥🔥🔥"
-	@echo "--> Forçando a parada e remoção de contêineres conhecidos para evitar conflitos..."
-	@-docker stop trustshield-api trustshield-mlflow trustshield-bucket-creator trustshield-minio trustshield-postgres >/dev/null 2>&1
-	@-docker rm -f trustshield-api trustshield-mlflow trustshield-bucket-creator trustshield-minio trustshield-postgres >/dev/null 2>&1
-	@echo "--> Executando o 'down' do compose para limpar a rede e os volumes..."
-	docker compose -f $(COMPOSE_FILE) down --volumes
-	@echo "🧹 Limpando cache de build e outros recursos não utilizados do Docker..."
+	@echo "🔥🔥🔥 ATENÇÃO: Parando todos os serviços e APAGANDO TODOS OS VOLUMES DE DADOS! 🔥🔥🔥"
+	docker compose -f docker/docker-compose.yml down --volumes
+	@echo "🧹 Limpando cache do builder do Docker..."
 	docker builder prune -a -f
+	@echo "🧹 Limpando outros recursos do Docker..."
 	docker system prune -f
-	@echo "✨ Ambiente limpo."
+
+
+# =====================================================================================
+# === SEÇÃO DE DESENVOLVIMENTO LOCAL (Não usa Docker) ===
+# =====================================================================================
+install:
+	pip install -r requirements.txt
+	pre-commit install
+
+test:
+	pytest tests/test_advanced.py -v
+
+lint:
+	flake8 src/ tests/
+	mypy src/
+
+format:
+	black src/ tests/
+
+clean:
+	find . -type f -name "*.pyc" -delete
+	find . -type d -name "__pycache__" -delete
+	rm -rf .coverage htmlcov/ .pytest_cache/
