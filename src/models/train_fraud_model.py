@@ -25,7 +25,6 @@ import psutil
 import signal
 import sys
 import time
-import traceback
 import uuid
 import warnings
 from dataclasses import dataclass, field
@@ -160,7 +159,7 @@ class ConsoleLogObserver(TrainingObserver):
 
     def update(self, event: TrainingEvent, data: Dict[str, Any]):
         messages = {
-            TrainingEvent.PIPELINE_START: f"🚀 === INICIANDO PIPELINE DE TREINO ===",
+            TrainingEvent.PIPELINE_START: f"🚀 === INICIANDO PIPELINE DE TREINO (ID: {data['experiment_id'][:8]}) ===",
             TrainingEvent.DATA_LOADING_START: "📁 Carregando e preparando dados...",
             TrainingEvent.DATA_LOADING_COMPLETE: f"✅ Dados prontos: {data['train_samples']:,} para treino, {data['test_samples']:,} para teste.",
             TrainingEvent.TRAINING_START: f"\n{'=' * 60}\n🎯 TREINANDO MODELO: {data['model_type'].value.upper()}\n{'=' * 60}",
@@ -307,24 +306,24 @@ class AdvancedTrustShieldTrainer(Subject):
         super().__init__()
         self.project_root = Path(__file__).resolve().parents[2]
         self.config = self._load_and_validate_config(config_path)
+        self.experiment_id = str(uuid.uuid4())
         self.use_dask = use_dask
         self.tune = tune
         self.n_trials = n_trials
         self.logger = AdvancedLogger('TrustShield')
         self.data_repository = ParquetDataRepository(self.config, self.project_root, use_dask=self.use_dask)
-        self.experiment_id = self._setup_environment()
         self.attach(ConsoleLogObserver(self.logger))
         self.attach(MLflowObserver(self.config.get('mlflow', {}).get('experiment_name', 'TrustShield'), config_path))
+        self._setup_environment()
 
     def _load_and_validate_config(self, config_path: str) -> Dict[str, Any]:
         with open(self.project_root / config_path, 'r') as f: config = yaml.safe_load(f)
         validate(instance=config, schema=CONFIG_SCHEMA)
         return config
 
-    def _setup_environment(self) -> str:
+    def _setup_environment(self):
         mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"))
-        experiment = mlflow.set_experiment(self.config.get('mlflow', {}).get('experiment_name', 'TrustShield'))
-        return experiment.experiment_id
+        mlflow.set_experiment(self.config.get('mlflow', {}).get('experiment_name', 'TrustShield'))
 
     def run_pipeline(self, model_types_str: List[str]):
         start_time = time.time()
@@ -412,7 +411,6 @@ def main():
         sys.exit(0)
     except Exception as e:
         print(f"❌ ERRO CRÍTICO: {e}")
-        traceback.print_exc()
         sys.exit(1)
 
 
