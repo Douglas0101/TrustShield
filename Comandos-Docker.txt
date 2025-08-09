@@ -1,4 +1,4 @@
-Próximos Passos
+Próximos Passosmake logs
 
 Depois de aplicar a correção no Dockerfile, siga estes passos para garantir que tudo seja reconstruído corretamente:
 

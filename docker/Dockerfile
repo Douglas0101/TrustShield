@@ -1,6 +1,6 @@
 # ==============================================================================
 # Dockerfile - TrustShield Enterprise Grade
-# Versão: 10.0.0
+# Versão: 10.1.0 (Com Git para rastreabilidade do MLflow)
 #
 # Otimizações e Melhores Práticas Implementadas:
 # - Multi-stage builds para imagens de produção drasticamente menores.
@@ -41,15 +41,17 @@ RUN pip install --user -r requirements.txt
 # Este estágio cria a imagem final, que é muito mais leve.
 FROM python:3.10-slim-bookworm as final
 
-LABEL maintainer="TrustShield Team <contact@trustshield.dev>" version="10.0.0"
+LABEL maintainer="TrustShield Team <contact@trustshield.dev>" version="10.1.0"
 
 # Define as mesmas variáveis de ambiente
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Instala o netcat, necessário para o script de health check no entrypoint.
-# Faz isso antes de criar o usuário para ser executado como root.
-RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd && rm -rf /var/lib/apt/lists/*
+# ---> INÍCIO DA ATUALIZAÇÃO <---
+# Instala o netcat (para o health check) E o git.
+# O Git é necessário para que o MLflow possa registar o commit hash associado a cada treino.
+RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd git && rm -rf /var/lib/apt/lists/*
+# ---> FIM DA ATUALIZAÇÃO <---
 
 # Cria o mesmo usuário não-root
 RUN useradd --create-home --shell /bin/bash trustshield
@@ -63,7 +65,6 @@ COPY --from=builder --chown=trustshield:trustshield /home/trustshield/.local /ho
 # Adiciona o diretório de binários do usuário ao PATH.
 ENV PATH="/home/trustshield/.local/bin:${PATH}"
 
-# ---> ADICIONE ESTA LINHA ABAIXO <---
 # Adiciona o diretório de bibliotecas do usuário ao PYTHONPATH para que o Python as encontre.
 ENV PYTHONPATH="/home/trustshield/.local/lib/python3.10/site-packages:${PYTHONPATH}"
 

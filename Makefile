@@ -1,6 +1,7 @@
-# Makefile - TrustShield Advanced (Versão 7.0.0 - Compose V2 Fix)
+# Makefile - TrustShield Advanced (Versão 7.1.0 - HPO Ready)
 # CORREÇÃO: Usa 'docker compose' (V2, com espaço) em vez do obsoleto 'docker-compose' (V1, com hífen).
-.PHONY: help install test lint format clean services-up services-down services-up-fresh train logs purge
+# NOVO: Adicionado alvo 'hpo-train' para otimização de hiperparâmetros em larga escala.
+.PHONY: help install test lint format clean services-up services-down services-up-fresh train hpo-train logs purge
 
 # === AJUDA ===
 help:
@@ -13,7 +14,8 @@ help:
 	@echo "  logs [service]      - Mostra os logs de um serviço (ex: make logs service=mlflow). Padrão: trustshield-api."
 	@echo ""
 	@echo "--- PIPELINE & TAREFAS (EFÊMERAS) ---"
-	@echo "  train [args]        - Executa o pipeline de treino completo dentro do Docker (ex: make train args='--model lof'). Requer 'services-up'."
+	@echo "  train [args]        - Executa o pipeline de treino rápido padrão (ex: make train args='--model lof'). Requer 'services-up'."
+	@echo "  hpo-train [args]    - (NOVO) Executa a otimização de hiperparâmetros em larga escala (ex: make hpo-train)."
 	@echo ""
 	@echo "--- LIMPEZA COMPLETA (DESTRUTIVO) ---"
 	@echo "  purge               - PARA TUDO e APAGA TODOS os dados (contêineres, volumes, redes). Use com cuidado!"
@@ -53,6 +55,14 @@ train:
 	@echo "🧠 Executando o pipeline de treino no ambiente unificado..."
 	@echo "   Comando: python /home/trustshield/src/models/train_fraud_model.py $(args)"
 	docker compose -f docker/docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py $(args)
+
+# ---> INÍCIO DA ATUALIZAÇÃO <---
+hpo-args ?= --model isolation_forest --tune
+hpo-train:
+	@echo "🔥 Executando OTIMIZAÇÃO DE HIPERPARÂMETROS em larga escala..."
+	@echo "   Comando: python /home/trustshield/src/models/train_fraud_model.py $(hpo-args)"
+	docker compose -f docker/docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py $(hpo-args)
+# ---> FIM DA ATUALIZAÇÃO <---
 
 # --- LIMPEZA COMPLETA (DESTRUTIVO) ---
 purge:

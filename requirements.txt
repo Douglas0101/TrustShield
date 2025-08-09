@@ -1,61 +1,69 @@
 # ==============================================================================
-# TrustShield Advanced Requirements (Versão 8.0.0-robust)
+# TrustShield Consolidated Requirements (Versão 12.0.0 - Anaconda Environment)
 #
-# Este ficheiro define as dependências Python para o projeto TrustShield.
-# Está organizado por funcionalidade para clareza e manutenibilidade.
-# Para garantir a reprodutibilidade, fixe as versões usando 'pip freeze > requirements.txt'
+# Este arquivo define TODAS as dependências do projeto para uso com o Anaconda.
+# As versões não são fixadas para permitir que o 'conda' resolva o ambiente
+# de forma otimizada. Para criar um ambiente a partir deste arquivo, use:
+# conda create --name trustshield --file requirements.txt
 # ==============================================================================
 
 # --- CORE DE CIÊNCIA DE DADOS E ML ---
 # Bibliotecas fundamentais para manipulação de dados e machine learning.
-scikit-learn
 numpy
 pandas
+scikit-learn
 scipy
+joblib
 
-# --- MLOPS: EXPERIMENTAÇÃO E GOVERNANÇA ---
-# Ferramentas para rastreamento, versionamento e otimização de modelos.
-mlflow         # Plataforma de ciclo de vida de ML (tracking, registry).
-optuna         # Framework de otimização de hiperparâmetros.
+# --- MLOPS: GOVERNANÇA, EXPERIMENTAÇÃO E OTIMIZAÇÃO ---
+# Ferramentas para o ciclo de vida completo do modelo.
+mlflow
+optuna
 optuna-integration[mlflow]
-jsonschema     # Para validar a estrutura do ficheiro de configuração.
 
 # --- ARMAZENAMENTO E MANIPULAÇÃO DE DADOS ---
-# Drivers e bibliotecas para interagir com formatos de ficheiro e storage.
-pyarrow        # Engine para trabalhar com o formato Parquet.
-fastparquet    # Alternativa ao pyarrow para ficheiros Parquet.
-boto3          # SDK da AWS para Python, necessário para o MLflow comunicar com o MinIO (S3).
+# Bibliotecas para formatos de arquivo eficientes e comunicação com storage.
+pyarrow
+fastparquet
+boto3
+psycopg2-binary
 
-# --- OTIMIZAÇÃO E PERFORMANCE ---
+# --- API DE INFERÊNCIA E SERVIÇOS WEB ---
+# Framework e servidor para expor o modelo como um microsserviço.
+fastapi
+uvicorn[standard]
+pydantic
+
+# --- COMPUTAÇÃO PARALELA E DE LARGA ESCALA ---
 # Bibliotecas para acelerar a execução e processar grandes volumes de dados.
-numba          # Compilador JIT que acelera código Python numérico.
-joblib         # Para serialização eficiente de objetos Python (modelos).
-dask           # Para computação paralela em datasets maiores que a memória.
+dask
+numba
 
-# --- MONITORIZAÇÃO E AVALIAÇÃO ---
-# Ferramentas para monitorizar recursos e visualizar resultados.
-psutil         # Para aceder a informações do sistema (CPU, memória).
-matplotlib     # Biblioteca base para criação de gráficos.
-seaborn        # Para visualizações estatísticas mais atraentes.
+# --- MONITORAMENTO, VALIDAÇÃO E ROBUSTEZ ---
+# Ferramentas para observabilidade, quality gates e resiliência.
+psutil
+great-expectations
+evidently
+circuitbreaker
+prometheus-client
+
+# --- VISUALIZAÇÃO E ANÁLISE ---
+# Bibliotecas para geração de gráficos e relatórios.
+matplotlib
+seaborn
+plotly
 
 # --- CONFIGURAÇÃO E UTILITÁRIOS ---
-# Bibliotecas para gerir configurações e outras tarefas de suporte.
-pyyaml         # Para ler e escrever ficheiros de configuração YAML.
-python-dotenv  # Para gerir variáveis de ambiente a partir de ficheiros .env.
-click          # Para criar interfaces de linha de comando (CLI) elegantes.
-tqdm           # Para adicionar barras de progresso a loops e processos.
-rich           # Para formatação de texto rico no terminal.
+# Bibliotecas para gerenciamento de configuração e melhoria da experiência de CLI.
+pyyaml
+python-dotenv
+jsonschema
+click
+tqdm
+rich
 
-# --- API E VISUALIZAÇÃO (PARA FUTURAS EXPANSÕES) ---
-# Dependências para a API de inferência e o dashboard de monitorização.
-fastapi
-uvicorn
-streamlit
-
-# ==============================================================================
-# DEPENDÊNCIAS DE DESENVOLVIMENTO
-# Instale separadamente com: pip install -r requirements-dev.txt
-# ==============================================================================
+# --- QUALIDADE DE CÓDGIO E FRAMEWORK DE TESTES ---
+# Ferramentas para garantir um código limpo, testado e de alta qualidade.
 black
 flake8
 mypy
@@ -63,3 +71,10 @@ pre-commit
 pytest
 pytest-cov
 pytest-mock
+
+# --- TESTES AVANÇADOS (NÍVEL EMPRESARIAL) ---
+# Dependências para os pilares de teste mais complexos.
+pytest-bdd
+hypothesis
+# pact-python  # Descomentar quando os testes de contrato forem implementados
+# locust       # Descomentar quando os testes de carga forem implementados
