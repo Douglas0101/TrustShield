@@ -1,13 +1,13 @@
 # ==============================================================================
 # docker-compose.yml - TrustShield Enterprise Grade
-# Versão: 10.1.0 (Path Fix)
+# Versão: 10.2.0 (Volume Mount Fix)
 #
 # Otimizações e Melhores Práticas Implementadas:
-# - CORREÇÃO: Corrigido o caminho do build do serviço MLflow.
+# - CORREÇÃO: Adicionada a montagem de volumes para os diretórios 'data' e 'outputs'
+#   no serviço 'trustshield-api', resolvendo o FileNotFoundError.
 # - Uso de extensões YAML (`x-`) para reduzir duplicação (DRY).
-# - Healthchecks robustos e explícitos para todos os serviços.
-# - Dependências de serviço baseadas no estado de saúde (`service_healthy`).
-# - Gestão de secrets e configurações centralizada e segura.
+# - Healthchecks robustos para garantir a ordem de inicialização correta.
+# - Gestão de secrets centralizada para maior segurança.
 # ==============================================================================
 
 x-common-settings: &common-settings
@@ -16,6 +16,7 @@ x-common-settings: &common-settings
     - trustshield-net
 
 services:
+  # --- Banco de Dados para o MLflow ---
   postgres:
     image: postgres:14-alpine
     container_name: trustshield-postgres
@@ -34,12 +35,13 @@ services:
       retries: 10
     <<: *common-settings
 
+  # --- Armazenamento de Artefatos (S3-compatível) ---
   minio:
     image: minio/minio:latest
     container_name: trustshield-minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9000:9000" # Endpoint da API S3
+      - "9001:9001" # Console Web
     environment:
       - MINIO_ROOT_USER_FILE=/run/secrets/minio_root_user
       - MINIO_ROOT_PASSWORD_FILE=/run/secrets/minio_root_password
@@ -56,6 +58,8 @@ services:
       - minio_root_password
     <<: *common-settings
 
+  # --- Serviço de Criação do Bucket do MLflow ---
+  # Contêiner efêmero que garante que o bucket 'mlflow' exista no MinIO.
   create-buckets:
     image: minio/mc:latest
     container_name: trustshield-bucket-creator
@@ -75,12 +79,10 @@ services:
     networks:
       - trustshield-net
 
+  # --- Servidor de Tracking do MLflow ---
   mlflow:
     build:
-      # O contexto é o diretório atual (docker/)
       context: .
-      # *** CORREÇÃO APLICADA AQUI ***
-      # O caminho do Dockerfile agora é relativo ao contexto '.'
       dockerfile: mlflow.Dockerfile
     container_name: trustshield-mlflow
     ports:
@@ -105,11 +107,10 @@ services:
       - minio_root_password
     <<: *common-settings
 
+  # --- Serviço Principal: Treinador e API ---
   trustshield-api:
     build:
-      # O contexto é o diretório pai (a raiz do projeto), o que está correto.
       context: ..
-      # O caminho do Dockerfile é relativo à raiz do projeto, o que está correto.
       dockerfile: docker/Dockerfile
     container_name: trustshield-api
     ports:
@@ -118,30 +119,38 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - WAIT_HOSTS=postgres:5432,minio:9000,mlflow:5000
       - WAIT_TIMEOUT=120
-    entrypoint: ["/home/trustshield/docker/entrypoint.sh"]
-    
+      # ---> ADICIONE ESTAS 2 LINHAS PARA O BOTO3 ENCONTRAR OS SEGREDOS <---
+      - AWS_ACCESS_KEY_ID_FILE=/run/secrets/minio_root_user
+      - AWS_SECRET_ACCESS_KEY_FILE=/run/secrets/minio_root_password
+    volumes:
+      - ../data:/home/trustshield/data
+      - ../outputs:/home/trustshield/outputs
+    entrypoint: [ "/home/trustshield/docker/entrypoint.sh" ]
     depends_on:
       mlflow:
         condition: service_started
+    # ---> ADICIONE ESTA SEÇÃO DE SECRETS ABAIXO <---
     secrets:
       - minio_root_user
       - minio_root_password
     <<: *common-settings
 
+# --- Rede Compartilhada ---
 networks:
   trustshield-net:
     driver: bridge
     name: trustshield-network
 
+# --- Volumes Persistentes ---
 volumes:
   postgres_data:
     name: trustshield-postgres-data
   minio_data:
     name: trustshield-minio-data
 
+# --- Gestão de Secrets ---
+# Mapeia os ficheiros de segredos locais para serem usados pelos contêineres.
 secrets:
-  postgres_password:
-    file: ../secrets/postgres_password.txt
   minio_root_user:
     file: ../secrets/minio_root_user.txt
   minio_root_password:

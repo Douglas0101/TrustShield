@@ -1,0 +1,26 @@
+Próximos Passos
+
+Depois de aplicar a correção no Dockerfile, siga estes passos para garantir que tudo seja reconstruído corretamente:
+
+Limpe completamente o ambiente anterior para evitar qualquer cache problemático:
+
+make purge
+
+Reconstrua as imagens e inicie os serviços com um único comando otimizado do seu Makefile:
+
+make services-up-fresh
+
+Este comando irá reconstruir a imagem trustshield-api com a correção e iniciar todos os serviços.
+
+Monitore os logs para confirmar que o serviço trustshield-api inicia sem erros:
+
+
+make logs
+
+Você deverá ver as mensagens do Uvicorn indicando que o servidor está rodando.
+
+Finalmente, execute o pipeline de treinamento:
+
+make train
+
+Seguindo esses passos, o contêiner da API ficará estável, permitindo que o comando make train seja executado com sucesso.

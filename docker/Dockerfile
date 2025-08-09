@@ -32,7 +32,6 @@ WORKDIR /home/trustshield
 # Copia apenas o requirements.txt primeiro para otimizar o cache.
 # O build só re-executará este passo se o requirements.txt mudar.
 COPY --chown=trustshield:trustshield requirements.txt .
-
 # Instala as dependências como o usuário da aplicação
 USER trustshield
 RUN pip install --user -r requirements.txt
@@ -64,6 +63,10 @@ COPY --from=builder --chown=trustshield:trustshield /home/trustshield/.local /ho
 # Adiciona o diretório de binários do usuário ao PATH.
 ENV PATH="/home/trustshield/.local/bin:${PATH}"
 
+# ---> ADICIONE ESTA LINHA ABAIXO <---
+# Adiciona o diretório de bibliotecas do usuário ao PYTHONPATH para que o Python as encontre.
+ENV PYTHONPATH="/home/trustshield/.local/lib/python3.10/site-packages:${PYTHONPATH}"
+
 # Copia o código-fonte e a configuração da aplicação.
 COPY --chown=trustshield:trustshield src ./src
 COPY --chown=trustshield:trustshield config ./config
@@ -74,7 +77,8 @@ RUN chmod +x ./docker/entrypoint.sh
 
 EXPOSE 8000
 
-# Define um comando padrão. Isto pode ser sobrescrito pelo docker-compose ou `docker run`.
+# Define um comando padrão.
+# Isto pode ser sobrescrito pelo docker-compose ou `docker run`.
 # Aqui, o entrypoint é chamado para aguardar os serviços.
 ENTRYPOINT ["./docker/entrypoint.sh"]
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
