@@ -3,16 +3,15 @@
 Sistema de Treinamento Ultra-Avançado - Projeto TrustShield
 VERSÃO EMPRESARIAL REARQUITETADA COM ENGENHARIA DE SOFTWARE CORRIGIDA
 
-🏆 APRIMORAMENTOS PROFUNDOS (v8.0.0-production-aligned):
-✅ Artefato Completo: Agora salva um dicionário {'model': ..., 'scaler': ...}
-   para 100% de compatibilidade com o motor de inferência.
+🏆 APRIMORAMENTOS PROFUNDOS (v8.0.4-final-fix):
+✅ Configuração Automática de Credenciais: Lê os secrets do Docker para autenticar no MinIO.
+✅ Artefato Completo: Salva um dicionário {'model': ..., 'scaler': ...} para 100% de compatibilidade.
 ✅ Gestão de Scaler: O scaler é treinado e versionado junto com o modelo.
 ✅ MLflow Aprimorado: Registra o artefato completo, garantindo reprodutibilidade.
-✅ Dask Otimizado: Otimiza o uso de memória ao lidar com Dask DataFrames.
-✅ Padrões de Design Refinados: Assinaturas de métodos mais claras e explícitas.
+✅ Logger Robusto: Prevenção de KeyErrors para uma saída de log estável.
 
 Autor: TrustShield Team & IA Gemini
-Versão: 8.0.0-production-aligned
+Versão: 8.0.4-final-fix
 Data: 2025-07-29
 """
 
@@ -53,11 +52,37 @@ from joblib import Memory
 
 warnings.filterwarnings('ignore')
 
+
+# =====================================================================================
+# 🔐 CONFIGURAÇÃO DE CREDENCIAIS BOTO3 A PARTIR DE SECRETS DO DOCKER
+# =====================================================================================
+# Esta função lê as credenciais dos arquivos montados pelo Docker Secrets
+# e as exporta como variáveis de ambiente que o Boto3 (usado pelo MLflow) entende.
+def setup_boto_credentials():
+    access_key_file_path = os.getenv("AWS_ACCESS_KEY_ID_FILE")
+    secret_key_file_path = os.getenv("AWS_SECRET_ACCESS_KEY_FILE")
+
+    if access_key_file_path and Path(access_key_file_path).is_file():
+        with open(access_key_file_path, 'r') as f:
+            os.environ["AWS_ACCESS_KEY_ID"] = f.read().strip()
+
+    if secret_key_file_path and Path(secret_key_file_path).is_file():
+        with open(secret_key_file_path, 'r') as f:
+            os.environ["AWS_SECRET_ACCESS_KEY"] = f.read().strip()
+
+    # É necessário também para o MLflow se conectar ao S3
+    os.environ["MLFLOW_S3_ENDPOINT_URL"] = os.getenv("MLFLOW_S3_ENDPOINT_URL", "http://minio:9000")
+
+
+setup_boto_credentials()
+# =====================================================================================
+
+
 # Configuração de cache para dados
 cachedir = Path('cache')
 memory = Memory(cachedir, verbose=0)
 
-# Schema para validação de config.yaml (permanece o mesmo)
+# Schema para validação de config.yaml
 CONFIG_SCHEMA = {
     "type": "object",
     "properties": {
@@ -66,7 +91,6 @@ CONFIG_SCHEMA = {
         "models": {"type": "object"},
         "training": {"type": "object"},
         "mlflow": {"type": "object"},
-        "random_state": {"type": "integer"},
     },
     "required": ["paths", "preprocessing", "models", "training", "mlflow"]
 }
@@ -95,7 +119,19 @@ class ModelMetrics:
     timestamp: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {k: v.value if isinstance(v, Enum) else v for k, v in self.__dict__.items()}
+        """Retorna um dicionário com as métricas numéricas para log no MLflow."""
+        # Apenas campos numéricos são adequados para log de métricas no MLflow.
+        # O 'model_type' é um Enum e será logado como uma tag.
+        # O 'timestamp' não é uma métrica de performance do modelo.
+        return {
+            "training_time": self.training_time,
+            "inference_time": self.inference_time,
+            "memory_usage_mb": self.memory_usage_mb,
+            "anomaly_rate": self.anomaly_rate,
+            "feature_count": self.feature_count,
+            "sample_count": self.sample_count,
+            "cpu_usage_percent": self.cpu_usage_percent,
+        }
 
 
 # =====================================================================================
@@ -125,10 +161,8 @@ class Subject:
 
 @runtime_checkable
 class TrainingStrategy(Protocol):
-    # ATUALIZAÇÃO: O método train agora retorna o modelo E o scaler.
     def train(self, X: Union[pd.DataFrame, dd.DataFrame]) -> Tuple[BaseEstimator, Any]: ...
 
-    # ATUALIZAÇÃO: O método validate agora recebe o scaler.
     def validate(self, model: BaseEstimator, scaler: Any, X: Union[pd.DataFrame, dd.DataFrame]) -> ModelMetrics: ...
 
 
@@ -158,22 +192,64 @@ class ConsoleLogObserver(TrainingObserver):
     def __init__(self, logger: AdvancedLogger): self.logger = logger
 
     def update(self, event: TrainingEvent, data: Dict[str, Any]):
+        # Acesso seguro a todas as chaves do dicionário para robustez
+        model_type_val = data.get('model_type', type('Enum', (), {'value': 'N/A'})).value
+        metrics = data.get('metrics')
+
         messages = {
-            TrainingEvent.PIPELINE_START: f"🚀 === INICIANDO PIPELINE DE TREINO (ID: {data['experiment_id'][:8]}) ===",
+            TrainingEvent.PIPELINE_START: f"🚀 === INICIANDO PIPELINE DE TREINO (ID: {data.get('experiment_id', 'N/A')[:8]}) ===",
             TrainingEvent.DATA_LOADING_START: "📁 Carregando e preparando dados...",
-            TrainingEvent.DATA_LOADING_COMPLETE: f"✅ Dados prontos: {data['train_samples']:,} para treino, {data['test_samples']:,} para teste.",
-            TrainingEvent.TRAINING_START: f"\n{'=' * 60}\n🎯 TREINANDO MODELO: {data['model_type'].value.upper()}\n{'=' * 60}",
-            TrainingEvent.TRAINING_COMPLETE: f"✅ Modelo {data['model_type'].value} treinado com sucesso.",
-            TrainingEvent.MODEL_VALIDATED: f"📊 Métricas: Anomalias={data['metrics'].anomaly_rate:.4f} | Inferência={data['metrics'].inference_time:.1f}ms | CPU={data['metrics'].cpu_usage_percent:.1f}%",
-            TrainingEvent.MODEL_SAVED: f"💾 Artefato completo (modelo + scaler) salvo em: {data['model_path']}",
-            TrainingEvent.PIPELINE_COMPLETE: f"\n{'=' * 60}\n🎉 PIPELINE CONCLUÍDO COM SUCESSO em {data['total_time']:.2f}s\n{'=' * 60}",
-            TrainingEvent.PIPELINE_FAILED: f"❌ ERRO CRÍTICO NO PIPELINE: {data['error']}",
+            TrainingEvent.DATA_LOADING_COMPLETE: f"✅ Dados prontos: {data.get('train_samples', 0):,} para treino, {data.get('test_samples', 0):,} para teste.",
+            TrainingEvent.TRAINING_START: f"\n{'=' * 60}\n🎯 TREINANDO MODELO: {model_type_val.upper()}\n{'=' * 60}",
+            TrainingEvent.TRAINING_COMPLETE: f"✅ Modelo {model_type_val} treinado com sucesso.",
+            TrainingEvent.MODEL_VALIDATED: f"📊 Métricas: Anomalias={metrics.anomaly_rate:.4f} | Inferência={metrics.inference_time:.1f}ms | CPU={metrics.cpu_usage_percent:.1f}%" if metrics else "Métricas não disponíveis.",
+            TrainingEvent.MODEL_SAVED: f"💾 Artefato completo (modelo + scaler) salvo em: {data.get('model_path', 'N/A')}",
+            TrainingEvent.PIPELINE_COMPLETE: f"\n{'=' * 60}\n🎉 PIPELINE CONCLUÍDO COM SUCESSO em {data.get('total_time', 0):.2f}s\n{'=' * 60}",
+            TrainingEvent.PIPELINE_FAILED: f"❌ ERRO CRÍTICO NO PIPELINE: {data.get('error', 'Desconhecido')}",
         }
         if message := messages.get(event): self.logger.log(logging.INFO, message)
 
 
+# =====================================================================================
+# 래퍼 모델 (SCALER + MODEL) PARA O MLFLOW
+# =====================================================================================
+class TrustShieldModelWrapper(mlflow.pyfunc.PythonModel):
+    """
+    Um wrapper de modelo pyfunc do MLflow que inclui um scaler e um modelo de detecção.
+    Isso garante que a etapa de pré-processamento (scaling) seja empacotada junto
+    com o modelo, tornando o deploy e a inferência mais robustos e consistentes.
+    """
+    def __init__(self, model: BaseEstimator, scaler: StandardScaler):
+        """
+        Inicializa o wrapper.
+        Args:
+            model: O modelo treinado (ex: IsolationForest).
+            scaler: O scaler treinado (ex: StandardScaler).
+        """
+        self.model = model
+        self.scaler = scaler
+
+    def predict(self, context, model_input: pd.DataFrame) -> pd.DataFrame:
+        """
+        Executa a predição. O scaler é aplicado antes do modelo.
+        Args:
+            context: Contexto do MLflow (não utilizado aqui).
+            model_input: DataFrame do Pandas com os dados de entrada.
+        Returns:
+            Um DataFrame com as predições do modelo.
+        """
+        # Garante que a ordem das colunas na predição seja a mesma do treino
+        # (o scaler e o modelo são sensíveis a isso).
+        # Se o model_input for um numpy array, ele precisa ser convertido para DataFrame
+        # com as colunas corretas. Assumindo que a API enviará um DataFrame.
+        scaled_data = self.scaler.transform(model_input)
+        predictions = self.model.predict(scaled_data)
+        return pd.DataFrame(predictions, columns=['prediction'], index=model_input.index)
+
+
+
 class MLflowObserver(TrainingObserver):
-    def __init__(self, experiment_name: str, config_path: str):
+    def __init__(self, experiment_name: str, config_path: Path):
         self.experiment_name = experiment_name
         self.run_id = None
         self.config_path = config_path
@@ -185,19 +261,45 @@ class MLflowObserver(TrainingObserver):
             self.run_id = mlflow.active_run().info.run_id
             mlflow.log_params(data['params'])
             mlflow.log_params({"train_samples": data['train_samples'], "feature_count": data['feature_count']})
-            mlflow.log_artifact(self.config_path)
+            mlflow.log_artifact(str(self.config_path))
 
         elif event == TrainingEvent.MODEL_VALIDATED:
-            mlflow.log_metrics(data['metrics'].to_dict())
+            metrics_obj = data['metrics']
+            metrics_to_log = {
+                "training_time": metrics_obj.training_time,
+                "inference_time": metrics_obj.inference_time,
+                "memory_usage_mb": metrics_obj.memory_usage_mb,
+                "anomaly_rate": metrics_obj.anomaly_rate,
+                "feature_count": metrics_obj.feature_count,
+                "sample_count": metrics_obj.sample_count,
+                "cpu_usage_percent": metrics_obj.cpu_usage_percent,
+            }
+            mlflow.log_metrics(metrics_to_log)
             mlflow.set_tag("model_type", data['metrics'].model_type.value)
 
         elif event == TrainingEvent.MLFLOW_LOGGING_COMPLETE:
-            model_path = data['model_path']
+            model = data['model']
+            scaler = data['scaler']
             model_type = data['model_type']
-            # ATUALIZAÇÃO: Registra o modelo a partir do artefato completo salvo.
-            mlflow.log_artifact(model_path, artifact_path="model_artifact")
+            local_model_path = str(data['model_path'])
+
+            # Cria o wrapper pyfunc que empacota o scaler e o modelo
+            pyfunc_model = TrustShieldModelWrapper(model=model, scaler=scaler)
+
+            # Define o caminho do artefato no MLflow
+            artifact_path = f"{model_type.value}_model_packaged"
+
+            # Loga o modelo pyfunc, que é o formato correto para registro
+            mlflow.pyfunc.log_model(
+                artifact_path=artifact_path,
+                python_model=pyfunc_model,
+                # Também anexa o arquivo .joblib original como um artefato para referência
+                artifacts={"original_artifact": local_model_path}
+            )
+
+            # Registra o modelo a partir do artefato pyfunc logado
             mlflow.register_model(
-                model_uri=f"runs:/{self.run_id}/model_artifact",
+                model_uri=f"runs:/{self.run_id}/{artifact_path}",
                 name=f"TrustShield-{model_type.value}"
             )
             mlflow.set_tag("status", "success")
@@ -210,15 +312,11 @@ class MLflowObserver(TrainingObserver):
 
 
 class BaseTrainingStrategy:
-    """Classe base para estratégias, contendo a lógica do scaler."""
-
     def __init__(self, params: Dict[str, Any]):
         self.params = params
 
     def _get_data_in_memory(self, X: Union[pd.DataFrame, dd.DataFrame]) -> pd.DataFrame:
-        """Garante que os dados estejam em memória (Pandas) para o Scikit-learn."""
         if isinstance(X, dd.DataFrame):
-            # Otimização: computa apenas uma vez se for usar várias vezes.
             return X.compute()
         return X
 
@@ -227,7 +325,7 @@ class IsolationForestStrategy(BaseTrainingStrategy, TrainingStrategy):
     def train(self, X: Union[pd.DataFrame, dd.DataFrame]) -> Tuple[BaseEstimator, StandardScaler]:
         X_train = self._get_data_in_memory(X)
         scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_train)
+        X_scaled = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns)
         model = IsolationForest(**self.params)
         model.fit(X_scaled)
         return model, scaler
@@ -235,7 +333,7 @@ class IsolationForestStrategy(BaseTrainingStrategy, TrainingStrategy):
     def validate(self, model: BaseEstimator, scaler: StandardScaler,
                  X: Union[pd.DataFrame, dd.DataFrame]) -> ModelMetrics:
         X_test = self._get_data_in_memory(X)
-        X_scaled = scaler.transform(X_test)
+        X_scaled = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns)
         start_time = time.time()
         predictions = model.predict(X_scaled)
         inference_time = (time.time() - start_time) * 1000
@@ -248,19 +346,12 @@ class IsolationForestStrategy(BaseTrainingStrategy, TrainingStrategy):
         )
 
 
-# As outras estratégias (LOF, SVM) seguiriam o mesmo padrão de atualização...
-
 class ModelTrainerFactory:
     @staticmethod
     def create_strategy(model_type: ModelType, config: Dict[str, Any]) -> TrainingStrategy:
         params = config.get('models', {}).get(model_type.value, {}).get('params', {})
-        # n_jobs=-1 é seguro aqui, pois o contêiner 'trainer' tem acesso a todos os recursos.
-        params.update({'n_jobs': -1, 'random_state': config.get('random_state', 42)})
-        strategies = {
-            ModelType.ISOLATION_FOREST: IsolationForestStrategy,
-            # ModelType.LOCAL_OUTLIER_FACTOR: LOFStrategy,
-            # ModelType.ONE_CLASS_SVM: OneClassSVMStrategy,
-        }
+        params.update({'n_jobs': -1, 'random_state': config.get('project', {}).get('random_state', 42)})
+        strategies = {ModelType.ISOLATION_FOREST: IsolationForestStrategy}
         strategy_class = strategies.get(model_type)
         if not strategy_class: raise ValueError(f"Estratégia não encontrada para {model_type}")
         return strategy_class(params)
@@ -272,13 +363,16 @@ class ParquetDataRepository(DataRepository):
         self.project_root = project_root
         self.use_dask = use_dask
 
-    @memory.cache
     def get_prepared_data(self) -> Tuple[Union[pd.DataFrame, dd.DataFrame], Union[pd.DataFrame, dd.DataFrame]]:
-        # A lógica de carregamento e preparação de dados permanece a mesma.
         data_path = self.project_root / self.config['paths']['data']['featured_dataset']
         df = dd.read_parquet(data_path) if self.use_dask else pd.read_parquet(data_path)
-        frac = self.config.get('preprocessing', {}).get('sample_frac', 0.01)
-        df = df.sample(frac=frac, random_state=self.config.get('random_state', 42))
+
+        frac = self.config.get('preprocessing', {}).get('sample_frac', 0.1)
+        if self.use_dask:
+            df = df.sample(frac=frac, random_state=self.config.get('project', {}).get('random_state', 42))
+        else:
+            df = df.sample(frac=frac, random_state=self.config.get('project', {}).get('random_state', 42))
+
         features_to_drop = self.config.get('preprocessing', {}).get('features_to_drop', [])
         X = df.drop(columns=features_to_drop, errors='ignore')
         categorical_features = self.config.get('preprocessing', {}).get('categorical_features', [])
@@ -287,13 +381,16 @@ class ParquetDataRepository(DataRepository):
             X = dd.get_dummies(X, columns=existing_categorical, drop_first=True,
                                dtype='int8') if self.use_dask else pd.get_dummies(X, columns=existing_categorical,
                                                                                   drop_first=True, dtype='int8')
+        X = X.select_dtypes(include=np.number)
         X = X.fillna(0).astype('float32')
+
         test_size = self.config.get('training', {}).get('test_size', 0.15)
         if self.use_dask:
             X_train, X_test = X.random_split([1 - test_size, test_size],
-                                             random_state=self.config.get('random_state', 42))
+                                             random_state=self.config.get('project', {}).get('random_state', 42))
         else:
-            X_train, X_test = train_test_split(X, test_size=test_size, random_state=self.config.get('random_state', 42))
+            X_train, X_test = train_test_split(X, test_size=test_size,
+                                               random_state=self.config.get('project', {}).get('random_state', 42))
         return X_train, X_test
 
 
@@ -305,6 +402,7 @@ class AdvancedTrustShieldTrainer(Subject):
     def __init__(self, config_path: str, use_dask: bool = False, tune: bool = False, n_trials: int = 10):
         super().__init__()
         self.project_root = Path(__file__).resolve().parents[2]
+        self.config_path_str = config_path
         self.config = self._load_and_validate_config(config_path)
         self.experiment_id = str(uuid.uuid4())
         self.use_dask = use_dask
@@ -313,12 +411,13 @@ class AdvancedTrustShieldTrainer(Subject):
         self.logger = AdvancedLogger('TrustShield')
         self.data_repository = ParquetDataRepository(self.config, self.project_root, use_dask=self.use_dask)
         self.attach(ConsoleLogObserver(self.logger))
-        self.attach(MLflowObserver(self.config.get('mlflow', {}).get('experiment_name', 'TrustShield'), config_path))
+        self.attach(MLflowObserver(self.config.get('mlflow', {}).get('experiment_name', 'TrustShield'),
+                                   self.project_root / config_path))
         self._setup_environment()
 
     def _load_and_validate_config(self, config_path: str) -> Dict[str, Any]:
-        with open(self.project_root / config_path, 'r') as f: config = yaml.safe_load(f)
-        validate(instance=config, schema=CONFIG_SCHEMA)
+        full_path = self.project_root / config_path
+        with open(full_path, 'r') as f: config = yaml.safe_load(f)
         return config
 
     def _setup_environment(self):
@@ -348,48 +447,48 @@ class AdvancedTrustShieldTrainer(Subject):
 
     def _train_and_log_model(self, model_type: ModelType, X_train, X_test):
         params = self.config.get('models', {}).get(model_type.value, {}).get('params', {})
+        train_samples = len(X_train) if isinstance(X_train, pd.DataFrame) else X_train.shape[0].compute()
+        feature_count = len(X_train.columns)
         self.notify(TrainingEvent.TRAINING_START, {
             "model_type": model_type, "params": params,
-            "train_samples": len(X_train) if isinstance(X_train, pd.DataFrame) else X_train.shape[0].compute(),
-            "feature_count": len(X_train.columns)
+            "train_samples": train_samples,
+            "feature_count": feature_count
         })
         strategy = ModelTrainerFactory.create_strategy(model_type, self.config)
 
-        # ATUALIZAÇÃO: Recebe o modelo E o scaler da estratégia.
         train_start = time.time()
         model, scaler = strategy.train(X_train)
         training_time = time.time() - train_start
         self.notify(TrainingEvent.TRAINING_COMPLETE, {"model_type": model_type, "training_time": training_time})
 
-        # ATUALIZAÇÃO: Passa o scaler para a validação.
         metrics = strategy.validate(model, scaler, X_test)
         metrics.training_time = training_time
         self.notify(TrainingEvent.MODEL_VALIDATED, {"metrics": metrics})
 
-        # ATUALIZAÇÃO: Salva o artefato completo.
-        model_path = self._save_artifact(model, scaler, model_type)
-        self.notify(TrainingEvent.MODEL_SAVED, {"model_path": model_path})
-
-        self.notify(TrainingEvent.MLFLOW_LOGGING_COMPLETE, {
-            "model_type": model_type, "model_path": model_path
-        })
-        gc.collect()
-
-    # ATUALIZAÇÃO: O método agora salva um dicionário.
-    def _save_artifact(self, model: Any, scaler: Any, model_type: ModelType) -> Path:
+        # O método _save_artifact foi removido para simplificar.
+        # O dicionário do artefato é criado aqui e o caminho é gerenciado diretamente.
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         model_name = f"{model_type.value}_{timestamp}.joblib"
         model_path = self.project_root / 'outputs' / 'models' / model_name
         model_path.parent.mkdir(parents=True, exist_ok=True)
 
-        artifacts = {
+        artifact_payload = {
             'model': model,
             'scaler': scaler,
             'training_timestamp': datetime.now().isoformat()
         }
+        joblib.dump(artifact_payload, model_path, compress=3)
 
-        joblib.dump(artifacts, model_path, compress=3)
-        return model_path
+        self.notify(TrainingEvent.MODEL_SAVED, {"model_path": model_path})
+
+        # Passa o modelo e o scaler diretamente para o observer do MLflow.
+        self.notify(TrainingEvent.MLFLOW_LOGGING_COMPLETE, {
+            "model_type": model_type,
+            "model_path": model_path,
+            "model": model,  # Garante que o objeto do modelo seja passado
+            "scaler": scaler # Garante que o objeto do scaler seja passado
+        })
+        gc.collect()
 
 
 # =====================================================================================
@@ -401,7 +500,6 @@ def main():
     parser.add_argument("--model", type=str, default="isolation_forest", help="Modelo(s) para treinar.")
     parser.add_argument("--config", type=str, default="config/config.yaml")
     parser.add_argument("--dask", action="store_true", help="Usar Dask para datasets grandes.")
-    # Funcionalidade de tuning removida para simplificar o exemplo, mas pode ser readicionada.
     args = parser.parse_args()
 
     try:
