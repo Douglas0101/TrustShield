@@ -32,9 +32,10 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Union, Tuple, Protocol, runtime_checkable
+from typing import Any, Dict, List, Union, Tuple, Protocol, Optional, runtime_checkable
 
 import joblib
+import pickle
 import mlflow
 import numpy as np  # noqa: F401
 import pandas as pd
@@ -231,9 +232,139 @@ class ConsoleLogObserver(TrainingObserver):
 
 class MLflowObserver(TrainingObserver):
     def __init__(self, experiment_name: str, config_path: Path):
-        self.experiment_name, self.run_id, self.config_path = experiment_name, None, config_path
+        """
+        Observer responsável por registrar parâmetros, métricas e artefatos no MLflow.
+        Cada modelo treinado gera um run distinto no experimento indicado.
 
-    def update(self, event: TrainingEvent, data: Dict[str, Any]): pass  # Omitido por brevidade
+        :param experiment_name: Nome do experimento no MLflow.
+        :param config_path: Caminho para o arquivo de configuração utilizado no treino.
+        """
+        self.experiment_name = experiment_name
+        self.config_path = config_path
+        self.run_id: Optional[str] = None
+
+    def _flatten_params(self, params: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
+        """
+        Converte um dicionário potencialmente aninhado de parâmetros em um dicionário plano,
+        concatenando chaves com ponto. Isso facilita o log de parâmetros no MLflow.
+
+        :param params: Dicionário de parâmetros possivelmente aninhado.
+        :param prefix: Prefixo para as chaves, usado durante a recursão.
+        :return: Dicionário plano com chaves concatenadas por ponto.
+        """
+        items: Dict[str, Any] = {}
+        for k, v in (params or {}).items():
+            key = f"{prefix}.{k}" if prefix else k
+            if isinstance(v, dict):
+                items.update(self._flatten_params(v, key))
+            else:
+                items[key] = v
+        return items
+
+    def _ensure_run_started(self, model_type: ModelType, data: Dict[str, Any]):
+        """
+        Garante que um novo run seja iniciado no MLflow. Se houver um run ativo, ele é encerrado.
+        Também registra o arquivo de configuração utilizado como artefato e loga metadados iniciais.
+
+        :param model_type: Tipo de modelo sendo treinado.
+        :param data: Dicionário com dados do evento, utilizado para log de metadados.
+        """
+        # Encerra qualquer run ativo antes de iniciar um novo
+        if mlflow.active_run():
+            mlflow.end_run()
+        # Define o experimento
+        mlflow.set_experiment(self.experiment_name)
+        # Cria um nome amigável para o run
+        run_name = f"training_{model_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        mlflow.start_run(run_name=run_name)
+        self.run_id = mlflow.active_run().info.run_id
+        # Registra o arquivo de configuração como artefato, se existir
+        try:
+            if self.config_path and Path(self.config_path).exists():
+                mlflow.log_artifact(str(self.config_path))
+        except Exception:
+            # Falha silenciosamente se não for possível registrar o artefato
+            pass
+        # Loga parâmetros iniciais relacionados ao dataset
+        for param_key in ("data_hash", "train_samples", "test_samples"):
+            if param_key in data:
+                mlflow.log_param(param_key, data[param_key])
+
+    def update(self, event: TrainingEvent, data: Dict[str, Any]):
+        """
+        Manipula eventos do pipeline de treino para registrar informações no MLflow.
+
+        Dependendo do tipo de evento, loga parâmetros, métricas ou artefatos.
+        Também gerencia a criação e encerramento de runs de acordo com a fase do pipeline.
+
+        :param event: Evento de treinamento sendo processado.
+        :param data: Dados associados ao evento.
+        """
+        try:
+            # Início do treinamento: inicia um novo run e registra parâmetros
+            if event == TrainingEvent.TRAINING_START:
+                model_type: ModelType = data.get('model_type')
+                self._ensure_run_started(model_type, data)
+                params = data.get('params', {})
+                flat_params = self._flatten_params(params)
+                flat_params.update({
+                    'model_type': model_type.value,
+                    'model_hash': data.get('model_hash'),
+                    'feature_count': data.get('feature_count'),
+                    'train_samples': data.get('train_samples'),
+                })
+                # Loga apenas valores não nulos
+                mlflow.log_params({k: v for k, v in flat_params.items() if v is not None})
+            # Fim do carregamento de dados: loga informações adicionais do dataset
+            elif event == TrainingEvent.DATA_LOADING_COMPLETE and mlflow.active_run():
+                for param_key in ("data_hash", "train_samples", "test_samples"):
+                    if param_key in data:
+                        mlflow.log_param(param_key, data[param_key])
+            # Fim do treinamento: loga tempo de treinamento
+            elif event == TrainingEvent.TRAINING_COMPLETE and mlflow.active_run():
+                if 'training_time' in data:
+                    mlflow.log_metric('training_time_sec', data['training_time'])
+            # Validação do modelo: loga métricas de validação
+            elif event == TrainingEvent.MODEL_VALIDATED and mlflow.active_run():
+                metrics = data.get('metrics')
+                if metrics:
+                    mlflow.log_metrics({k: v for k, v in metrics.to_dict().items() if isinstance(v, (int, float, float))})
+            # Salva artefato do modelo
+            elif event == TrainingEvent.MODEL_SAVED and mlflow.active_run():
+                model_path = data.get('model_path')
+                if model_path:
+                    mlflow.log_artifact(str(model_path))
+            # Loga modelo como pyfunc
+            elif event == TrainingEvent.MLFLOW_LOGGING_COMPLETE and mlflow.active_run():
+                model = data.get('model')
+                scaler = data.get('scaler')
+                signature = data.get('signature')
+                input_example = data.get('input_example')
+                if model is not None and scaler is not None:
+                    pyfunc_wrapper = TrustShieldModelWrapper(model=model, scaler=scaler)
+                    mlflow.pyfunc.log_model(
+                        artifact_path="model",
+                        python_model=pyfunc_wrapper,
+                        signature=signature,
+                        input_example=input_example
+                    )
+            # Finalização bem sucedida do pipeline
+            elif event == TrainingEvent.PIPELINE_COMPLETE and mlflow.active_run():
+                mlflow.set_tag("status", "success")
+                mlflow.end_run()
+                self.run_id = None
+            # Falha no pipeline
+            elif event == TrainingEvent.PIPELINE_FAILED and mlflow.active_run():
+                mlflow.set_tag("status", "failed")
+                try:
+                    mlflow.end_run(status="FAILED")
+                except Exception:
+                    mlflow.end_run()
+                self.run_id = None
+        except Exception as mlflow_exc:
+            # Registra erro durante logging no MLflow sem interromper o treinamento
+            if mlflow.active_run():
+                mlflow.set_tag("mlflow_logging_error", str(mlflow_exc))
 
 
 class TrustShieldModelWrapper(mlflow.pyfunc.PythonModel):
@@ -257,7 +388,9 @@ class BaseTrainingStrategy:
         return X
 
     def _calculate_model_hash(self, model: Any) -> str:
-        return hashlib.sha256(joblib.dumps(model)).hexdigest()
+        # Usar pickle para serialização em memória, que é o padrão para hashing.
+        # Joblib é otimizado para I/O em disco de grandes arrays e não expõe 'dumps'.
+        return hashlib.sha256(pickle.dumps(model)).hexdigest()
 
 
 class IsolationForestStrategy(BaseTrainingStrategy, TrainingStrategy):
@@ -265,22 +398,51 @@ class IsolationForestStrategy(BaseTrainingStrategy, TrainingStrategy):
         X_train = self._get_data_in_memory(X)
         scaler = StandardScaler().fit(X_train)
         X_scaled = pd.DataFrame(scaler.transform(X_train), columns=X_train.columns)
+
+        # Otimização de memória: libera o dataframe original antes do fit.
+        del X_train
+        gc.collect()
+
         params = {**self.params, 'n_jobs': min(self.params.get('n_jobs', -1), psutil.cpu_count()), 'random_state': 42}
         model = IsolationForest(**params)
+        self.logger.log(logging.INFO,
+                        "Iniciando model.fit() para IsolationForest. Esta pode ser uma operação intensiva.")
         model.fit(X_scaled)
+        self.logger.log(logging.INFO, "model.fit() concluído com sucesso.")
         return model, scaler, self._calculate_model_hash(model)
 
     def validate(self, model: IsolationForest, scaler: StandardScaler,
                  X: Union[pd.DataFrame, dd.DataFrame]) -> ModelMetrics:
         X_test = self._get_data_in_memory(X)
         X_scaled = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns)
+
+        # Captura as dimensões ANTES de deletar o dataframe para evitar UnboundLocalError.
+        feature_count = X_test.shape[1]
+        sample_count = len(X_test)
+
+        # Otimização de memória: libera o dataframe original antes da predição.
+        del X_test
+        gc.collect()
+
         start_time = time.time()
         predictions = model.predict(X_scaled)
         inference_time = (time.time() - start_time) * 1000
-        return ModelMetrics(model_type=ModelType.ISOLATION_FOREST, training_time=0, inference_time=inference_time,
-                            memory_usage_mb=psutil.Process().memory_info().rss / (1024 ** 2),
-                            anomaly_rate=np.sum(predictions == -1) / len(predictions), feature_count=X_test.shape[1],
-                            sample_count=len(X_test))
+        # Calcula a utilização de CPU imediatamente após a predição. O intervalo curto ajuda a capturar
+        # picos de utilização no momento da inferência, fornecendo melhor visibilidade para a métrica.
+        try:
+            cpu_usage_percent = psutil.cpu_percent(interval=0.5)
+        except Exception:
+            cpu_usage_percent = 0.0
+        return ModelMetrics(
+            model_type=ModelType.ISOLATION_FOREST,
+            training_time=0,
+            inference_time=inference_time,
+            memory_usage_mb=psutil.Process().memory_info().rss / (1024 ** 2),
+            anomaly_rate=np.sum(predictions == -1) / len(predictions),
+            feature_count=feature_count,
+            sample_count=sample_count,
+            cpu_usage_percent=cpu_usage_percent
+        )
 
 
 class ParquetDataRepository(DataRepository):
@@ -368,6 +530,7 @@ class ResilientTrustShieldTrainer(Subject):
 
     def train_and_evaluate_model(self, model_type: ModelType, X_train: Union[pd.DataFrame, dd.DataFrame],
                                  X_test: Union[pd.DataFrame, dd.DataFrame]) -> Dict[str, Any]:
+        self.logger.log(logging.INFO, f"Iniciando 'train_and_evaluate_model' para o modelo {model_type.value}")
         params = self.config.get('models', {}).get(model_type.value, {}).get('params', {})
         if self.tune:
             tuned_params = self._tune_model(model_type, X_train, X_test)
@@ -412,7 +575,10 @@ class ResilientTrustShieldTrainer(Subject):
         try:
             self.notify(TrainingEvent.PIPELINE_START, {"experiment_id": self.experiment_id})
             X_train, X_test, data_hash = self.load_and_validate_data()
+
+            self.logger.log(logging.INFO, f"Iniciando loop de treinamento para modelos: {model_types_str}")
             for model_type_str in model_types_str:
+                self.logger.log(logging.INFO, f"--- Processando modelo: {model_type_str} ---")
                 model_type = ModelType(model_type_str)
                 training_artifacts = self.train_and_evaluate_model(model_type, X_train, X_test)
                 training_artifacts['data_hash'] = data_hash
