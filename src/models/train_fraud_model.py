@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Union, Tuple, Protocol, runtime_checkable
 
 import joblib
+import pickle
 import mlflow
 import numpy as np  # noqa: F401
 import pandas as pd
@@ -257,7 +258,9 @@ class BaseTrainingStrategy:
         return X
 
     def _calculate_model_hash(self, model: Any) -> str:
-        return hashlib.sha256(joblib.dumps(model)).hexdigest()
+        # Usar pickle para serialização em memória, que é o padrão para hashing.
+        # Joblib é otimizado para I/O em disco de grandes arrays e não expõe 'dumps'.
+        return hashlib.sha256(pickle.dumps(model)).hexdigest()
 
 
 class IsolationForestStrategy(BaseTrainingStrategy, TrainingStrategy):

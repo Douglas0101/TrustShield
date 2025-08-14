@@ -1,80 +1,80 @@
 # ==============================================================================
-# TrustShield Consolidated Requirements (Versão 12.0.0 - Anaconda Environment)
+# TrustShield Consolidated Requirements (Versão 12.1.0 - Ambiente Reprodutível)
 #
-# Este arquivo define TODAS as dependências do projeto para uso com o Anaconda.
-# As versões não são fixadas para permitir que o 'conda' resolva o ambiente
-# de forma otimizada. Para criar um ambiente a partir deste arquivo, use:
-# conda create --name trustshield --file requirements.txt
+# Este arquivo define TODAS as dependências do projeto para uso com pip.
+# As versões são FIXADAS (pinned) para garantir 100% de reprodutibilidade
+# do ambiente em qualquer build do Docker.
+# Para instalar, use: pip install -r requirements.txt
 # ==============================================================================
 
 # --- CORE DE CIÊNCIA DE DADOS E ML ---
 # Bibliotecas fundamentais para manipulação de dados e machine learning.
-numpy
-pandas
-scikit-learn
-scipy
-joblib
+numpy==1.24.3
+pandas==2.1.4
+scikit-learn==1.3.2
+scipy==1.11.4
+joblib==1.3.2
 
 # --- MLOPS: GOVERNANÇA, EXPERIMENTAÇÃO E OTIMIZAÇÃO ---
 # Ferramentas para o ciclo de vida completo do modelo.
-mlflow
-optuna
-optuna-integration[mlflow]
+mlflow==2.9.2
+optuna==3.4.0
+optuna-integration[mlflow]==3.4.0
 
 # --- ARMAZENAMENTO E MANIPULAÇÃO DE DADOS ---
 # Bibliotecas para formatos de arquivo eficientes e comunicação com storage.
-pyarrow
-fastparquet
-boto3
-psycopg2-binary
+pyarrow==14.0.1
+fastparquet==2023.10.1
+boto3==1.33.2
+psycopg2-binary==2.9.9
 
 # --- API DE INFERÊNCIA E SERVIÇOS WEB ---
 # Framework e servidor para expor o modelo como um microsserviço.
-fastapi
-uvicorn[standard]
-pydantic
+fastapi==0.104.1
+uvicorn[standard]==0.24.0.post1
+pydantic==2.5.2
 
 # --- COMPUTAÇÃO PARALELA E DE LARGA ESCALA ---
 # Bibliotecas para acelerar a execução e processar grandes volumes de dados.
-dask
-numba
+dask==2023.11.0
+numba==0.58.1
 
 # --- MONITORAMENTO, VALIDAÇÃO E ROBUSTEZ ---
 # Ferramentas para observabilidade, quality gates e resiliência.
-psutil
-great-expectations
-evidently
-circuitbreaker
-prometheus-client
+psutil==5.9.6
+great-expectations==0.18.0
+evidently==0.4.4
+circuitbreaker==2.0.0
+prometheus-client==0.18.0
 
 # --- VISUALIZAÇÃO E ANÁLISE ---
 # Bibliotecas para geração de gráficos e relatórios.
-matplotlib
-seaborn
-plotly
+matplotlib==3.8.1
+seaborn==0.13.0
+plotly==5.18.0
 
 # --- CONFIGURAÇÃO E UTILITÁRIOS ---
 # Bibliotecas para gerenciamento de configuração e melhoria da experiência de CLI.
-pyyaml
-python-dotenv
-jsonschema
-click
-tqdm
-rich
+pyyaml==6.0.1
+python-dotenv==1.0.0
+jsonschema==4.20.0
+click==8.1.7
+tqdm==4.66.1
+rich==13.7.0
 
 # --- QUALIDADE DE CÓDGIO E FRAMEWORK DE TESTES ---
 # Ferramentas para garantir um código limpo, testado e de alta qualidade.
-black
-flake8
-mypy
-pre-commit
-pytest
-pytest-cov
-pytest-mock
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
+pre-commit==3.5.0
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
 
 # --- TESTES AVANÇADOS (NÍVEL EMPRESARIAL) ---
 # Dependências para os pilares de teste mais complexos.
-pytest-bdd
-hypothesis
+pytest-bdd==6.1.1
+hypothesis==6.88.2
 # pact-python  # Descomentar quando os testes de contrato forem implementados
 # locust       # Descomentar quando os testes de carga forem implementados
