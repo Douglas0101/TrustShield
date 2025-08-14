@@ -119,9 +119,9 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - WAIT_HOSTS=postgres:5432,minio:9000,mlflow:5000
       - WAIT_TIMEOUT=120
-      # ---> ADICIONE ESTAS 2 LINHAS PARA O BOTO3 ENCONTRAR OS SEGREDOS <---
       - AWS_ACCESS_KEY_ID_FILE=/run/secrets/minio_root_user
       - AWS_SECRET_ACCESS_KEY_FILE=/run/secrets/minio_root_password
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
     volumes:
       - ../data:/home/trustshield/data
       - ../outputs:/home/trustshield/outputs
@@ -129,7 +129,6 @@ services:
     depends_on:
       mlflow:
         condition: service_started
-    # ---> ADICIONE ESTA SEÇÃO DE SECRETS ABAIXO <---
     secrets:
       - minio_root_user
       - minio_root_password

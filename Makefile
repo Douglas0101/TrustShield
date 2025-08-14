@@ -95,3 +95,10 @@ clean:
 	find . -type f -name "*.pyc" -delete
 	find . -type d -name "__pycache__" -delete
 	rm -rf .coverage htmlcov/ .pytest_cache/
+
+# === Otimização com Optuna ===
+optimize:
+	python -m src.models.train_optimized --config config/config.optim.yaml
+
+optimize-fast:
+	python -m src.models.train_optimized --config config/config.yaml

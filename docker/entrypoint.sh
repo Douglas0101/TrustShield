@@ -1,9 +1,10 @@
 #!/bin/sh
 # ==============================================================================
 # entrypoint.sh - TrustShield Enterprise Grade
-# Versão: 9.0.0
+# Versão: 9.1.0 (Docker Secrets Handling)
 #
 # Otimizações e Melhores Práticas Implementadas:
+# - GESTÃO DE SECRETS: Adicionada função para exportar Docker Secrets para env vars.
 # - Script 100% compatível com POSIX sh para máxima portabilidade.
 # - Parametrização via variáveis de ambiente (WAIT_HOSTS, WAIT_TIMEOUT).
 # - Loop de espera robusto com timeout para evitar bloqueios infinitos.
@@ -14,12 +15,6 @@
 # Termina o script imediatamente se um comando falhar.
 set -e
 
-# --- Variáveis de Ambiente ---
-# Exemplo: WAIT_HOSTS="postgres:5432,minio:9000"
-# Se WAIT_HOSTS não for definido, o script continua sem esperar.
-WAIT_HOSTS=${WAIT_HOSTS:-""}
-WAIT_TIMEOUT=${WAIT_TIMEOUT:-120}
-
 # --- Funções de Log ---
 log_info() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ENTRYPOINT] INFO: $1"
@@ -29,6 +24,25 @@ log_error() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ENTRYPOINT] ERROR: $1" >&2
     exit 1
 }
+
+# --- Gestão de Segredos ---
+# Promove os segredos do Docker para variáveis de ambiente que o Boto3/MLflow esperam.
+export_docker_secrets() {
+    if [ -f /run/secrets/minio_root_user ]; then
+        log_info "Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID."
+        export AWS_ACCESS_KEY_ID=$(cat /run/secrets/minio_root_user)
+    fi
+    if [ -f /run/secrets/minio_root_password ]; then
+        log_info "Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY."
+        export AWS_SECRET_ACCESS_KEY=$(cat /run/secrets/minio_root_password)
+    fi
+}
+
+# --- Variáveis de Ambiente ---
+# Exemplo: WAIT_HOSTS="postgres:5432,minio:9000"
+# Se WAIT_HOSTS não for definido, o script continua sem esperar.
+WAIT_HOSTS=${WAIT_HOSTS:-""}
+WAIT_TIMEOUT=${WAIT_TIMEOUT:-120}
 
 # --- Função Principal de Espera ---
 wait_for_services() {
@@ -41,7 +55,8 @@ wait_for_services() {
     # Transforma a string separada por vírgulas numa lista para o loop
     # IFS (Internal Field Separator) é alterado para a vírgula.
     IFS=','
-    for service in $WAIT_HOSTS; do
+    for service in $WAIT_HOSTS;
+    do
         # Restaura o IFS para o padrão
         unset IFS
 
@@ -65,7 +80,7 @@ wait_for_services() {
             printf "."
         done
         # Adiciona uma nova linha para formatação limpa.
-        printf "\\n"
+        printf "\n"
         log_info "Serviço ${host}:${port} está pronto!"
         # Restaura o IFS para o próximo loop
         IFS=','
@@ -74,6 +89,7 @@ wait_for_services() {
 }
 
 # --- Orquestração do Arranque ---
+export_docker_secrets
 wait_for_services
 
 log_info "Todos os serviços dependentes estão operacionais. Executando o comando principal..."
@@ -81,3 +97,4 @@ log_info "Todos os serviços dependentes estão operacionais. Executando o coman
 # 'exec' substitui o processo do shell pelo comando passado como argumento ($@).
 # Esta é a melhor prática para gestão de sinais e processos em containers.
 exec "$@"
+
