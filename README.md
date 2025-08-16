@@ -23,6 +23,8 @@ O sistema foi concebido com uma arquitetura de nível empresarial, focada em rob
   - [Configuração do Ambiente](#configuração-do-ambiente)
   - [Executando o Pipeline Completo](#executando-o-pipeline-completo)
 - [Fluxo do Pipeline de Dados e ML](#fluxo-do-pipeline-de-dados-e-ml)
+- [Qualidade de Código e Testes](#qualidade-de-código-e-testes)
+- [Métricas de Sucesso e SLAs](#métricas-de-sucesso-e-slas)
 - [Roadmap e Próximos Passos](#roadmap-e-próximos-passos)
 - [Como Contribuir](#como-contribuir)
 - [Licença](#licença)
@@ -52,8 +54,10 @@ O TrustShield adota uma **Arquitetura Hexagonal (Portas e Adaptadores)**, separa
 ## **Tecnologias Utilizadas**
 
 -   **Linguagem**: Python 3.10+
--   **Bibliotecas de Dados**: Pandas, NumPy, Scikit-learn, PyArrow
+-   **Bibliotecas de Dados**: Pandas, NumPy, Scikit-learn, PyArrow, Dask
 -   **MLOps e Orquestração**: Docker, Docker Compose, MLflow, MinIO, PostgreSQL
+-   **API**: FastAPI, Uvicorn
+-   **Testes**: Pytest, Pytest-BDD, Hypothesis
 -   **Gestão de Tarefas**: Makefile
 -   **Configuração**: YAML
 
@@ -61,29 +65,32 @@ O TrustShield adota uma **Arquitetura Hexagonal (Portas e Adaptadores)**, separa
 
 A estrutura de diretórios segue as melhores práticas para projetos de *Data Science*, separando dados, código-fonte, configurações e saídas.
 
-````
-├── config/                # Ficheiros de configuração (config.yaml)
-├── data/                  # Dados do projeto (brutos, processados, features)
-│   ├── raw/
-│   ├── processed/
-│   └── features/
-├── docker/                # Configuração do ambiente Docker
+```
+TrustShield/
+├── README.md               # Visão geral do projeto, instruções de setup
+├── LICENSE                 # Licença do projeto
+├── config/                 # Arquivos de configuração (config.yaml)
+├── data/
+│   ├── raw/                # Dados brutos originais (CSV, JSON)
+│   ├── interim/            # Dados pré-processados em etapas intermediárias
+│   ├── processed/          # Dados finais prontos para treino/avaliação
+│   └── external/           # Dados de fontes externas
+├── docker/                 # Configuração do ambiente Docker
 │   ├── Dockerfile
 │   └── docker-compose.yml
-├── docs/                  # Documentação do projeto (PDFs, Markdown)
-├── notebooks/             # Jupyter Notebooks para análise exploratória (EDA)
-├── outputs/               # Saídas geradas (modelos, relatórios, figuras)
-│   ├── models/
-│   └── reports/
-├── src/                   # Código-fonte do projeto
-│   ├── data/              # Scripts para processamento de dados (make_dataset.py)
-│   ├── features/          # Scripts para engenharia de features (build_features.py)
-│   └── models/            # Scripts para treino (train_model.py) e inferência (predict.py)
-├── tests/                 # Testes unitários e de integração
-├── Makefile               # Comandos para automatizar tarefas comuns
-├── requirements.txt       # Dependências do Python
-└── README.md              # Este ficheiro
-````
+├── notebooks/              # Jupyter Notebooks de exploração e prototipagem
+├── outputs/                # Artefatos de saída (modelos, relatórios, gráficos)
+│   ├── models/             # Modelos treinados (pickle, joblib)
+│   └── figures/            # Gráficos de EDA e métricas
+├── src/                    # Código-fonte do projeto
+│   ├── api/                # Código da API de inferência
+│   ├── data/               # Scripts para processamento de dados
+│   ├── features/           # Scripts para engenharia de features
+│   └── models/             # Scripts para treino, avaliação e predição de modelos
+├── tests/                  # Testes unitários e de integração
+├── Makefile                # Comandos para automatizar tarefas comuns
+└── requirements.txt        # Dependências do Python
+```
 
 ## **Como Executar o Projeto**
 
@@ -153,10 +160,26 @@ Quando `make docker-run` é executado, o seguinte pipeline é orquestrado dentro
     -   Treina o modelo campeão (**Isolation Forest**).
     -   Regista parâmetros, métricas e o artefacto do modelo no MLflow.
 
+## **Qualidade de Código e Testes**
+
+-   **Convenções de Código**: PEP 8 para Python, Arquitetura Hexagonal e Domain-Driven Design (DDD).
+-   **Revisão de Código**: Pull Requests obrigatórios com checks automatizados (lint, análise estática).
+-   **Tipos de Testes**:
+    -   **Unitários**: Pytest com mocking de conexões.
+    -   **Integração**: Testes end-to-end com contêineres.
+    -   **Avançados**: Testes de comportamento (BDD), baseados em propriedades e de contrato.
+
+## **Métricas de Sucesso e SLAs**
+
+-   **SLA de Inferência:** < 200ms p/ request em 95º percentil.
+-   **Taxa de Detecção:** Recall ≥ 90% e Precision ≥ 85%.
+-   **Disponibilidade:** ≥ 99.9% dos serviços principais.
+-   **Taxa de Alerta Falso Positivo:** ≤ 2%.
+
 ## **Roadmap e Próximos Passos**
 
--   [ ] **API de Inferência**: Desenvolver uma API RESTful (ex: com FastAPI) para servir o modelo campeão e realizar predições em tempo real.
--   [ ] **Dashboard de Monitoramento**: Criar um *dashboard* (ex: com Streamlit ou Dash) para visualizar as predições e monitorar a saúde do modelo.
+-   [ ] **API de Inferência**: Desenvolver uma API RESTful (com FastAPI) para servir o modelo campeão e realizar predições em tempo real.
+-   [ ] **Dashboard de Monitoramento**: Criar um *dashboard* (com Streamlit ou Dash) para visualizar as predições e monitorar a saúde do modelo.
 -   [ ] **Testes Automatizados**: Expandir a suíte de testes para incluir testes de integração para o pipeline completo.
 -   [ ] **Deploy em Cloud**: Adaptar a configuração para *deploy* em um provedor de nuvem (AWS, GCP, Azure) utilizando Kubernetes.
 
