@@ -73,6 +73,13 @@ except ImportError:
     CIRCUITBREAKER_AVAILABLE = False
 
 try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    shap = None
+    SHAP_AVAILABLE = False
+
+try:
     import plotly.graph_objects as go
     import plotly.express as px
 
@@ -316,15 +323,42 @@ class BaseInterpretationStrategy:
 
 
 class ShapInterpreter(BaseInterpretationStrategy, InterpretationStrategy):
-    # O código da classe ShapInterpreter (omitido por brevidade) vai aqui.
-    # A única alteração necessária é na função `save_results`:
+    def interpret(self, model: Any, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+        if not SHAP_AVAILABLE:
+            raise ImportError("SHAP library is not installed. Please install it to use this feature.")
+
+        self.logger.log(logging.INFO, "Starting SHAP interpretation.")
+        start_time = time.time()
+
+        # SHAP explainer requires the model's prediction function
+        # For IsolationForest, we can use the decision_function
+        explainer = shap.Explainer(model.decision_function, data)
+        shap_values = explainer(data)
+
+        metrics = self._calculate_metrics(start_time, len(data), len(data.columns))
+
+        return {
+            "shap_values": shap_values.values.tolist(),
+            "base_values": shap_values.base_values.tolist(),
+            "feature_names": data.columns.tolist(),
+            "metrics": metrics
+        }
+
     def save_results(self, results: Dict[str, Any], path: str) -> None:
-        # ... (lógica existente para criar output_path e serializable_results) ...
-        # OTIMIZAÇÃO: Usa o encoder customizado
-        # with open(results_path, "w") as f:
-        #     json.dump(serializable_results, f, indent=2, cls=CustomJSONEncoder)
-        # ... (resto da função) ...
-        pass  # Placeholder
+        output_path = Path(path)
+        output_path.mkdir(parents=True, exist_ok=True)
+        results_path = output_path / "shap_results.json"
+
+        serializable_results = {
+            "shap_values": results["shap_values"],
+            "base_values": results["base_values"],
+            "feature_names": results["feature_names"],
+            "metrics": results["metrics"].to_dict()
+        }
+
+        with open(results_path, "w") as f:
+            json.dump(serializable_results, f, indent=2, cls=CustomJSONEncoder)
+        self.logger.log(logging.INFO, f"SHAP results saved to {results_path}")
 
 
 class LimeInterpreter(BaseInterpretationStrategy, InterpretationStrategy):

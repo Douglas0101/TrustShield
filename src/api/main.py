@@ -45,6 +45,10 @@ from pydantic.types import confloat
 # Importações do projeto
 from src.models.predict import TrustShieldPredictor, PredictionResult
 from src.models.validation import ResilientTrustShieldValidator
+from src.models.interpretation import ResilientModelInterpreter
+import pandas as pd
+import tempfile
+import json
 
 # Dependências opcionais de Engenharia de IA
 try:
@@ -422,6 +426,45 @@ async def batch_predict_transactions(batch: BatchTransactionInput, predictor: Pr
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/explain", tags=["Interpretation"], response_model=Dict[str, Any])
+async def explain_transaction(transaction: TransactionInput, request: Request):
+    app_state: AppState = request.app.state
+    model_path = str(app_state.model_path)
+
+    # Create a temporary file to store the transaction data
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.parquet') as tmp:
+        df = pd.DataFrame([transaction.model_dump()])
+        df.to_parquet(tmp.name)
+        tmp_path = tmp.name
+
+    try:
+        # Run the interpretation
+        interpreter = ResilientModelInterpreter(model_path=model_path)
+        interpreter.run_interpretation(data_path=tmp_path, methods=['shap'])
+
+        # The result is saved to a file, so we need to find it and read it.
+        project_root = Path(__file__).resolve().parents[2]
+        output_dir = project_root / "outputs" / "interpretations" / "shap"
+        # Find the latest results file in the directory
+        result_files = list(output_dir.glob('*.json'))
+        if not result_files:
+            raise HTTPException(status_code=404, detail="Interpretation result file not found.")
+        
+        latest_result_file = max(result_files, key=os.path.getctime)
+
+        with open(latest_result_file, 'r') as f:
+            explanation = json.load(f)
+
+        return explanation
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up the temporary file
+        if 'tmp_path' in locals() and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 @app.get("/status", tags=["Health Check"], response_model=Dict[str, Any])
 async def get_status(predictor: PredictorDep, request: Request):
     status = predictor.get_status()
@@ -434,7 +477,8 @@ async def run_model_validation(app_state: AppState):
     validator.run_validation(
         data_path="data/interim/validation_sample.parquet",
         model_path=str(app_state.model_path),
-        validation_types=['model_performance']
+        reference_data_path="data/features/featured_dataset.parquet",
+        validation_types=['drift_detection']
     )
     app_state.subject.notify(APIEvent.MODEL_VALIDATED, {})
 

@@ -1,7 +1,8 @@
-# Makefile - TrustShield Advanced (Versão 7.1.0 - HPO Ready)
-# CORREÇÃO: Usa 'docker compose' (V2, com espaço) em vez do obsoleto 'docker-compose' (V1, com hífen).
-# NOVO: Adicionado alvo 'hpo-train' para otimização de hiperparâmetros em larga escala.
-.PHONY: help install test lint format clean services-up services-down services-up-fresh train hpo-train logs purge
+# Makefile - TrustShield Advanced (Versão 7.3.0 - Dashboard Hotfix)
+# HOTFIX: Adiciona a atualização do 'pip' e 'setuptools' no alvo 'dashboard' para garantir
+#         compatibilidade com versões recentes do Python (3.12+).
+
+.PHONY: help install test lint format clean services-up services-down services-up-fresh train hpo-train logs purge dashboard
 
 # === AJUDA ===
 help:
@@ -15,7 +16,10 @@ help:
 	@echo ""
 	@echo "--- PIPELINE & TAREFAS (EFÊMERAS) ---"
 	@echo "  train [args]        - Executa o pipeline de treino rápido padrão (ex: make train args='--model lof'). Requer 'services-up'."
-	@echo "  hpo-train [args]    - (NOVO) Executa a otimização de hiperparâmetros em larga escala (ex: make hpo-train)."
+	@echo "  hpo-train [args]    - Executa a otimização de hiperparâmetros em larga escala (ex: make hpo-train)."
+	@echo ""
+	@echo "--- VISUALIZAÇÃO & DASHBOARD ---"
+	@echo "  dashboard           - Inicia o Dashboard de Monitoramento com Streamlit. Requer 'services-up'."
 	@echo ""
 	@echo "--- LIMPEZA COMPLETA (DESTRUTIVO) ---"
 	@echo "  purge               - PARA TUDO e APAGA TODOS os dados (contêineres, volumes, redes). Use com cuidado!"
@@ -31,7 +35,6 @@ help:
 # === SEÇÃO DOCKER: O CORAÇÃO DA OPERAÇÃO ===
 # =====================================================================================
 
-# ATUALIZAÇÃO: Trocado 'docker-compose' por 'docker compose' em todos os comandos.
 services-up:
 	@echo "🚀 Subindo todos os serviços (API, Postgres, MinIO, MLflow)..."
 	docker compose -f docker/docker-compose.yml up -d --remove-orphans
@@ -56,15 +59,27 @@ train:
 	@echo "   Comando: python /home/trustshield/src/models/train_fraud_model.py $(args)"
 	docker compose -f docker/docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py $(args)
 
-# ---> INÍCIO DA ATUALIZAÇÃO <---
 hpo-args ?= --model isolation_forest --tune
 hpo-train:
 	@echo "🔥 Executando OTIMIZAÇÃO DE HIPERPARÂMETROS em larga escala..."
 	@echo "   Comando: python /home/trustshield/src/models/train_fraud_model.py $(hpo-args)"
 	docker compose -f docker/docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py $(hpo-args)
-# ---> FIM DA ATUALIZAÇÃO <---
 
-# --- LIMPEZA COMPLETA (DESTRUTIVO) ---
+# =====================================================================================
+# === SEÇÃO DE VISUALIZAÇÃO ===
+# =====================================================================================
+dashboard:
+	@echo "📊 Iniciando o Dashboard de Monitoramento TrustShield..."
+	@echo "   Atualizando ferramentas de build (pip, setuptools) para compatibilidade com Python 3.13+..."
+	@pip install --upgrade pip setuptools wheel -q --no-color
+	@echo "   Verificando e instalando dependências do dashboard..."
+	@pip install -r src/dashboard/requirements.txt -q --no-color
+	@echo "   Acesse em seu navegador: http://localhost:8501"
+	@streamlit run src/dashboard/app.py
+
+# =====================================================================================
+# === SEÇÃO DE LIMPEZA E DESENVOLVIMENTO LOCAL ===
+# =====================================================================================
 purge:
 	@echo "🔥🔥🔥 ATENÇÃO: Parando todos os serviços e APAGANDO TODOS OS VOLUMES DE DADOS! 🔥🔥🔥"
 	docker compose -f docker/docker-compose.yml down --volumes
@@ -73,10 +88,6 @@ purge:
 	@echo "🧹 Limpando outros recursos do Docker..."
 	docker system prune -f
 
-
-# =====================================================================================
-# === SEÇÃO DE DESENVOLVIMENTO LOCAL (Não usa Docker) ===
-# =====================================================================================
 install:
 	pip install -r requirements.txt
 	pre-commit install
@@ -96,7 +107,6 @@ clean:
 	find . -type d -name "__pycache__" -delete
 	rm -rf .coverage htmlcov/ .pytest_cache/
 
-# === Otimização com Optuna ===
 optimize:
 	python -m src.models.train_optimized --config config/config.optim.yaml
 

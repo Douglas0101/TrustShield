@@ -1,517 +1,1141 @@
-(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make services-up-fresh
-🧼 Reconstruindo a imagem unificada e subindo todos os serviços do zero...
-docker compose -f docker/docker-compose.yml up -d --build --force-recreate --remove-orphans
-WARN[0000] Docker Compose is configured to build using Bake, but buildx isn't installed
-[+] Building 5.5s (27/27) FINISHED                                                                                                                                                                                   docker:default
- => [mlflow internal] load build definition from mlflow.Dockerfile                                                                                                                                                             0.0s
- => => transferring dockerfile: 965B                                                                                                                                                                                           0.0s
- => [mlflow internal] load metadata for ghcr.io/mlflow/mlflow:v3.2.0                                                                                                                                                           2.3s
- => [mlflow internal] load .dockerignore                                                                                                                                                                                       0.0s
- => => transferring context: 2B                                                                                                                                                                                                0.0s
- => [mlflow 1/2] FROM ghcr.io/mlflow/mlflow:v3.2.0@sha256:843538b0e56aa83cb5b1367ed05ee68c83e907332702760399c5f6ce8ee5b502                                                                                                     0.0s
- => CACHED [mlflow 2/2] RUN pip install --no-cache-dir boto3 psycopg2-binary                                                                                                                                                   0.0s
- => [mlflow] exporting to image                                                                                                                                                                                                0.0s
- => => exporting layers                                                                                                                                                                                                        0.0s
- => => writing image sha256:d8d1921ca9a4228e3cd1c650be0177d52ab95013c1f7d220406029a660d17ddd                                                                                                                                   0.0s
- => => naming to docker.io/library/docker-mlflow                                                                                                                                                                               0.0s
- => [mlflow] resolving provenance for metadata file                                                                                                                                                                            0.0s
- => [trustshield-api internal] load build definition from Dockerfile                                                                                                                                                           0.0s
- => => transferring dockerfile: 3.55kB                                                                                                                                                                                         0.0s
- => WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 15)                                                                                                                                                0.0s
- => WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 42)                                                                                                                                                0.0s
- => [trustshield-api internal] load metadata for docker.io/library/python:3.10-slim-bookworm                                                                                                                                   2.6s
- => [trustshield-api internal] load .dockerignore                                                                                                                                                                              0.0s
- => => transferring context: 3.54kB                                                                                                                                                                                            0.0s
- => [trustshield-api builder 1/6] FROM docker.io/library/python:3.10-slim-bookworm@sha256:66a6e8a211a02794515d4e1aa1970fc037ec4dde1429395e1321bdd63af01256                                                                     0.0s
- => [trustshield-api internal] load build context                                                                                                                                                                              0.0s
- => => transferring context: 25.00kB                                                                                                                                                                                           0.0s
- => CACHED [trustshield-api final 2/9] RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd git && rm -rf /var/lib/apt/lists/*                                                                      0.0s
- => CACHED [trustshield-api final 3/9] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                                 0.0s
- => CACHED [trustshield-api final 4/9] WORKDIR /home/trustshield                                                                                                                                                               0.0s
- => CACHED [trustshield-api builder 2/6] RUN apt-get update && apt-get install -y --no-install-recommends gcc build-essential && rm -rf /var/lib/apt/lists/*                                                                   0.0s
- => CACHED [trustshield-api builder 3/6] RUN useradd --create-home --shell /bin/bash trustshield                                                                                                                               0.0s
- => CACHED [trustshield-api builder 4/6] WORKDIR /home/trustshield                                                                                                                                                             0.0s
- => CACHED [trustshield-api builder 5/6] COPY --chown=trustshield:trustshield requirements.txt .                                                                                                                               0.0s
- => CACHED [trustshield-api builder 6/6] RUN pip install --user -r requirements.txt                                                                                                                                            0.0s
- => CACHED [trustshield-api final 5/9] COPY --from=builder --chown=trustshield:trustshield /home/trustshield/.local /home/trustshield/.local                                                                                   0.0s
- => [trustshield-api final 6/9] COPY --chown=trustshield:trustshield src ./src                                                                                                                                                 0.0s
- => [trustshield-api final 7/9] COPY --chown=trustshield:trustshield config ./config                                                                                                                                           0.0s
- => [trustshield-api final 8/9] COPY --chown=trustshield:trustshield docker/entrypoint.sh ./docker/entrypoint.sh                                                                                                               0.0s
- => [trustshield-api final 9/9] RUN chmod +x ./docker/entrypoint.sh                                                                                                                                                            0.1s
- => [trustshield-api] exporting to image                                                                                                                                                                                       0.1s
- => => exporting layers                                                                                                                                                                                                        0.1s
- => => writing image sha256:73a208c05032406b8fdd599b91aac8eac40cbb9af7cd959529f463db1c4f1409                                                                                                                                   0.0s
- => => naming to docker.io/library/docker-trustshield-api                                                                                                                                                                      0.0s
- => [trustshield-api] resolving provenance for metadata file                                                                                                                                                                   0.0s
-[+] Running 7/7
- ✔ mlflow                                Built                                                                                                                                                                                 0.0s
- ✔ trustshield-api                       Built                                                                                                                                                                                 0.0s
- ✔ Container trustshield-postgres        Healthy                                                                                                                                                                              17.0s
- ✔ Container trustshield-minio           Healthy                                                                                                                                                                              16.3s
- ✔ Container trustshield-bucket-creator  Exited                                                                                                                                                                               16.7s
- ✔ Container trustshield-mlflow          Started                                                                                                                                                                              16.9s
- ✔ Container trustshield-api             Started                                                                                                                                                                               6.8s
-(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make train
-🧠 Executando o pipeline de treino no ambiente unificado...
-   Comando: python /home/trustshield/src/models/train_fraud_model.py --model isolation_forest
-docker compose -f docker/docker-compose.yml run --rm trustshield-api python /home/trustshield/src/models/train_fraud_model.py --model isolation_forest
-[+] Creating 3/3
- ✔ Container trustshield-minio     Running                                                                                                                                                                                     0.0s
- ✔ Container trustshield-postgres  Running                                                                                                                                                                                     0.0s
- ✔ Container trustshield-mlflow    Running                                                                                                                                                                                     0.0s
-[+] Running 3/3
- ✔ Container trustshield-minio           Healthy                                                                                                                                                                               0.5s
- ✔ Container trustshield-bucket-creator  Exited                                                                                                                                                                                0.7s
- ✔ Container trustshield-postgres        Healthy                                                                                                                                                                               0.5s
-[2025-08-15 06:09:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
-
-[2025-08-15 06:09:37] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
-[2025-08-15 06:09:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
-
-[2025-08-15 06:09:37] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
-[2025-08-15 06:09:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
-
-[2025-08-15 06:09:37] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
-[2025-08-15 06:09:38] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
-
-    ╔══════════════════════════════════════════════════════════════╗
-    ║                                                              ║
-    ║         TRUSTSHIELD EXTREME OPTIMIZATION SYSTEM             ║
-    ║              Intel Core i3 Specialized Edition              ║
-    ║                                                              ║
-    ║   Transformando 4 horas em 30 minutos com ciência!         ║
-    ║                                                              ║
-    ╚══════════════════════════════════════════════════════════════╝
-
-🔍 Verificando ambiente...
-
-╔══════════════════════════════════════════════════════════════╗
-║           TRUSTSHIELD PHD-LEVEL OPTIMIZER V2.0               ║
-║                  Intel i3 Specialized Edition                ║
-╚══════════════════════════════════════════════════════════════╝
-
-🖥️  Hardware Detectado:
-    • CPU: Intel i3 - 2 cores / 4 threads
-    • RAM: 19.3 GB total / 10.9 GB disponível
-    • Otimização: Ativada para CPU limitada + RAM abundante
-
-
-📋 OPÇÕES DE OTIMIZAÇÃO:
-1. Re-treinar TODOS os 30 modelos (estimado: 30 minutos)
-2. Treinar apenas 1 modelo de teste (estimado: 1 minuto)
-3. Benchmark de modelo existente
-4. Análise completa + Re-treinamento
-
-Escolha uma opção (1-4): 1
-
-============================================================
-🚀 INICIANDO RE-TREINAMENTO OTIMIZADO DOS 30 MODELOS
-============================================================
-
-📊 FASE 1: Carregamento Otimizado de Dados
---------------------------------------------------
-📖 Lendo dataset...
-🔧 Otimizando tipos de dados...
-   💾 Memória reduzida: 6722.7MB → 965.6MB (85.6% economia)
-✅ Dados preparados em 25.17s
-   Shape: (13305915, 22)
-   Memória: 1116.7 MB
-
-📊 Preparando dados para treinamento...
-🔧 Normalizando dados...
-   Train shape: (11310027, 22)
-   Test shape: (1995888, 22)
-
-🔬 FASE 2: Otimização de Hiperparâmetros
---------------------------------------------------
-📋 Testando 10 configurações...
-
-🎯 Treinando Modelo 0
-
-🎯 Treinando Modelo 1
-   ✅ Concluído em 0.45s | Anomaly Rate: 14.92%
-
-🎯 Treinando Modelo 2
-   ✅ Concluído em 0.42s | Anomaly Rate: 4.98%
-
-🎯 Treinando Modelo 3
-   ✅ Concluído em 0.21s | Anomaly Rate: 9.89%
-
-🎯 Treinando Modelo 4
-   ✅ Concluído em 1.25s | Anomaly Rate: 5.01%
-
-🎯 Treinando Modelo 5
-   ✅ Concluído em 0.50s | Anomaly Rate: 15.14%
-
-🎯 Treinando Modelo 6
-   ✅ Concluído em 0.83s | Anomaly Rate: 10.39%
-
-🎯 Treinando Modelo 7
-   ✅ Concluído em 0.28s | Anomaly Rate: 5.26%
-
-🎯 Treinando Modelo 8
-   ✅ Concluído em 0.78s | Anomaly Rate: 15.41%
-
-🎯 Treinando Modelo 9
-   ✅ Concluído em 0.66s | Anomaly Rate: 14.93%
-   ✅ Concluído em 0.87s | Anomaly Rate: 10.04%
-
-🏆 Melhor configuração encontrada:
-   • n_estimators: 150
-   • max_features: 0.5
-   • contamination: 0.1
-   • Anomaly Rate: 10.04%
-
-============================================================
-📦 RE-TREINANDO 30 MODELOS COM CONFIGURAÇÃO OTIMIZADA
-============================================================
-
-📦 Batch 1/7
-
-========================================
-Modelo 1/30
-========================================
-
-🎯 Treinando Modelo 0
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 468.78s | Anomaly Rate: 10.04%
-   💾 Salvo: isolation_forest_optimized_00_20250815_061823.joblib
-
-========================================
-Modelo 2/30
-========================================
-
-🎯 Treinando Modelo 1
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 332.02s | Anomaly Rate: 9.96%
-   💾 Salvo: isolation_forest_optimized_01_20250815_062357.joblib
-
-========================================
-Modelo 3/30
-========================================
-
-🎯 Treinando Modelo 2
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 329.64s | Anomaly Rate: 10.28%
-   💾 Salvo: isolation_forest_optimized_02_20250815_062928.joblib
-
-========================================
-Modelo 4/30
-========================================
-
-🎯 Treinando Modelo 3
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 439.39s | Anomaly Rate: 10.03%
-   💾 Salvo: isolation_forest_optimized_03_20250815_063649.joblib
-
-========================================
-Modelo 5/30
-========================================
-
-🎯 Treinando Modelo 4
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 329.08s | Anomaly Rate: 9.96%
-   💾 Salvo: isolation_forest_optimized_04_20250815_064220.joblib
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 2/7
-
-========================================
-Modelo 6/30
-========================================
-
-🎯 Treinando Modelo 5
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 326.68s | Anomaly Rate: 9.99%
-   💾 Salvo: isolation_forest_optimized_05_20250815_064753.joblib
-
-========================================
-Modelo 7/30
-========================================
-
-🎯 Treinando Modelo 6
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 437.99s | Anomaly Rate: 10.00%
-   💾 Salvo: isolation_forest_optimized_06_20250815_065513.joblib
-
-========================================
-Modelo 8/30
-========================================
-
-🎯 Treinando Modelo 7
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 329.44s | Anomaly Rate: 10.05%
-   💾 Salvo: isolation_forest_optimized_07_20250815_070044.joblib
-
-========================================
-Modelo 9/30
-========================================
-
-🎯 Treinando Modelo 8
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 330.98s | Anomaly Rate: 10.35%
-   💾 Salvo: isolation_forest_optimized_08_20250815_070617.joblib
-
-========================================
-Modelo 10/30
-========================================
-
-🎯 Treinando Modelo 9
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 437.68s | Anomaly Rate: 10.08%
-   💾 Salvo: isolation_forest_optimized_09_20250815_071336.joblib
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 3/7
-
-========================================
-Modelo 11/30
-========================================
-
-🎯 Treinando Modelo 10
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 327.65s | Anomaly Rate: 10.18%
-   💾 Salvo: isolation_forest_optimized_10_20250815_071911.joblib
-
-========================================
-Modelo 12/30
-========================================
-
-🎯 Treinando Modelo 11
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 327.20s | Anomaly Rate: 10.17%
-   💾 Salvo: isolation_forest_optimized_11_20250815_072439.joblib
-
-========================================
-Modelo 13/30
-========================================
-
-🎯 Treinando Modelo 12
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 432.96s | Anomaly Rate: 10.13%
-   💾 Salvo: isolation_forest_optimized_12_20250815_073154.joblib
-
-========================================
-Modelo 14/30
-========================================
-
-🎯 Treinando Modelo 13
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 330.96s | Anomaly Rate: 10.15%
-   💾 Salvo: isolation_forest_optimized_13_20250815_073727.joblib
-
-========================================
-Modelo 15/30
-========================================
-
-🎯 Treinando Modelo 14
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 327.31s | Anomaly Rate: 10.15%
-   💾 Salvo: isolation_forest_optimized_14_20250815_074255.joblib
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 4/7
-
-========================================
-Modelo 16/30
-========================================
-
-🎯 Treinando Modelo 15
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 437.47s | Anomaly Rate: 9.96%
-   💾 Salvo: isolation_forest_optimized_15_20250815_075019.joblib
-
-========================================
-Modelo 17/30
-========================================
-
-🎯 Treinando Modelo 16
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 330.60s | Anomaly Rate: 10.17%
-   💾 Salvo: isolation_forest_optimized_16_20250815_075552.joblib
-
-========================================
-Modelo 18/30
-========================================
-
-🎯 Treinando Modelo 17
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 330.28s | Anomaly Rate: 10.00%
-   💾 Salvo: isolation_forest_optimized_17_20250815_080123.joblib
-
-========================================
-Modelo 19/30
-========================================
-
-🎯 Treinando Modelo 18
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 440.45s | Anomaly Rate: 10.04%
-   💾 Salvo: isolation_forest_optimized_18_20250815_080846.joblib
-
-========================================
-Modelo 20/30
-========================================
-
-🎯 Treinando Modelo 19
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 328.86s | Anomaly Rate: 10.09%
-   💾 Salvo: isolation_forest_optimized_19_20250815_081416.joblib
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 5/7
-
-========================================
-Modelo 21/30
-========================================
-
-🎯 Treinando Modelo 20
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 325.40s | Anomaly Rate: 10.25%
-   💾 Salvo: isolation_forest_optimized_20_20250815_081948.joblib
-
-========================================
-Modelo 22/30
-========================================
-
-🎯 Treinando Modelo 21
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 434.40s | Anomaly Rate: 10.11%
-   💾 Salvo: isolation_forest_optimized_21_20250815_082704.joblib
-
-========================================
-Modelo 23/30
-========================================
-
-🎯 Treinando Modelo 22
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 331.26s | Anomaly Rate: 10.00%
-   💾 Salvo: isolation_forest_optimized_22_20250815_083237.joblib
-
-========================================
-Modelo 24/30
-========================================
-
-🎯 Treinando Modelo 23
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 331.39s | Anomaly Rate: 10.02%
-   💾 Salvo: isolation_forest_optimized_23_20250815_083810.joblib
-
-========================================
-Modelo 25/30
-========================================
-
-🎯 Treinando Modelo 24
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 434.01s | Anomaly Rate: 10.02%
-   💾 Salvo: isolation_forest_optimized_24_20250815_084526.joblib
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 6/7
-
-========================================
-Modelo 26/30
-========================================
-
-🎯 Treinando Modelo 25
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 330.53s | Anomaly Rate: 10.30%
-   💾 Salvo: isolation_forest_optimized_25_20250815_085103.joblib
-
-========================================
-Modelo 27/30
-========================================
-
-🎯 Treinando Modelo 26
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 328.87s | Anomaly Rate: 9.91%
-   💾 Salvo: isolation_forest_optimized_26_20250815_085633.joblib
-
-========================================
-Modelo 28/30
-========================================
-
-🎯 Treinando Modelo 27
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 440.23s | Anomaly Rate: 10.15%
-   💾 Salvo: isolation_forest_optimized_27_20250815_090355.joblib
-
-========================================
-Modelo 29/30
-========================================
-
-🎯 Treinando Modelo 28
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 327.21s | Anomaly Rate: 9.87%
-   💾 Salvo: isolation_forest_optimized_28_20250815_090924.joblib
-
-========================================
-Modelo 30/30
-========================================
-
-🎯 Treinando Modelo 29
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 327.06s | Anomaly Rate: 9.93%
-   💾 Salvo: isolation_forest_optimized_29_20250815_091453.joblib
-
-============================================================
-📊 RELATÓRIO FINAL DE OTIMIZAÇÃO
-============================================================
-
-📈 Estatísticas de Treinamento:
-   • Total de modelos: 30
-   • Tempo total: 11060.51 segundos (184.3 minutos)
-   • Tempo médio por modelo: 366.19s
-   • Tempo mínimo: 325.40s
-   • Tempo máximo: 468.78s
-
-🎯 Estatísticas de Performance:
-   • Anomaly Rate médio: 10.08%
-   • Desvio padrão: 0.12%
-   • Melhor modelo: 9.87%
-   • Pior modelo: 10.35%
-
-💾 Uso de Recursos:
-   • CPU médio: 34.3%
-   • RAM usada: 75.3%
-   • Temperatura CPU: N/A°C
-
-
-🚀 COMPARAÇÃO COM MODELO ORIGINAL:
-   • Tempo original (1 modelo): 4 horas
-   • Tempo otimizado (1 modelo): 366.19s
-   • Speedup: 39.1x mais rápido!
-   • Economia total: 117.2 horas
-
-
-✅ RECOMENDAÇÕES:
-   1. Melhor modelo para produção: Modelo 6
-      • Anomaly Rate: 10.00%
-      • Tempo de treino: 437.99s
-
-   2. Para melhorar ainda mais:
-      • Instale Numba: pip install numba (2-3x speedup adicional)
-      • Use SSD NVMe se possível (I/O 2x mais rápido)
-      • Considere upgrade para i5/i7 (4-8 cores físicos)
-      • Ou use Google Colab Pro (GPU grátis)
-
-
-============================================================
-✅ OTIMIZAÇÃO CONCLUÍDA COM SUCESSO!
-============================================================
-
-    💡 Próximos passos:
-       1. Teste o modelo otimizado na API
-       2. Compare métricas no MLflow
-       3. Faça deploy do melhor modelo
-
-    📊 Para visualizar no MLflow:
-       mlflow ui --host 0.0.0.0
-
-    🚀 Para usar na API:
-       export MODEL_PATH='outputs/models/isolation_forest_optimized_00_*.joblib'
-       uvicorn src.api.main:app --reload
+(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield/docker$ docker compose logs trustshield-api
+trustshield-api  | [2025-08-16 16:34:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:34:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:34:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:36] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:34:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:36] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:34:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:36] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:34:36] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:34:37] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:34:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:34:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:34:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:38] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:34:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:38] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:34:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:38] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:34:38] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:34:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:34:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:34:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:39] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:34:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:39] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:34:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:39] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:34:39] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:34:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:34:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:34:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:41] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:34:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:41] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:34:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:41] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:34:41] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:34:44] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:34:44] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:34:44] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:44] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:34:44] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:44] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:34:44] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:44] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:34:44] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:34:51] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:34:51] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:34:51] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:51] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:34:51] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:51] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:34:51] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:34:51] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:34:51] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:35:04] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:35:04] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:35:04] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:35:04] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:35:04] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:35:04] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:35:04] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:35:04] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:35:04] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:35:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:35:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:35:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:35:29] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:35:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:35:29] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:35:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:35:29] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:35:29] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:36:21] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:36:21] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:36:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:36:21] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:36:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:36:21] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:36:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:36:21] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:36:21] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:37:21] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:37:21] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:37:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:37:21] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:37:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:37:21] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:37:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:37:21] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:37:21] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:38:21] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:38:21] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:38:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:38:21] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:38:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:38:21] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:38:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:38:21] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:38:21] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:39:21] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:39:21] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:39:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:39:21] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:39:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:39:21] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:39:21] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:39:21] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:39:21] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:40:22] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:40:22] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:40:22] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:40:22] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:40:22] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:40:22] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:40:22] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:40:22] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:40:22] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:41:22] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:41:22] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:41:22] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:41:22] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:41:22] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:41:22] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:41:22] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:41:22] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:41:22] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:42:23] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:42:23] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:42:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:42:23] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:42:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:42:23] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:42:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:42:23] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:42:23] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:43:23] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:43:23] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:43:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:43:23] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:43:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:43:23] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:43:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:43:23] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:43:23] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:44:23] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:44:23] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:44:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:44:23] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:44:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:44:23] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:44:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:44:23] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:44:23] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:45:23] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:45:23] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:45:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:45:23] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:45:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:45:23] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:45:23] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:45:23] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:45:23] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:46:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:46:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:46:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:46:24] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:46:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:46:24] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:46:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:46:24] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:46:24] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:47:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:47:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:47:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:47:24] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:47:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:47:24] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:47:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:47:24] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:47:24] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:48:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:48:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:48:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:48:24] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:48:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:48:24] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:48:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:48:24] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:48:24] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:49:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:49:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:49:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:49:24] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:49:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:49:24] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:49:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:49:24] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:49:24] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:50:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:50:24] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:50:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:50:24] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:50:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:50:24] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:50:24] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:50:24] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:50:24] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:51:25] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:51:25] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:51:25] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:51:25] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:51:25] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:51:25] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:51:25] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:51:25] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:51:25] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:52:25] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:52:25] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:52:25] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:52:25] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:52:25] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:52:25] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:52:25] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:52:25] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:52:25] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:53:25] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:53:25] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:53:25] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:53:25] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:53:25] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:53:25] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:53:25] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:53:25] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:53:25] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:54:26] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:54:26] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:54:26] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:54:26] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:54:26] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:54:26] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:54:26] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:54:26] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:54:26] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:55:26] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:55:26] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:55:26] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:55:26] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:55:26] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:55:26] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:55:26] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:55:26] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:55:26] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:56:27] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:56:27] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:56:27] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:56:27] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:56:27] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:56:27] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:56:27] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:56:27] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:56:27] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:57:27] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:57:27] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:57:27] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:57:27] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:57:27] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:57:27] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:57:27] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:57:27] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:57:27] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:58:27] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:58:27] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:58:27] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:58:27] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:58:27] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:58:27] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:58:27] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:58:27] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:58:27] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 16:59:28] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 16:59:28] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 16:59:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:59:28] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 16:59:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:59:28] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 16:59:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 16:59:28] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 16:59:28] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:00:28] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:00:28] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:00:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:00:28] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:00:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:00:28] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:00:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:00:28] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:00:28] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:01:28] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:01:28] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:01:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:01:28] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:01:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:01:28] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:01:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:01:28] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:01:28] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:02:28] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:02:28] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:02:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:02:28] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:02:28] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:02:28] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:02:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:02:29] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:02:29] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:03:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:03:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:03:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:03:29] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:03:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:03:29] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:03:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:03:29] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:03:29] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:04:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:04:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:04:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:04:29] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:04:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:04:29] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:04:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:04:29] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:04:29] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:05:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:05:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:05:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:05:29] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:05:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:05:29] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:05:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:05:29] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:05:29] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:06:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:06:29] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:06:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:06:29] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:06:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:06:29] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:06:29] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:06:29] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:06:29] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:07:30] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:07:30] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:07:30] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:07:30] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:07:30] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:07:30] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:07:30] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:07:30] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:07:30] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:08:30] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:08:30] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:08:30] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:08:30] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:08:30] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:08:30] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:08:30] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:08:30] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:08:30] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:09:31] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:09:31] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:09:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:09:31] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:09:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:09:31] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:09:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:09:31] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:09:31] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:10:31] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:10:31] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:10:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:10:31] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:10:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:10:31] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:10:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:10:31] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:10:31] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:11:31] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:11:31] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:11:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:11:31] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:11:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:11:31] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:11:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:11:31] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:11:31] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:12:31] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:12:31] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:12:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:12:31] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:12:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:12:31] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:12:31] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:12:31] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:12:31] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:13:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:13:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:13:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:13:32] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:13:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:13:32] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:13:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:13:32] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:13:32] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:14:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:14:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:14:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:14:32] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:14:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:14:32] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:14:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:14:32] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:14:32] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:15:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:15:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:15:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:15:32] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:15:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:15:32] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:15:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:15:32] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:15:32] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:16:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:16:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:16:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:16:32] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:16:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:16:32] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:16:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:16:32] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:16:32] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:17:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:17:32] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:17:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:17:32] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:17:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:17:32] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:17:32] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:17:32] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:17:32] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:18:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:18:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:18:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:18:33] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:18:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:18:33] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:18:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:18:33] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:18:33] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:19:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:19:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:19:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:19:33] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:19:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:19:33] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:19:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:19:33] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:19:33] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:20:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:20:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:20:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:20:33] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:20:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:20:33] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:20:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:20:33] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:20:33] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:21:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:21:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:21:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:21:33] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:21:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:21:33] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:21:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:21:33] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:21:33] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:22:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:22:33] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:22:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:22:33] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:22:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:22:33] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:22:33] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:22:33] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:22:33] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:23:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:23:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:23:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:23:34] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:23:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:23:34] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:23:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:23:34] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:23:34] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:24:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:24:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:24:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:24:34] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:24:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:24:34] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:24:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:24:34] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:24:34] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:25:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:25:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:25:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:25:34] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:25:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:25:34] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:25:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:25:34] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:25:34] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:26:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:26:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:26:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:26:34] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:26:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:26:34] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:26:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:26:34] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:26:34] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:27:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:27:34] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:27:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:27:34] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:27:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:27:34] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:27:34] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:27:34] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:27:34] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:28:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:28:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:28:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:28:35] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:28:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:28:35] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:28:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:28:35] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:28:35] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:29:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:29:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:29:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:29:35] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:29:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:29:35] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:29:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:29:35] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:29:35] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:30:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:30:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:30:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:30:35] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:30:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:30:35] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:30:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:30:35] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:30:35] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:31:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:31:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:31:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:31:35] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:31:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:31:35] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:31:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:31:35] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:31:35] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:32:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:32:35] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:32:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:32:35] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:32:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:32:35] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:32:35] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:32:35] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:32:35] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:33:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:33:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:33:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:33:36] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:33:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:33:36] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:33:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:33:36] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:33:36] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:34:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:34:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:34:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:34:36] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:34:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:34:36] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:34:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:34:36] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:34:36] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:35:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:35:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:35:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:35:36] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:35:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:35:36] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:35:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:35:36] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:35:36] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:36:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:36:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:36:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:36:36] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:36:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:36:36] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:36:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:36:36] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:36:36] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:37:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:37:36] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:37:36] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:37:37] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:37:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:37:37] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:37:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:37:37] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:37:37] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:38:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:38:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:38:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:38:37] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:38:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:38:37] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:38:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:38:37] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:38:37] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:39:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:39:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:39:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:39:37] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:39:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:39:37] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:39:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:39:37] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:39:37] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:40:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:40:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:40:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:40:37] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:40:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:40:37] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:40:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:40:37] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:40:37] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:41:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:41:37] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:41:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:41:37] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:41:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:41:37] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:41:37] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:41:37] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:41:37] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:42:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:42:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:42:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:42:38] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:42:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:42:38] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:42:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:42:38] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:42:38] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:43:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:43:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:43:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:43:38] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:43:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:43:38] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:43:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:43:38] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:43:38] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:44:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:44:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:44:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:44:38] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:44:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:44:38] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:44:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:44:38] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:44:38] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:45:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:45:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:45:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:45:38] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:45:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:45:38] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:45:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:45:38] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:45:38] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:46:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:46:38] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:46:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:46:38] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:46:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:46:38] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:46:38] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:46:38] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:46:38] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:47:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:47:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:47:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:47:39] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:47:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:47:39] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:47:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:47:39] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:47:39] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:48:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:48:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:48:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:48:39] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:48:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:48:39] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:48:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:48:39] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:48:39] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:49:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:49:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:49:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:49:39] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:49:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:49:39] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:49:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:49:39] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:49:39] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:50:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:50:39] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:50:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:50:39] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:50:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:50:39] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:50:39] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:50:39] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:50:39] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:51:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:51:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:51:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:51:40] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:51:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:51:40] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:51:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:51:40] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:51:40] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:52:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:52:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:52:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:52:40] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:52:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:52:40] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:52:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:52:40] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:52:40] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:53:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:53:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:53:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:53:40] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:53:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:53:40] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:53:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:53:40] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:53:40] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:54:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:54:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:54:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:54:40] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:54:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:54:40] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:54:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:54:40] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:54:40] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:55:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:55:40] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:55:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:55:40] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:55:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:55:40] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:55:40] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:55:40] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:55:40] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:56:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:56:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:56:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:56:41] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:56:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:56:41] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:56:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:56:41] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:56:41] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:57:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:57:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:57:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:57:41] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:57:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:57:41] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:57:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:57:41] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:57:41] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:58:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:58:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:58:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:58:41] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:58:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:58:41] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:58:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:58:41] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:58:41] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 17:59:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 17:59:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 17:59:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:59:41] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 17:59:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:59:41] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 17:59:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 17:59:41] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 17:59:41] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...
+trustshield-api  | [2025-08-16 18:00:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_user' para AWS_ACCESS_KEY_ID.
+trustshield-api  | [2025-08-16 18:00:41] [ENTRYPOINT] INFO: Exportando segredo 'minio_root_password' para AWS_SECRET_ACCESS_KEY.
+trustshield-api  | [2025-08-16 18:00:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: postgres na porta 5432...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 18:00:41] [ENTRYPOINT] INFO: Serviço postgres:5432 está pronto!
+trustshield-api  | [2025-08-16 18:00:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: minio na porta 9000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 18:00:41] [ENTRYPOINT] INFO: Serviço minio:9000 está pronto!
+trustshield-api  | [2025-08-16 18:00:41] [ENTRYPOINT] INFO: Aguardando pelo serviço: mlflow na porta 5000...
+trustshield-api  | 
+trustshield-api  | [2025-08-16 18:00:41] [ENTRYPOINT] INFO: Serviço mlflow:5000 está pronto!
+trustshield-api  | [2025-08-16 18:00:41] [ENTRYPOINT] INFO: Todos os serviços dependentes estão operacionais. Executando o comando principal...

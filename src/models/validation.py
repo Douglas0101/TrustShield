@@ -193,7 +193,44 @@ class BaseValidationStrategy:
 class DataSchemaValidationStrategy(BaseValidationStrategy, ValidationStrategy): pass # Omitido por brevidade
 class DataQualityValidationStrategy(BaseValidationStrategy, ValidationStrategy): pass # Omitido por brevidade
 class ModelPerformanceValidationStrategy(BaseValidationStrategy, ValidationStrategy): pass # Omitido por brevidade
-class DriftDetectionValidationStrategy(BaseValidationStrategy, ValidationStrategy): pass # Omitido por brevidade
+class DriftDetectionValidationStrategy(BaseValidationStrategy, ValidationStrategy):
+    def validate(self, data: Any, config: Dict[str, Any]) -> ValidationResult:
+        if not EVIDENTLY_AVAILABLE:
+            raise ImportError("Evidently AI library is not installed.")
+
+        start_time = time.time()
+        reference_data, current_data = data
+
+        # Create a report
+        report = Report(metrics=[DataDriftPreset()])
+        report.run(reference_data=reference_data, current_data=current_data)
+        
+        report_dict = report.as_dict()
+        drift_score = report_dict['metrics'][0]['result']['dataset_drift_score']
+        is_valid = not report_dict['metrics'][0]['result']['dataset_drift']
+
+        errors = []
+        if not is_valid:
+            errors.append(f"Data drift detected with a score of {drift_score:.4f}")
+
+        return ValidationResult(
+            validation_type=ValidationType.DRIFT_DETECTION,
+            is_valid=is_valid,
+            score=1 - drift_score,
+            errors=errors,
+            metrics={"drift_score": drift_score, "reference_data": reference_data, "current_data": current_data, "report": report},
+            execution_time=time.time() - start_time,
+        )
+
+    def generate_report(self, result: ValidationResult, output_path: str) -> None:
+        output_path = Path(output_path)
+        output_path.mkdir(parents=True, exist_ok=True)
+        report_path = output_path / f"drift_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        
+        report = result.metrics.get("report")
+        if report:
+            report.save_html(str(report_path))
+            self.logger.log(logging.INFO, f"Drift report saved to {report_path}")
 
 class ValidationStrategyFactory:
     @staticmethod

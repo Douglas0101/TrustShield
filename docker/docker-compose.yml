@@ -134,6 +134,24 @@ services:
       - minio_root_password
     <<: *common-settings
 
+  # --- Dashboard Interativo Streamlit ---
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/dashboard.Dockerfile
+    container_name: trustshield-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://trustshield-api:8000
+    volumes:
+      - ../data:/app/data
+      - ../outputs:/app/outputs
+    depends_on:
+      trustshield-api:
+        condition: service_started
+    <<: *common-settings
+
 # --- Rede Compartilhada ---
 networks:
   trustshield-net:
