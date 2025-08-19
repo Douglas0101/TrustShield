@@ -44,7 +44,9 @@ if 'anomaly_feed' not in st.session_state:
 # =====================================================================================
 # Funções de Interação com a API
 # =====================================================================================
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+
+
+API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
 
 def get_api_status():
     """Verifica o status da API."""
@@ -68,10 +70,24 @@ def explain_transaction(transaction_data):
     """Envia uma transação para a API e retorna a explicação SHAP."""
     try:
         response = requests.post(f"{API_URL}/explain", json=transaction_data)
+        # O endpoint agora retorna 202 Accepted para iniciar o job
+        if response.status_code == 202:
+            return {"success": True, "explanation": response.json()}
         response.raise_for_status()
         return {"success": True, "explanation": response.json()}
     except requests.exceptions.RequestException as e:
         return {"success": False, "error": str(e)}
+
+def get_explanation_result(job_id: str):
+    """Busca o resultado de um job de explicação da API."""
+    try:
+        response = requests.get(f"{API_URL}/explanation-result/{job_id}")
+        if response.status_code == 202:
+            return {"success": False, "status_code": 202, "error": "Result not ready"}
+        response.raise_for_status()
+        return {"success": True, "explanation": response.json()}
+    except requests.exceptions.RequestException as e:
+        return {"success": False, "error": str(e), "status_code": e.response.status_code if e.response else 500}
 
 def validate_model():
     """Aciona a validação do modelo na API."""
@@ -201,9 +217,28 @@ with tab1:
             with col1:
                 st.success(f"**Resultado:** {result.get('prediction_label', 'N/A')}")
                 if st.button("Explicar Predição (SHAP)"):
-                    with st.spinner("Gerando explicação..."):
-                        explanation_result = explain_transaction(st.session_state.last_prediction_input)
-                        st.session_state.last_explanation = explanation_result
+                    with st.spinner("Iniciando análise de explicação..."):
+                        explanation_job = explain_transaction(st.session_state.last_prediction_input)
+                        if explanation_job.get("success"):
+                            st.session_state.explanation_job_id = explanation_job.get('explanation', {}).get('job_id')
+                            st.session_state.last_explanation = None # Limpa a explicação antiga
+                            st.info("Análise de explicação iniciada. Verifique o resultado em breve.")
+                        else:
+                            st.error(f"Falha ao iniciar a explicação: {explanation_job.get('error')}")
+
+            if st.session_state.get('explanation_job_id') and not st.session_state.get('last_explanation'):
+                if st.button("Verificar Resultado da Explicação"):
+                    with st.spinner("Buscando resultado..."):
+                        # Esta função precisará ser criada ou modificada
+                        result = get_explanation_result(st.session_state.explanation_job_id)
+                        if result.get("success"):
+                            st.session_state.last_explanation = {"success": True, "explanation": result.get("explanation")}
+                            st.session_state.explanation_job_id = None # Limpa o job
+                            st.rerun()
+                        elif result.get("status_code") == 202:
+                            st.info("A análise ainda está em andamento. Tente novamente em alguns segundos.")
+                        else:
+                            st.error(f"Erro ao buscar resultado: {result.get('error')}")
             
             with col2:
                 st.write("**Dados da Transação Enviada:**")

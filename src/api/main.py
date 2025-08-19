@@ -426,43 +426,67 @@ async def batch_predict_transactions(batch: BatchTransactionInput, predictor: Pr
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/explain", tags=["Interpretation"], response_model=Dict[str, Any])
-async def explain_transaction(transaction: TransactionInput, request: Request):
+def run_explanation(interpreter: ResilientModelInterpreter, data_path: str, output_path: str):
+    """Executa a interpretação e salva o resultado em um arquivo específico."""
+    try:
+        interpreter.run_interpretation(data_path=data_path, methods=['shap'])
+        # A saída padrão do interpreter pode não ser configurável, então encontramos o último resultado
+        project_root = Path(__file__).resolve().parents[2]
+        source_dir = project_root / "outputs" / "interpretations" / "shap"
+        result_files = list(source_dir.glob('*.json'))
+        if not result_files:
+            return
+        latest_result_file = max(result_files, key=os.path.getctime)
+        # Move/renomeia o arquivo de resultado para o caminho de saída esperado
+        os.rename(latest_result_file, output_path)
+    finally:
+        # Limpa o arquivo de dados de entrada temporário
+        if os.path.exists(data_path):
+            os.unlink(data_path)
+
+
+@app.post("/explain", tags=["Interpretation"], status_code=202)
+async def explain_transaction_async(transaction: TransactionInput, background_tasks: BackgroundTasks, request: Request):
     app_state: AppState = request.app.state
     model_path = str(app_state.model_path)
+    
+    # Gera um ID único para o job de explicação
+    job_id = f"explanation_{datetime.now().strftime('%Y%m%d%H%M%S')}_{os.urandom(4).hex()}"
+    project_root = Path(__file__).resolve().parents[2]
+    
+    # Define caminhos para arquivos temporários e de saída
+    temp_dir = project_root / "outputs" / "temp_explanations"
+    temp_dir.mkdir(exist_ok=True)
+    
+    input_data_path = temp_dir / f"{job_id}_input.parquet"
+    output_result_path = temp_dir / f"{job_id}_result.json"
 
-    # Create a temporary file to store the transaction data
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.parquet') as tmp:
-        df = pd.DataFrame([transaction.model_dump()])
-        df.to_parquet(tmp.name)
-        tmp_path = tmp.name
+    # Salva os dados da transação em um arquivo temporário
+    df = pd.DataFrame([transaction.model_dump()])
+    df.to_parquet(input_data_path)
 
-    try:
-        # Run the interpretation
-        interpreter = ResilientModelInterpreter(model_path=model_path)
-        interpreter.run_interpretation(data_path=tmp_path, methods=['shap'])
+    # Cria o interpretador e adiciona a tarefa em segundo plano
+    interpreter = ResilientModelInterpreter(model_path=model_path)
+    background_tasks.add_task(run_explanation, interpreter, str(input_data_path), str(output_result_path))
 
-        # The result is saved to a file, so we need to find it and read it.
-        project_root = Path(__file__).resolve().parents[2]
-        output_dir = project_root / "outputs" / "interpretations" / "shap"
-        # Find the latest results file in the directory
-        result_files = list(output_dir.glob('*.json'))
-        if not result_files:
-            raise HTTPException(status_code=404, detail="Interpretation result file not found.")
-        
-        latest_result_file = max(result_files, key=os.path.getctime)
+    return {"job_id": job_id, "status": "explanation_started"}
 
-        with open(latest_result_file, 'r') as f:
-            explanation = json.load(f)
 
-        return explanation
+@app.get("/explanation-result/{job_id}", tags=["Interpretation"], response_model=Dict[str, Any])
+async def get_explanation_result(job_id: str):
+    project_root = Path(__file__).resolve().parents[2]
+    output_path = project_root / "outputs" / "temp_explanations" / f"{job_id}_result.json"
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        # Clean up the temporary file
-        if 'tmp_path' in locals() and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+    if not output_path.exists():
+        raise HTTPException(status_code=202, detail="Explanation result not ready yet.")
+
+    with open(output_path, 'r') as f:
+        explanation = json.load(f)
+    
+    # Opcional: remover o arquivo de resultado após a leitura
+    # os.unlink(output_path)
+
+    return explanation
 
 
 @app.get("/status", tags=["Health Check"], response_model=Dict[str, Any])

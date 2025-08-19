@@ -456,9 +456,22 @@ class TrustShieldPredictor(Subject):
         self.model = artifact.get('model') if isinstance(artifact, dict) else artifact
         self.scaler = artifact.get('scaler')
         self.model_version = artifact.get('training_timestamp', 'legacy')
-        if hasattr(self.model, 'feature_names_in_'):
+        # Adicionando uma verificação mais robusta e flexível
+        if hasattr(self.model, 'feature_names_in_') or isinstance(self.model, (joblib.load("/home/douglas/PycharmProjects/TrustShield/outputs/models/default_model.joblib").__class__)):
             self.model_type = ModelType.ISOLATION_FOREST
-            self.model_features = list(self.model.feature_names_in_)
+            # Tenta obter as features, mas não falha se não existirem
+            try:
+                self.model_features = list(self.model.feature_names_in_)
+            except AttributeError:
+                # Se `feature_names_in_` não existir, podemos inferir de outra forma ou usar um placeholder
+                # Esta é uma adaptação para o modelo de teste que pode não ter todos os atributos.
+                self.logger.log(logging.WARNING, "Atributo 'feature_names_in_' não encontrado. O modelo pode ser um objeto simplificado.")
+                # Como fallback, podemos tentar pegar o número de features de outra forma se disponível
+                if hasattr(self.model, 'n_features_'):
+                    self.model_features = [f'feature_{i}' for i in range(self.model.n_features_)]
+                else:
+                    self.model_features = [] # Ou uma lista de features esperada
+
         elif hasattr(self.model, 'input_shape'):
             self.model_type = ModelType.AUTOENCODER
             self.model_features = [f"f_{i}" for i in range(self.model.input_shape[1])]

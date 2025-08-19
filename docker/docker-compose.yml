@@ -145,8 +145,8 @@ services:
     environment:
       - API_URL=http://trustshield-api:8000
     volumes:
-      - ../data:/app/data
-      - ../outputs:/app/outputs
+      - ./data:/app/data
+      - ./outputs:/app/outputs
     depends_on:
       trustshield-api:
         condition: service_started
@@ -169,6 +169,6 @@ volumes:
 # Mapeia os ficheiros de segredos locais para serem usados pelos contêineres.
 secrets:
   minio_root_user:
-    file: ../secrets/minio_root_user.txt
+    file: ./secrets/minio_root_user.txt
   minio_root_password:
-    file: ../secrets/minio_root_password.txt
+    file: ./secrets/minio_root_password.txt
