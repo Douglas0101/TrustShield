@@ -1,0 +1,14 @@
+artifact_uri: file:///home/douglas/PycharmProjects/TrustShield/mlruns/0/edab4d0ba9544af9ac51e4028ac48070/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: edab4d0ba9544af9ac51e4028ac48070
+run_name: prediction_service_20250820-004251
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1755661371997
+status: 1
+tags: []
+user_id: douglas

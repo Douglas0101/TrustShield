@@ -1,0 +1,15 @@
+artifact_uri: file:///home/douglas/PycharmProjects/TrustShield/mlruns/852299903582028003/09351d9aa308442e80e5132a89b13360/artifacts
+end_time: 1755752990325
+entry_point_name: ''
+experiment_id: '852299903582028003'
+lifecycle_stage: active
+run_id: 09351d9aa308442e80e5132a89b13360
+run_name: prediction_service_20250821-050235
+run_uuid: 09351d9aa308442e80e5132a89b13360
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1755752555583
+status: 3
+tags: []
+user_id: root

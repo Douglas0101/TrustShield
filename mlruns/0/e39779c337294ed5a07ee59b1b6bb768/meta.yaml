@@ -1,0 +1,14 @@
+artifact_uri: file:///home/douglas/PycharmProjects/TrustShield/mlruns/0/e39779c337294ed5a07ee59b1b6bb768/artifacts
+end_time: 1755665673288
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: e39779c337294ed5a07ee59b1b6bb768
+run_name: api_20250820-015432
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1755665672778
+status: 3
+tags: []
+user_id: douglas

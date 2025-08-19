@@ -1,26 +1,22 @@
-# src/api/main.py
-
+# -*- coding: utf-8 -*-
 """
-API Principal do Projeto TrustShield - Versão Otimizada e Corrigida
-Versão: 5.2.0 - Enterprise MLOps Integration (Linter-Clean & Enhanced Usability)
+TrustShield API (FastAPI) — versão otimizada e robusta
 
-Melhorias Implementadas:
-✅ Código alinhado com Pydantic V2 (@field_validator, .model_dump()).
-✅ Resolução de todas as referências de importação e atributos.
-✅ Correção de erros de tipo em chamadas de Enum.
-✅ Implementação do padrão Observer para monitoramento modular (MLflow, Prometheus).
-✅ Uso de 'time' e 'dataclasses' para métricas de performance estruturadas.
-✅ Integração profunda com MLflow para observabilidade da API.
+Principais melhorias em relação à base anterior:
+- `ResourceMonitor.get_stats()` implementado (evita 500 no /status).
+- Rota raiz `/` amigável e `/healthz` para probes.
+- Carregamento resiliente de configurações (fallback se `config.yaml` ausente).
+- Limite conservador de threads numéricas no processo (OMP/BLAS/Numba).
+- Logs consistentes e observabilidade via Observers (Console, Prometheus, MLflow) preservados.
+- Tratamento robusto de caminhos e artefatos (modelo) durante o startup.
 
-Autor: TrustShield Team & IA Gemini
-Versão: 5.2.0-enterprise-mlops
-Data: 2025-08-12
+Como executar (raiz do projeto):
+    uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 """
 
-# =====================================================================================
-# 📦 IMPORTS E CONFIGURAÇÕES INICIAIS
-# =====================================================================================
-
+# =============================================================================
+# Imports & setup
+# =============================================================================
 import logging
 import os
 import sys
@@ -33,55 +29,52 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, Annotated, Optional, List, Protocol, runtime_checkable
 
-import yaml
+import json
+import tempfile
+
 import psutil
+import yaml
 import mlflow
+import pandas as pd
+
 from fastapi import FastAPI, HTTPException, Request, Depends, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.datastructures import State
 from pydantic import BaseModel, ValidationError, field_validator
 from pydantic.types import confloat
 
-# Importações do projeto
+# Projeto
 from src.models.predict import TrustShieldPredictor, PredictionResult
 from src.models.validation import ResilientTrustShieldValidator
 from src.models.interpretation import ResilientModelInterpreter
-import pandas as pd
-import tempfile
-import json
 
-# Dependências opcionais de Engenharia de IA
+# Dependências opcionais
 try:
-    from prometheus_client import Counter, Histogram, Gauge, start_http_server
-
+    from prometheus_client import Counter, Histogram
     PROMETHEUS_AVAILABLE = True
-except ImportError:
+except Exception:
     PROMETHEUS_AVAILABLE = False
 
 try:
-    from dynaconf import Dynaconf
-
-    DYNACONF_AVAILABLE = True
-except ImportError:
-    DYNACONF_AVAILABLE = False
-
-try:
     from circuitbreaker import circuit
-
     CIRCUITBREAKER_AVAILABLE = True
-except ImportError:
+except Exception:
     CIRCUITBREAKER_AVAILABLE = False
 
-# Configurações globais
-warnings.filterwarnings('ignore')
-os.environ['OMP_NUM_THREADS'] = '4'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# Configuração global de warnings e threads numéricas
+warnings.filterwarnings("ignore")
+os.environ.setdefault("OMP_NUM_THREADS", "1")           # conservador para evitar tempestade de threads
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("NUMBA_NUM_THREADS", "1")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
+API_VERSION = "5.3.0-optimized"
 
-# =====================================================================================
-# 🏗️ CAMADA DE INFRAESTRUTURA - SERVIÇOS DE SUPORTE
-# =====================================================================================
-
+# =============================================================================
+# Infra — logging e config
+# =============================================================================
 class AdvancedLogger:
     def __init__(self, name: str):
         self.logger = logging.getLogger(name)
@@ -89,13 +82,13 @@ class AdvancedLogger:
             self.logger.setLevel(logging.INFO)
             handler = logging.StreamHandler(sys.stdout)
             formatter = logging.Formatter(
-                '%(asctime)s - [TrustShield-API] - %(levelname)s - %(message)s'
+                "%(asctime)s - [TrustShield-API] - %(levelname)s - %(message)s"
             )
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
 
     def log(self, level: int, message: str, **kwargs):
-        extra = {'timestamp': datetime.now().isoformat()}
+        extra = {"timestamp": datetime.now().isoformat()}
         extra.update(kwargs)
         self.logger.log(level, message, extra=extra)
 
@@ -104,8 +97,26 @@ class ConfigManager:
     def __init__(self, project_root: Path):
         self.project_root = project_root
         config_path = self.project_root / "config" / "config.yaml"
-        with open(config_path, 'r') as f:
-            self.settings = yaml.safe_load(f)
+        self.settings: Dict[str, Any] = {
+            "api": {
+                "model_path": "outputs/models/default_model.joblib",
+                "model_validation": False,
+            },
+            "mlflow": {
+                "experiment_name": "TrustShield",
+            },
+        }
+        if config_path.exists():
+            try:
+                with open(config_path, "r") as f:
+                    loaded = yaml.safe_load(f) or {}
+                    # merge raso — apenas chaves conhecidas
+                    for k in ("api", "mlflow"):
+                        if k in loaded and isinstance(loaded[k], dict):
+                            self.settings[k].update(loaded[k])
+            except Exception as e:
+                # mantém defaults e segue
+                print(f"[ConfigManager] Falha ao ler config.yaml: {e}")
 
     def get_config(self) -> Dict[str, Any]:
         return self.settings
@@ -123,11 +134,23 @@ class ResourceMonitor:
         if not success:
             self.error_count += 1
 
+    def get_stats(self) -> Dict[str, Any]:
+        try:
+            cpu = psutil.cpu_percent(interval=0.0)
+            mem = self.process.memory_info().rss / (1024 ** 2)
+        except Exception:
+            cpu, mem = None, None
+        return {
+            "requests": self.request_count,
+            "errors": self.error_count,
+            "cpu_percent": cpu,
+            "mem_rss_mb": round(mem, 2) if mem is not None else None,
+        }
 
-# =====================================================================================
-# 🏗️ CAMADA DE DOMÍNIO - LÓGICA DE NEGÓCIO CENTRAL
-# =====================================================================================
 
+# =============================================================================
+# Domínio — eventos & métricas
+# =============================================================================
 class APIEvent(Enum):
     STARTUP = 0
     SHUTDOWN = 1
@@ -150,9 +173,9 @@ class APIMetrics:
     timestamp: datetime = field(default_factory=datetime.now)
 
 
-# Modelos Pydantic para validação de entrada (Pydantic V2)
+# Pydantic models (V2)
 class TransactionInput(BaseModel):
-    amount: confloat(ge=0, le=1000000)
+    amount: confloat(ge=0, le=1_000_000)
     use_chip: str
     current_age: int
     retirement_age: int
@@ -170,40 +193,39 @@ class TransactionInput(BaseModel):
     is_night_transaction: bool
     amount_vs_avg: confloat(ge=0)
 
-    @field_validator('birth_year')
+    @field_validator("birth_year")
     def validate_birth_year(cls, v):
         current_year = datetime.now().year
         if v < 1900 or v > current_year:
-            raise ValueError('Ano de nascimento inválido')
+            raise ValueError("Ano de nascimento inválido")
         return v
 
-    @field_validator('transaction_hour')
+    @field_validator("transaction_hour")
     def validate_hour(cls, v):
         if v < 0 or v > 23:
-            raise ValueError('Hora da transação inválida')
+            raise ValueError("Hora da transação inválida")
         return v
 
-    @field_validator('day_of_week')
+    @field_validator("day_of_week")
     def validate_day(cls, v):
         if v < 0 or v > 6:
-            raise ValueError('Dia da semana inválido')
+            raise ValueError("Dia da semana inválido")
         return v
 
 
 class BatchTransactionInput(BaseModel):
     transactions: List[TransactionInput]
 
-    @field_validator('transactions')
+    @field_validator("transactions")
     def validate_transactions(cls, v):
         if len(v) > 1000:
-            raise ValueError('Tamanho máximo do batch é 1000 transações')
+            raise ValueError("Tamanho máximo do batch é 1000 transações")
         return v
 
 
-# =====================================================================================
-# 🔧 CAMADA DE APLICAÇÃO - CASOS DE USO E ORQUESTRAÇÃO
-# =====================================================================================
-
+# =============================================================================
+# Observers
+# =============================================================================
 @runtime_checkable
 class APIObserver(Protocol):
     def update(self, event: APIEvent, data: Dict[str, Any]): ...
@@ -218,12 +240,11 @@ class Subject:
 
     def notify(self, event: APIEvent, data: Dict[str, Any]):
         for observer in self._observers:
-            observer.update(event, data)
+            try:
+                observer.update(event, data)
+            except Exception:
+                pass
 
-
-# =====================================================================================
-# 🏭 CAMADA DE INFRAESTRUTURA - IMPLEMENTAÇÕES CONCRETAS
-# =====================================================================================
 
 class ConsoleLogObserver(APIObserver):
     def __init__(self, logger: AdvancedLogger):
@@ -245,20 +266,23 @@ class ConsoleLogObserver(APIObserver):
 class PrometheusObserver(APIObserver):
     def __init__(self):
         if PROMETHEUS_AVAILABLE:
-            self.request_counter = Counter('trustshield_api_requests_total', 'Total API requests',
-                                           ['endpoint', 'status'])
-            self.request_duration = Histogram('trustshield_api_request_duration_seconds', 'API request duration')
+            self.request_counter = Counter(
+                "trustshield_api_requests_total", "Total API requests", ["endpoint", "status"]
+            )
+            self.request_duration = Histogram(
+                "trustshield_api_request_duration_seconds", "API request duration"
+            )
 
     def update(self, event: APIEvent, data: Dict[str, Any]):
         if not PROMETHEUS_AVAILABLE:
             return
         if event == APIEvent.REQUEST_PROCESSED:
-            metrics = data.get('metrics', {})
-            endpoint = metrics.get('endpoint', 'unknown')
-            status = 'success' if metrics.get('success', False) else 'error'
+            metrics = data.get("metrics", {}) or data
+            endpoint = metrics.get("endpoint", "unknown")
+            status = "success" if metrics.get("success", False) else "error"
             self.request_counter.labels(endpoint=endpoint, status=status).inc()
-            if 'execution_time' in metrics:
-                self.request_duration.observe(metrics['execution_time'])
+            if "execution_time" in metrics:
+                self.request_duration.observe(metrics["execution_time"])
 
 
 class MLflowObserver(APIObserver):
@@ -267,23 +291,28 @@ class MLflowObserver(APIObserver):
         self.run_id = None
 
     def update(self, event: APIEvent, data: Dict[str, Any]):
-        if event == APIEvent.STARTUP:
-            mlflow.start_run(run_name=f"api_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
-            self.run_id = mlflow.active_run().info.run_id
-        elif event == APIEvent.REQUEST_PROCESSED:
-            if self.run_id:
-                metrics = data.get('metrics', {})
-                mlflow.log_metric(f"{metrics.get('endpoint', 'req').replace('/', '_')}_time",
-                                  metrics.get('execution_time', 0))
-        elif event == APIEvent.SHUTDOWN:
-            if mlflow.active_run():
-                mlflow.end_run()
+        try:
+            if event == APIEvent.STARTUP:
+                mlflow.set_experiment(self.experiment_name)
+                mlflow.start_run(run_name=f"api_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+                self.run_id = mlflow.active_run().info.run_id
+            elif event == APIEvent.REQUEST_PROCESSED and self.run_id:
+                metrics = data.get("metrics", {}) or data
+                mlflow.log_metric(
+                    f"{metrics.get('endpoint', 'req').replace('/', '_')}_time",
+                    metrics.get("execution_time", 0.0),
+                )
+            elif event == APIEvent.SHUTDOWN:
+                if mlflow.active_run():
+                    mlflow.end_run()
+        except Exception:
+            # observabilidade não deve derrubar a API
+            pass
 
 
-# =====================================================================================
-# 🎼 ORQUESTRADOR - O SERVIÇO PRINCIPAL DA APLICAÇÃO
-# =====================================================================================
-
+# =============================================================================
+# App state & lifecycle
+# =============================================================================
 class AppState(State):
     predictor: Optional[TrustShieldPredictor]
     config: Dict[str, Any]
@@ -297,32 +326,37 @@ class AppState(State):
 async def lifespan(app: FastAPI):
     app.state = AppState()
     project_root = Path(__file__).resolve().parents[2]
+
+    # Config
     config_manager = ConfigManager(project_root)
     app.state.config = config_manager.get_config()
-    app.state.logger = AdvancedLogger('TrustShield-API')
+
+    # Infra
+    app.state.logger = AdvancedLogger("TrustShield-API")
     app.state.monitor = ResourceMonitor(app.state.logger)
     app.state.subject = Subject()
 
+    # Observers
     app.state.subject.attach(ConsoleLogObserver(app.state.logger))
     app.state.subject.attach(PrometheusObserver())
-    app.state.subject.attach(MLflowObserver(app.state.config.get('mlflow', {}).get('experiment_name', 'TrustShield')))
+    app.state.subject.attach(MLflowObserver(app.state.config.get("mlflow", {}).get("experiment_name", "TrustShield")))
 
     app.state.subject.notify(APIEvent.STARTUP, {})
 
+    # Modelo
     try:
-        model_path_str = app.state.config.get('api', {}).get('model_path', 'outputs/models/default_model.joblib')
+        model_path_str = app.state.config.get("api", {}).get("model_path", "outputs/models/default_model.joblib")
         model_path = project_root / model_path_str if not Path(model_path_str).is_absolute() else Path(model_path_str)
         app.state.model_path = model_path
-
         app.state.predictor = TrustShieldPredictor(model_path=str(model_path))
-
         app.state.subject.notify(APIEvent.MODEL_LOADED, {
-            "model_type": app.state.predictor.model_type.value if app.state.predictor.model_type else "unknown"
+            "model_type": app.state.predictor.model_type.value if getattr(app.state.predictor, 'model_type', None) else "unknown"
         })
+    except Exception as e:
+        app.state.logger.log(logging.ERROR, f"Falha ao carregar o modelo: {e}")
+        app.state.predictor = None
 
-        if PROMETHEUS_AVAILABLE:
-            start_http_server(8001)
-
+    try:
         yield
     finally:
         app.state.subject.notify(APIEvent.SHUTDOWN, {})
@@ -330,17 +364,29 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="TrustShield Fraud Detection API",
-    version="5.2.0-linter-clean",
-    lifespan=lifespan
+    version=API_VERSION,
+    lifespan=lifespan,
 )
 
+# CORS (liberal para dev; ajuste em prod)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# =============================================================================
+# Dependencies & middleware
+# =============================================================================
 
 def get_predictor(request: Request) -> TrustShieldPredictor:
     predictor = request.app.state.predictor
     if not predictor:
         raise HTTPException(status_code=503, detail="Serviço indisponível: Modelo não carregado.")
     return predictor
-
 
 PredictorDep = Annotated[TrustShieldPredictor, Depends(get_predictor)]
 
@@ -359,7 +405,7 @@ async def log_requests(request: Request, call_next):
             endpoint=request.url.path,
             execution_time=execution_time,
             success=True,
-            status_code=response.status_code
+            status_code=response.status_code,
         )
         app_state.monitor.record_request(success=True)
         app_state.subject.notify(APIEvent.REQUEST_PROCESSED, metrics.__dict__)
@@ -371,7 +417,7 @@ async def log_requests(request: Request, call_next):
             endpoint=request.url.path,
             execution_time=execution_time,
             success=False,
-            error_message=str(e)
+            error_message=str(e),
         )
         app_state.monitor.record_request(success=False)
         app_state.subject.notify(APIEvent.ERROR_OCCURRED, metrics.__dict__)
@@ -383,28 +429,41 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
+# =============================================================================
+# Circuit breakers (opcional)
+# =============================================================================
 if CIRCUITBREAKER_AVAILABLE:
     @circuit(failure_threshold=5, recovery_timeout=60)
-    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor,
-                                           transaction_data: Dict[str, Any]) -> PredictionResult:
+    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor, transaction_data: Dict[str, Any]) -> PredictionResult:
         return predictor.predict(transaction_data)
-
 
     @circuit(failure_threshold=3, recovery_timeout=30)
-    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor,
-                                                 transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
+    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor, transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
         return predictor.batch_predict(transaction_data)
 else:
-    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor,
-                                           transaction_data: Dict[str, Any]) -> PredictionResult:
+    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor, transaction_data: Dict[str, Any]) -> PredictionResult:
         return predictor.predict(transaction_data)
 
-
-    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor,
-                                                 transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
+    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor, transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
         return predictor.batch_predict(transaction_data)
 
 
+# =============================================================================
+# Endpoints — raiz/health
+# =============================================================================
+@app.get("/", include_in_schema=False)
+async def root():
+    return {"message": "TrustShield API is running. See /docs and /status."}
+
+
+@app.get("/healthz", tags=["Health"])  # simples para probes
+async def healthz():
+    return {"status": "ok", "version": API_VERSION}
+
+
+# =============================================================================
+# Endpoints — predição e explicabilidade
+# =============================================================================
 @app.post("/predict", tags=["Prediction"], response_model=Dict[str, Any])
 async def predict_transaction(transaction: TransactionInput, predictor: PredictorDep):
     try:
@@ -426,49 +485,81 @@ async def batch_predict_transactions(batch: BatchTransactionInput, predictor: Pr
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/explain", tags=["Interpretation"], response_model=Dict[str, Any])
-async def explain_transaction(transaction: TransactionInput, request: Request):
+# ---- Explicabilidade assíncrona -------------------------------------------------
+
+def run_explanation(interpreter: ResilientModelInterpreter, data_path: str, output_path: str):
+    """Executa a interpretação e salva o resultado em um arquivo específico."""
+    try:
+        interpreter.run_interpretation(data_path=data_path, methods=['shap'])
+        # Encontrar o último resultado gerado no diretório padrão e movê-lo para o output esperado
+        project_root = Path(__file__).resolve().parents[2]
+        source_dir = project_root / "outputs" / "interpretations" / "shap"
+        result_files = list(source_dir.glob('*.json'))
+        if not result_files:
+            return
+        latest_result_file = max(result_files, key=os.path.getctime)
+        os.rename(latest_result_file, output_path)
+    finally:
+        # Limpa o arquivo temporário de entrada, se existir
+        try:
+            if os.path.exists(data_path):
+                os.unlink(data_path)
+        except Exception:
+            pass
+
+
+@app.post("/explain", tags=["Interpretation"], status_code=202)
+async def explain_transaction_async(transaction: TransactionInput, background_tasks: BackgroundTasks, request: Request):
     app_state: AppState = request.app.state
     model_path = str(app_state.model_path)
 
-    # Create a temporary file to store the transaction data
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.parquet') as tmp:
-        df = pd.DataFrame([transaction.model_dump()])
-        df.to_parquet(tmp.name)
-        tmp_path = tmp.name
+    # ID único para o job
+    job_id = f"explanation_{datetime.now().strftime('%Y%m%d%H%M%S')}_{os.urandom(4).hex()}"
+    project_root = Path(__file__).resolve().parents[2]
 
-    try:
-        # Run the interpretation
-        interpreter = ResilientModelInterpreter(model_path=model_path)
-        interpreter.run_interpretation(data_path=tmp_path, methods=['shap'])
+    # Pastas temporárias
+    temp_dir = project_root / "outputs" / "temp_explanations"
+    temp_dir.mkdir(exist_ok=True)
 
-        # The result is saved to a file, so we need to find it and read it.
-        project_root = Path(__file__).resolve().parents[2]
-        output_dir = project_root / "outputs" / "interpretations" / "shap"
-        # Find the latest results file in the directory
-        result_files = list(output_dir.glob('*.json'))
-        if not result_files:
-            raise HTTPException(status_code=404, detail="Interpretation result file not found.")
-        
-        latest_result_file = max(result_files, key=os.path.getctime)
+    input_data_path = temp_dir / f"{job_id}_input.parquet"
+    output_result_path = temp_dir / f"{job_id}_result.json"
 
-        with open(latest_result_file, 'r') as f:
-            explanation = json.load(f)
+    # Persistir entrada em parquet
+    df = pd.DataFrame([transaction.model_dump()])
+    df.to_parquet(input_data_path)
 
-        return explanation
+    # Interpretador + background task
+    interpreter = ResilientModelInterpreter(model_path=model_path)
+    background_tasks.add_task(run_explanation, interpreter, str(input_data_path), str(output_result_path))
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        # Clean up the temporary file
-        if 'tmp_path' in locals() and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+    return {"job_id": job_id, "status": "explanation_started"}
 
 
-@app.get("/status", tags=["Health Check"], response_model=Dict[str, Any])
+@app.get("/explanation-result/{job_id}", tags=["Interpretation"], response_model=Dict[str, Any])
+async def get_explanation_result(job_id: str):
+    project_root = Path(__file__).resolve().parents[2]
+    output_path = project_root / "outputs" / "temp_explanations" / f"{job_id}_result.json"
+
+    if not output_path.exists():
+        raise HTTPException(status_code=202, detail="Explanation result not ready yet.")
+
+    with open(output_path, "r") as f:
+        explanation = json.load(f)
+
+    # opcional: remover o arquivo após leitura
+    # os.unlink(output_path)
+
+    return explanation
+
+
+# =============================================================================
+# Endpoints — status e validação
+# =============================================================================
+@app.get("/status", tags=["Health"], response_model=Dict[str, Any])
 async def get_status(predictor: PredictorDep, request: Request):
     status = predictor.get_status()
-    status['api_metrics'] = request.app.state.monitor.get_stats()
+    status["version"] = API_VERSION
+    status["api_metrics"] = request.app.state.monitor.get_stats()
     return status
 
 
@@ -478,7 +569,7 @@ async def run_model_validation(app_state: AppState):
         data_path="data/interim/validation_sample.parquet",
         model_path=str(app_state.model_path),
         reference_data_path="data/features/featured_dataset.parquet",
-        validation_types=['drift_detection']
+        validation_types=['drift_detection'],
     )
     app_state.subject.notify(APIEvent.MODEL_VALIDATED, {})
 

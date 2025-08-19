@@ -455,10 +455,24 @@ class TrustShieldPredictor(Subject):
         artifact = joblib.load(full_path)
         self.model = artifact.get('model') if isinstance(artifact, dict) else artifact
         self.scaler = artifact.get('scaler')
-        self.model_version = artifact.get('training_timestamp', 'legacy')
-        if hasattr(self.model, 'feature_names_in_'):
-            self.model_type = ModelType.ISOLATION_FOREST
-            self.model_features = list(self.model.feature_names_in_)
+        # Verificação de modelo adaptável e robusta
+        if hasattr(self.model, 'fit') and hasattr(self.model, 'predict'):
+            # Heurística para determinar o tipo de modelo com base nos atributos
+            if hasattr(self.model, 'n_estimators'): # Típico de modelos de ensemble como IsolationForest
+                self.model_type = ModelType.ISOLATION_FOREST
+            else: # Pode ser outro tipo de modelo sklearn, ou um autoencoder com API sklearn
+                self.model_type = ModelType.ENSEMBLE # Um tipo genérico
+
+            self.logger.log(logging.INFO, f"Modelo detectado como do tipo: {self.model_type.value}")
+
+            # Extração de features de forma adaptável
+            if hasattr(self.model, 'feature_names_in_'):
+                self.model_features = list(self.model.feature_names_in_)
+            elif hasattr(self.model, 'n_features_in_'):
+                self.model_features = [f'feature_{i}' for i in range(self.model.n_features_in_)]
+            else:
+                self.logger.log(logging.WARNING, "Não foi possível determinar as features do modelo a partir dos atributos.")
+                self.model_features = []
         elif hasattr(self.model, 'input_shape'):
             self.model_type = ModelType.AUTOENCODER
             self.model_features = [f"f_{i}" for i in range(self.model.input_shape[1])]
