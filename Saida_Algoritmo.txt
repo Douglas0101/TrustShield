@@ -1,155 +1,168 @@
-(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ # (se ainda não houver) symlink para variáveis no diretório do compose
-cd ~/PycharmProjects/TrustShield/docker
-ln -sf ../.env .env
+(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make nuke CONFIRM=1
+make up
+make pipeline EXPERIMENT=TrustShield RUN_TAG=initial
+make health
+make logs-mlflow
+docker compose -f docker/docker-compose.yml down -v --remove-orphans || true
+WARN[0000] The "PGPASS" variable is not set. Defaulting to a blank string.
+WARN[0000] The "PGPASS" variable is not set. Defaulting to a blank string.
+[+] Running 10/10
+ ✔ Container trustshield-dashboard-1      Removed                                                                                                                                                                              0.0s
+ ✔ Container trustshield-api-1            Removed                                                                                                                                                                              0.0s
+ ✔ Container trustshield-mlflow-1         Removed                                                                                                                                                                              0.0s
+ ✔ Container trustshield-mlflow-dbinit-1  Removed                                                                                                                                                                              0.0s
+ ✔ Container trustshield-minio-setup-1    Removed                                                                                                                                                                              0.0s
+ ✔ Container trustshield-postgres-1       Removed                                                                                                                                                                              0.1s
+ ✔ Container trustshield-minio-1          Removed                                                                                                                                                                              0.0s
+ ✔ Volume trustshield_minio_data          Removed                                                                                                                                                                              0.0s
+ ✔ Volume trustshield_pgdata              Removed                                                                                                                                                                              0.0s
+ ✔ Network trustshield_default            Removed                                                                                                                                                                              0.1s
+docker volume rm -f trustshield_pgdata trustshield_minio_data 2>/dev/null || true
+trustshield_pgdata
+trustshield_minio_data
+docker network rm trustshield_default 2>/dev/null || true
+docker images --filter "label=com.docker.compose.project=trustshield" -q | xargs -r docker rmi -f
+Untagged: trustshield-dashboard:latest
+Deleted: sha256:fba37f4abb7eac59eab8ab96dc9261dd3da6a19ef6b7764cdd0306cd27bcdd6c
+Untagged: trustshield-api:latest
+Deleted: sha256:627bd82c4987dfcf28cbb9121d6e8fab3c4d27a4f0c4771724736e00b323b94f
+Untagged: trustshield-mlflow:latest
+Deleted: sha256:2cd0f9cbda93222bc8560335be26e39ddf078a70b52380a621f8ede896a13527
+Untagged: trustshield-mlflow-dbinit:latest
+Deleted: sha256:7cb89a20d006392c6761ed89a779b157cb547ff94bf32c202c899be7971dd02f
+Executando prune final (imagens/containers órfãos)...
+docker system prune -f
+Deleted build cache objects:
+89tf2rjuksgjw949rs4cntx1j
+0lse07ux4079jcw91piquju9s
+1osxl4cd62v3m0o8vkheo8cp5
+g6bhxwbqe7qucq4o1zk6awljv
+me49odjd0pb65b9y3y9wbemsg
+zqscd638olqb0am57ttri1o34
+nvuzuxvx8zexgaek98tmuex9z
+nivqviumbyle5l3115mermvj0
+ic93by5emug3y8da6m5yd2wcs
+ujaikee18cgspcudf85055qv3
+i0h077ofgvwi3sv0z7tfb8zas
+juah36kzyz9n5uaiqe97ri89d
+a8izbg00kdvi1wt083y0jsqfo
+s9v12zvur5ov3f8morrips7nf
+gd1pwxgk6sqv443jhavtqgzpz
+wmrkfskrkqrgtzvpkjtnle1oc
+6gavgo3f18mzs8s5dkxkkh3ar
+oq2fivumvrrizsqideernpysj
+ptf8vjio3a2chjago8ii62amt
 
-docker compose down -v --remove-orphans
-docker compose build --no-cache api dashboard mlflow
-docker compose up -d
-
-# saúde
-docker compose logs -f postgres
-docker compose logs -f mlflow
-docker compose logs -f api
-docker compose logs -f dashboard
-
-# smoke tests (host)
-curl -fsS http://localhost:8000/healthz && echo " - API OK"
-curl -I  http://localhost:5000/ | head -n1
-curl -fsS http://localhost:8501/_stcore/health && echo " - DASHBOARD OK"
-[+] Running 8/8
- ✔ Container trustshield_dashboard  Removed                                                                                                                                                                                    0.2s
- ✔ Container trustshield_api        Removed                                                                                                                                                                                    1.1s
- ✔ Container trustshield_mlflow     Removed                                                                                                                                                                                   10.1s
- ✔ Container trustshield_minio      Removed                                                                                                                                                                                    0.2s
- ✔ Container trustshield_postgres   Removed                                                                                                                                                                                    0.2s
- ✔ Volume docker_pgdata             Removed                                                                                                                                                                                    0.0s
- ✔ Network docker_default           Removed                                                                                                                                                                                    0.1s
- ✔ Volume docker_minio_data         Removed                                                                                                                                                                                    0.0s
+Total reclaimed space: 4.201GB
+✅ Docker OK
+✅ Docker Compose OK
+make[1]: Entrando no diretório '/home/douglas/PycharmProjects/TrustShield'
+✅ .env encontrado
+make[1]: Saindo do diretório '/home/douglas/PycharmProjects/TrustShield'
+make[1]: Entrando no diretório '/home/douglas/PycharmProjects/TrustShield'
+✅ OK: secrets/minio_root_user.txt
+✅ OK: secrets/minio_root_password.txt
+✅ OK: secrets/postgres_password.txt
+make[1]: Saindo do diretório '/home/douglas/PycharmProjects/TrustShield'
+bash: -c: linha 1: erro de sintaxe próximo ao token inesperado `then'
+make: *** [Makefile:89: doctor] Erro 2
+make[1]: Entrando no diretório '/home/douglas/PycharmProjects/TrustShield'
+docker compose -f docker/docker-compose.yml up -d
+WARN[0000] The "PGPASS" variable is not set. Defaulting to a blank string.
+WARN[0000] The "PGPASS" variable is not set. Defaulting to a blank string.
 WARN[0000] Docker Compose is configured to build using Bake, but buildx isn't installed
-[+] Building 339.6s (33/33) FINISHED                                                                                                                                                                                 docker:default
+[+] Building 263.1s (36/36) FINISHED                                                                                                                                                                                 docker:default
+ => [mlflow-dbinit internal] load build definition from mlflow.Dockerfile                                                                                                                                                      0.0s
+ => => transferring dockerfile: 502B                                                                                                                                                                                           0.0s
+ => [dashboard] resolve image config for docker-image://docker.io/docker/dockerfile:1.7                                                                                                                                        3.7s
+ => CACHED [dashboard] docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e                                                                                  0.0s
+ => [dashboard internal] load metadata for docker.io/library/python:3.11-slim                                                                                                                                                  5.5s
+ => [mlflow-dbinit internal] load .dockerignore                                                                                                                                                                                0.0s
+ => => transferring context: 3.54kB                                                                                                                                                                                            0.0s
+ => [dashboard 1/7] FROM docker.io/library/python:3.11-slim@sha256:1d6131b5d479888b43200645e03a78443c7157efbdb730e6b48129740727c312                                                                                            2.5s
+ => => resolve docker.io/library/python:3.11-slim@sha256:1d6131b5d479888b43200645e03a78443c7157efbdb730e6b48129740727c312                                                                                                      0.0s
+ => => sha256:1961ca026b04e3e3720545ee5a8e05e60692056663c685c5d2437bf3ad9e6e08 249B / 249B                                                                                                                                     1.3s
+ => => sha256:1d6131b5d479888b43200645e03a78443c7157efbdb730e6b48129740727c312 10.37kB / 10.37kB                                                                                                                               0.0s
+ => => sha256:8df0e8faf75b3c17ac33dc90d76787bbbcae142679e11da8c6f16afae5605ea7 1.75kB / 1.75kB                                                                                                                                 0.0s
+ => => sha256:2ba2e944f9cd164e42cf5e50da9ddeff526b43886a47738a75ab424624cdc427 5.38kB / 5.38kB                                                                                                                                 0.0s
+ => => sha256:fcec5a125fd8f69ba9d5c3fd9ecf3810f95775d4d5694ed731adcdeae1cff909 1.29MB / 1.29MB                                                                                                                                 0.9s
+ => => sha256:a27cb4be70170df84ec3045fb7d33b3eb7018cb39fc029037429d9f06362737f 14.64MB / 14.64MB                                                                                                                               2.1s
+ => => extracting sha256:fcec5a125fd8f69ba9d5c3fd9ecf3810f95775d4d5694ed731adcdeae1cff909                                                                                                                                      0.1s
+ => => extracting sha256:a27cb4be70170df84ec3045fb7d33b3eb7018cb39fc029037429d9f06362737f                                                                                                                                      0.3s
+ => => extracting sha256:1961ca026b04e3e3720545ee5a8e05e60692056663c685c5d2437bf3ad9e6e08                                                                                                                                      0.0s
+ => CACHED [mlflow 2/3] RUN apt-get update  && apt-get install -y --no-install-recommends curl  && rm -rf /var/lib/apt/lists/*                                                                                                 5.0s
+ => CACHED [mlflow 3/3] RUN pip install --upgrade pip &&     pip install "mlflow" boto3 psycopg2-binary                                                                                                                       41.6s
+ => [mlflow-dbinit] exporting to image                                                                                                                                                                                         2.0s
+ => => exporting layers                                                                                                                                                                                                        2.0s
+ => => writing image sha256:ff7be43639769fca544bb833e58c4a5fab2d2cba45f6a1cc0fcc9099d46d52a5                                                                                                                                   0.0s
+ => => naming to docker.io/library/trustshield-mlflow-dbinit                                                                                                                                                                   0.0s
+ => [mlflow-dbinit] resolving provenance for metadata file                                                                                                                                                                     0.0s
  => [mlflow internal] load build definition from mlflow.Dockerfile                                                                                                                                                             0.0s
- => => transferring dockerfile: 454B                                                                                                                                                                                           0.0s
- => [dashboard internal] load metadata for docker.io/library/python:3.10-slim-bookworm                                                                                                                                         4.1s
+ => => transferring dockerfile: 502B                                                                                                                                                                                           0.0s
  => [mlflow internal] load .dockerignore                                                                                                                                                                                       0.0s
  => => transferring context: 3.54kB                                                                                                                                                                                            0.0s
- => CACHED [dashboard 1/7] FROM docker.io/library/python:3.10-slim-bookworm@sha256:66a6e8a211a02794515d4e1aa1970fc037ec4dde1429395e1321bdd63af01256                                                                            0.0s
- => [mlflow internal] load build context                                                                                                                                                                                       0.0s
- => => transferring context: 2.06kB                                                                                                                                                                                            0.0s
- => [dashboard 2/7] RUN apt-get update && apt-get install -y --no-install-recommends     curl &&     rm -rf /var/lib/apt/lists/*                                                                                              13.2s
- => [dashboard 3/7] WORKDIR /app                                                                                                                                                                                               0.0s
- => [mlflow 4/5] COPY requirements.txt ./requirements.txt                                                                                                                                                                      0.0s
- => [mlflow 5/5] RUN pip install --no-cache-dir -r requirements.txt                                                                                                                                                          104.4s
- => [mlflow] exporting to image                                                                                                                                                                                                4.5s
- => => exporting layers                                                                                                                                                                                                        4.5s
- => => writing image sha256:b9d4dbfd18d12ea6e3a6dfd522744dcd5894af4e9a37ee14dab16a9f9c82378d                                                                                                                                   0.0s
- => => naming to docker.io/library/trustshield_mlflow:local                                                                                                                                                                    0.0s
+ => [mlflow] exporting to image                                                                                                                                                                                                0.0s
+ => => exporting layers                                                                                                                                                                                                        0.0s
+ => => writing image sha256:15da9904022b7310c8a56b79cb1d596f6422b3b62e1f04cd921b11b98afe0ac8                                                                                                                                   0.0s
+ => => naming to docker.io/library/trustshield-mlflow                                                                                                                                                                          0.0s
  => [mlflow] resolving provenance for metadata file                                                                                                                                                                            0.0s
  => [api internal] load build definition from Dockerfile                                                                                                                                                                       0.0s
- => => transferring dockerfile: 569B                                                                                                                                                                                           0.0s
+ => => transferring dockerfile: 567B                                                                                                                                                                                           0.0s
  => [api internal] load .dockerignore                                                                                                                                                                                          0.0s
  => => transferring context: 3.54kB                                                                                                                                                                                            0.0s
  => [api internal] load build context                                                                                                                                                                                          0.0s
- => => transferring context: 325.94kB                                                                                                                                                                                          0.0s
- => [api 2/9] RUN apt-get update && apt-get install -y --no-install-recommends     curl netcat-openbsd &&     rm -rf /var/lib/apt/lists/*                                                                                      7.2s
- => [api 3/9] WORKDIR /app                                                                                                                                                                                                     0.0s
- => [api 4/9] COPY requirements.txt ./requirements.txt                                                                                                                                                                         0.0s
- => [api 5/9] RUN pip install --no-cache-dir -r requirements.txt                                                                                                                                                              97.9s
- => [api 6/9] COPY src ./src                                                                                                                                                                                                   0.0s
- => [api 7/9] COPY config ./config                                                                                                                                                                                             0.0s
- => [api 8/9] COPY docker/entrypoint.sh ./entrypoint.sh                                                                                                                                                                        0.0s
- => [api 9/9] RUN chmod +x ./entrypoint.sh                                                                                                                                                                                     0.1s
- => [api] exporting to image                                                                                                                                                                                                   4.5s
- => => exporting layers                                                                                                                                                                                                        4.5s
- => => writing image sha256:c59f69ca92a5705e29f60cf084c3d3a2c84e6ac99d57c9e6f4fd344f277c50ee                                                                                                                                   0.0s
- => => naming to docker.io/library/trustshield_api:local                                                                                                                                                                       0.0s
+ => => transferring context: 327.09kB                                                                                                                                                                                          0.0s
+ => CACHED [dashboard 2/7] WORKDIR /app                                                                                                                                                                                        0.0s
+ => [api 3/8] COPY requirements.txt .                                                                                                                                                                                          0.0s
+ => [api 4/8] RUN pip install --upgrade pip && pip install -r requirements.txt                                                                                                                                                99.6s
+ => [api 5/8] COPY src/ src/                                                                                                                                                                                                   0.0s
+ => [api 6/8] COPY config/ config/                                                                                                                                                                                             0.0s
+ => [api 7/8] COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh                                                                                                                                                           0.0s
+ => [api 8/8] RUN chmod +x /usr/local/bin/entrypoint.sh                                                                                                                                                                        0.1s
+ => [api] exporting to image                                                                                                                                                                                                   5.1s
+ => => exporting layers                                                                                                                                                                                                        5.1s
+ => => writing image sha256:9e02f3c2fe5f491bc81a0e02c90ad38f63bb4cb44674a523229abd13d23c95dc                                                                                                                                   0.0s
+ => => naming to docker.io/library/trustshield-api                                                                                                                                                                             0.0s
  => [api] resolving provenance for metadata file                                                                                                                                                                               0.0s
  => [dashboard internal] load build definition from dashboard.Dockerfile                                                                                                                                                       0.0s
- => => transferring dockerfile: 528B                                                                                                                                                                                           0.0s
+ => => transferring dockerfile: 526B                                                                                                                                                                                           0.0s
  => [dashboard internal] load .dockerignore                                                                                                                                                                                    0.0s
  => => transferring context: 3.54kB                                                                                                                                                                                            0.0s
  => [dashboard internal] load build context                                                                                                                                                                                    0.0s
- => => transferring context: 199B                                                                                                                                                                                              0.0s
- => [dashboard 4/7] COPY requirements.txt ./requirements.txt                                                                                                                                                                   0.0s
- => [dashboard 5/7] RUN pip install --no-cache-dir -r requirements.txt                                                                                                                                                        98.7s
- => [dashboard 6/7] COPY src/dashboard ./src/dashboard                                                                                                                                                                         0.0s
- => [dashboard 7/7] COPY config ./config                                                                                                                                                                                       0.0s
- => [dashboard] exporting to image                                                                                                                                                                                             4.5s
- => => exporting layers                                                                                                                                                                                                        4.5s
- => => writing image sha256:ea39a5ae5eeefeaa1ed311b1997106b9fa5f880da97d1a56fbd97258bb264cb1                                                                                                                                   0.0s
- => => naming to docker.io/library/trustshield_dashboard:local                                                                                                                                                                 0.0s
+ => => transferring context: 273B                                                                                                                                                                                              0.0s
+ => CACHED [dashboard 3/7] COPY requirements.txt .                                                                                                                                                                             0.0s
+ => [dashboard 4/7] RUN pip install --upgrade pip && pip install -r requirements.txt streamlit>=1.35                                                                                                                          92.1s
+ => [dashboard 5/7] COPY src/dashboard/ src/dashboard/                                                                                                                                                                         0.0s
+ => [dashboard 6/7] COPY src/utils/ src/utils/                                                                                                                                                                                 0.0s
+ => [dashboard 7/7] COPY config/ config/                                                                                                                                                                                       0.0s
+ => [dashboard] exporting to image                                                                                                                                                                                             5.0s
+ => => exporting layers                                                                                                                                                                                                        5.0s
+ => => writing image sha256:aec746f3527ee271575c27fac9be5c74e0ec5b41995a1fefdd47706b09b0d99b                                                                                                                                   0.0s
+ => => naming to docker.io/library/trustshield-dashboard                                                                                                                                                                       0.0s
  => [dashboard] resolving provenance for metadata file                                                                                                                                                                         0.0s
-[+] Building 3/3
- ✔ api        Built                                                                                                                                                                                                            0.0s
- ✔ dashboard  Built                                                                                                                                                                                                            0.0s
- ✔ mlflow     Built                                                                                                                                                                                                            0.0s
-[+] Running 8/8
- ✔ Network docker_default           Created                                                                                                                                                                                    0.1s
- ✔ Volume "docker_minio_data"       Created                                                                                                                                                                                    0.0s
- ✔ Volume "docker_pgdata"           Created                                                                                                                                                                                    0.0s
- ✔ Container trustshield_minio      Healthy                                                                                                                                                                                    6.6s
- ✔ Container trustshield_postgres   Healthy                                                                                                                                                                                    6.6s
- ✔ Container trustshield_mlflow     Healthy                                                                                                                                                                                   11.4s
- ✔ Container trustshield_api        Healthy                                                                                                                                                                                   22.1s
- ✔ Container trustshield_dashboard  Started                                                                                                                                                                                   22.2s
-trustshield_postgres  | The files belonging to this database system will be owned by user "postgres".
-trustshield_postgres  | This user must also own the server process.
-trustshield_postgres  |
-trustshield_postgres  | The database cluster will be initialized with locale "en_US.utf8".
-trustshield_postgres  | The default database encoding has accordingly been set to "UTF8".
-trustshield_postgres  | The default text search configuration will be set to "english".
-trustshield_postgres  |
-trustshield_postgres  | Data page checksums are disabled.
-trustshield_postgres  |
-trustshield_postgres  | fixing permissions on existing directory /var/lib/postgresql/data ... ok
-trustshield_postgres  | creating subdirectories ... ok
-trustshield_postgres  | selecting dynamic shared memory implementation ... posix
-trustshield_postgres  | selecting default max_connections ... 100
-trustshield_postgres  | selecting default shared_buffers ... 128MB
-trustshield_postgres  | selecting default time zone ... UTC
-trustshield_postgres  | creating configuration files ... ok
-trustshield_postgres  | running bootstrap script ... ok
-trustshield_postgres  | sh: locale: not found
-trustshield_postgres  | 2025-08-21 05:55:12.298 UTC [35] WARNING:  no usable system locales were found
-trustshield_postgres  | performing post-bootstrap initialization ... ok
-trustshield_postgres  | initdb: warning: enabling "trust" authentication for local connections
-trustshield_postgres  | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
-trustshield_postgres  | syncing data to disk ... ok
-trustshield_postgres  |
-trustshield_postgres  |
-trustshield_postgres  | Success. You can now start the database server using:
-trustshield_postgres  |
-trustshield_postgres  |     pg_ctl -D /var/lib/postgresql/data -l logfile start
-trustshield_postgres  |
-trustshield_postgres  | waiting for server to start....2025-08-21 05:55:12.839 UTC [41] LOG:  starting PostgreSQL 15.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
-trustshield_postgres  | 2025-08-21 05:55:12.840 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
-trustshield_postgres  | 2025-08-21 05:55:12.842 UTC [44] LOG:  database system was shut down at 2025-08-21 05:55:12 UTC
-trustshield_postgres  | 2025-08-21 05:55:12.851 UTC [41] LOG:  database system is ready to accept connections
-trustshield_postgres  |  done
-trustshield_postgres  | server started
-trustshield_postgres  | CREATE DATABASE
-trustshield_postgres  |
-trustshield_postgres  |
-trustshield_postgres  | /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
-trustshield_postgres  |
-trustshield_postgres  | waiting for server to shut down....2025-08-21 05:55:12.983 UTC [41] LOG:  received fast shutdown request
-trustshield_postgres  | 2025-08-21 05:55:12.984 UTC [41] LOG:  aborting any active transactions
-trustshield_postgres  | 2025-08-21 05:55:12.986 UTC [41] LOG:  background worker "logical replication launcher" (PID 47) exited with exit code 1
-trustshield_postgres  | 2025-08-21 05:55:12.986 UTC [42] LOG:  shutting down
-trustshield_postgres  | 2025-08-21 05:55:12.986 UTC [42] LOG:  checkpoint starting: shutdown immediate
-trustshield_postgres  | 2025-08-21 05:55:13.047 UTC [42] LOG:  checkpoint complete: wrote 921 buffers (5.6%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.029 s, sync=0.025 s, total=0.062 s; sync files=301, longest=0.002 s, average=0.001 s; distance=4239 kB, estimate=4239 kB
-trustshield_postgres  | 2025-08-21 05:55:13.052 UTC [41] LOG:  database system is shut down
-trustshield_postgres  |  done
-trustshield_postgres  | server stopped
-trustshield_postgres  |
-trustshield_postgres  | PostgreSQL init process complete; ready for start up.
-trustshield_postgres  |
-trustshield_postgres  | 2025-08-21 05:55:13.098 UTC [1] LOG:  starting PostgreSQL 15.14 on x86_64-pc-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit
-trustshield_postgres  | 2025-08-21 05:55:13.098 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
-trustshield_postgres  | 2025-08-21 05:55:13.098 UTC [1] LOG:  listening on IPv6 address "::", port 5432
-trustshield_postgres  | 2025-08-21 05:55:13.099 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
-trustshield_postgres  | 2025-08-21 05:55:13.101 UTC [57] LOG:  database system was shut down at 2025-08-21 05:55:13 UTC
-trustshield_postgres  | 2025-08-21 05:55:13.104 UTC [1] LOG:  database system is ready to accept connections
-trustshield_postgres  | 2025-08-21 06:00:13.200 UTC [55] LOG:  checkpoint starting: time
-trustshield_postgres  | 2025-08-21 06:00:30.940 UTC [55] LOG:  checkpoint complete: wrote 179 buffers (1.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=17.707 s, sync=0.021 s, total=17.740 s; sync files=133, longest=0.011 s, average=0.001 s; distance=965 kB, estimate=965 kB
-trustshield_postgres  | 2025-08-21 18:36:19.127 UTC [55] LOG:  checkpoint starting: time
-trustshield_postgres  | 2025-08-21 18:36:20.836 UTC [55] LOG:  checkpoint complete: wrote 17 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.704 s, sync=0.003 s, total=1.709 s; sync files=11, longest=0.002 s, average=0.001 s; distance=18 kB, estimate=870 kB
+[+] Running 13/14
+ ✔ api                                    Built                                                                                                                                                                                0.0s
+ ✔ dashboard                              Built                                                                                                                                                                                0.0s
+ ✔ mlflow                                 Built                                                                                                                                                                                0.0s
+ ✔ mlflow-dbinit                          Built                                                                                                                                                                                0.0s
+ ✔ Network trustshield_default            Created                                                                                                                                                                              0.1s
+ ✔ Volume "trustshield_pgdata"            Created                                                                                                                                                                              0.0s
+ ✔ Volume "trustshield_minio_data"        Created                                                                                                                                                                              0.0s
+ ⠸ Container trustshield-minio-1          Starting                                                                                                                                                                             0.3s
+ ✔ Container trustshield-postgres-1       Started                                                                                                                                                                              0.3s
+ ✔ Container trustshield-mlflow-dbinit-1  Created                                                                                                                                                                              0.0s
+ ✔ Container trustshield-minio-setup-1    Created                                                                                                                                                                              0.0s
+ ✔ Container trustshield-mlflow-1         Created                                                                                                                                                                              0.0s
+ ✔ Container trustshield-api-1            Created                                                                                                                                                                              0.0s
+ ✔ Container trustshield-dashboard-1      Created                                                                                                                                                                              0.0s
+Error response from daemon: driver failed programming external connectivity on endpoint trustshield-minio-1 (4fea06293c29cc3ef682cfcb2cc16ff1fbca0739517967719f8c3b6f4bb8d76c): Bind for 0.0.0.0:9000 failed: port is already allocated
+make[1]: *** [Makefile:105: up-no-build] Erro 1
+make[1]: Saindo do diretório '/home/douglas/PycharmProjects/TrustShield'
+make: *** [Makefile:201: ensure-up] Erro 2
+✅ MLflow OK
+✅ MinIO OK
+✅ API OK
+✅ Dashboard OK
+docker compose -f docker/docker-compose.yml logs -f --tail=200 mlflow
+WARN[0000] The "PGPASS" variable is not set. Defaulting to a blank string.
+WARN[0000] The "PGPASS" variable is not set. Defaulting to a blank string.

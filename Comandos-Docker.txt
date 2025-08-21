@@ -1,26 +1,67 @@
-Próximos Passosmake logs
+1) Preparação & diagnóstico
 
-Depois de aplicar a correção no Dockerfile, siga estes passos para garantir que tudo seja reconstruído corretamente:
+make check-env        # .env presente e sem variáveis aninhadas
+make check-secrets    # confere secrets/ obrigatórios
+make doctor           # checagem completa: Docker/Compose/curl/.env/secrets/portas
+make config           # imprime o docker compose já resolvido
 
-Limpe completamente o ambiente anterior para evitar qualquer cache problemático:
+2) Limpeza (leve → radical)
 
-make purge
+make down             # derruba a stack (mantém volumes)
+make down-v           # derruba e remove volumes do projeto
+make prune            # remove recursos órfãos globais (confirma no prompt)
+make nuke CONFIRM=1   # ⚠️ limpeza radical do projeto (volumes/redes/imagens do compose)
 
-Reconstrua as imagens e inicie os serviços com um único comando otimizado do seu Makefile:
+3) Subida da infraestrutura
 
-make services-up-fresh
+make build            # (re)build das imagens com pull de bases
+make up               # sobe tudo com build + healthchecks
+# ou:
+make up-no-build      # sobe sem rebuild (idempotente)
+make ps               # status dos serviços
+make health           # checa MLflow / MinIO / API / Dashboard
 
-Este comando irá reconstruir a imagem trustshield-api com a correção e iniciar todos os serviços.
+4) Observabilidade & logs
 
-Monitore os logs para confirmar que o serviço trustshield-api inicia sem erros:
+make logs             # tail de todos os serviços
+make logs-mlflow      # logs do MLflow
+make logs-api         # logs da API
+make logs-minio       # logs do MinIO
+make logs-dashboard   # logs do Dashboard
 
+5) Pipeline de dados e treino (alvos unitários)
 
-make logs
+make data             # ingestão/curadoria -> data/processed/primary_dataset.parquet
+make features         # feature engineering -> data/features/featured_dataset.parquet
+make experiment EXPERIMENT=TrustShield
+make train    EXPERIMENT=TrustShield RUN_TAG=manual
+make evaluate         # avalia últimos modelos (ou default_model)
+make promote          # promove último isolation_forest_* -> default_model.joblib
 
-Você deverá ver as mensagens do Uvicorn indicando que o servidor está rodando.
+6) Pipeline E2E (recomendado)
+make pipeline EXPERIMENT=TrustShield RUN_TAG=setup
+# Executa: data -> features -> train -> evaluate -> promote
 
-Finalmente, execute o pipeline de treinamento:
+7) Retreinamento com HPO
+make optimize  EXPERIMENT=TrustShield HPO_TRIALS=60
+make retrain   EXPERIMENT=TrustShield RUN_TAG=retrain-2025-08 HPO_TRIALS=60
+# Executa: data -> features -> optimize -> train -> evaluate -> promote
 
-make train
+8) Utilitários
+make psql      # abre psql no contêiner do Postgres (usa secret de senha)
+make mc        # abre um shell do MinIO Client já autenticado (alias: local)
+make restart   # reinicia serviços
+make pull      # atualiza imagens base do compose
+make test      # roda pytest no host
 
-Seguindo esses passos, o contêiner da API ficará estável, permitindo que o comando make train seja executado com sucesso.
+9) Encerramento
+make down      # derruba os serviços (mantém volumes)
+# ou, para encerrar e limpar volumes do projeto:
+make down-v
+
+Sequência sugerida (do zero ao modelo publicado)
+make nuke CONFIRM=1
+make up
+make pipeline EXPERIMENT=TrustShield RUN_TAG=initial
+make health
+make logs-mlflow

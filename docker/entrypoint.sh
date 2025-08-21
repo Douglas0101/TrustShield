@@ -1,33 +1,32 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "[entrypoint] CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}"
-echo "[entrypoint] DATA_DIR=${DATA_DIR:-/app/data} OUTPUTS_DIR=${OUTPUTS_DIR:-/app/outputs}"
+# Secrets -> env (se ainda não vieram)
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -f /run/secrets/minio_root_user ]; then
+  export AWS_ACCESS_KEY_ID="$(cat /run/secrets/minio_root_user)"
+fi
+if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ] && [ -f /run/secrets/minio_root_password ]; then
+  export AWS_SECRET_ACCESS_KEY="$(cat /run/secrets/minio_root_password)"
+fi
 
-wait_for() {
-  host="$1"; port="$2"; name="$3"; timeout="${4:-120}"
-  echo "[wait] Aguardando ${name} em ${host}:${port} (timeout: ${timeout}s)…"
-  start="$(date +%s)"
-  while :; do
-    if nc -z "$host" "$port" >/dev/null 2>&1; then
-      echo "[wait] ${name} pronto."
-      break
-    fi
-    now="$(date +%s)"
-    elapsed=$(( now - start ))
-    if [ "$elapsed" -ge "$timeout" ]; then
-      echo "[wait][ERRO] Timeout ao aguardar ${name} em ${host}:${port}"
-      exit 1
-    fi
-    sleep 1
-  done
+# Espera HTTP sem curl (usa Python da própria imagem)
+wait_http_py() {
+  local url="$1"; local tries="${2:-180}"
+  python - <<PY
+import sys, time, urllib.request
+url = "$url"; tries = $tries
+for i in range(tries):
+    try:
+        with urllib.request.urlopen(url, timeout=2) as r:
+            if 200 <= r.getcode() < 500:
+                sys.exit(0)
+    except Exception:
+        time.sleep(1)
+sys.exit(1)
+PY
 }
 
-wait_for postgres 5432 "Postgres"
-wait_for minio    9000 "MinIO (S3)"
-wait_for mlflow   5000 "MLflow Server"
-
-[ -z "${BACKEND_STORE_URI:-}" ] && echo "[WARN] BACKEND_STORE_URI não definido."
-[ -z "${MLFLOW_S3_ENDPOINT_URL:-}" ] && echo "[WARN] MLFLOW_S3_ENDPOINT_URL não definido."
+: "${MLFLOW_TRACKING_URI:=http://mlflow:5000}"
+wait_http_py "${MLFLOW_TRACKING_URI}/version" 180
 
 exec "$@"

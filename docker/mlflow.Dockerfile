@@ -1,14 +1,18 @@
-FROM python:3.10-slim-bookworm
+# syntax=docker/dockerfile:1.7
+FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl && \
-    rm -rf /var/lib/apt/lists/*
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1
 
-WORKDIR /app
+# curl para healthchecks e utilidades
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install "mlflow" boto3 psycopg2-binary
 
 EXPOSE 5000
-CMD ["bash", "-lc", "mlflow server --backend-store-uri ${BACKEND_STORE_URI} --default-artifact-root s3://mlflow/ --host 0.0.0.0 --port 5000"]
+# o comando real vem do compose (mlflow server ...)
+CMD ["mlflow","server","--host","0.0.0.0","--port","5000"]
 

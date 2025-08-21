@@ -1,136 +1,190 @@
+# Arquivo: docker/docker-compose.yml
+
 services:
   postgres:
-    image: postgres:15-alpine
-    container_name: trustshield_postgres
-    ports: ["5432:5432"]
-    env_file: [../.env]                 # .env na raiz (ou symlink docker/.env -> ../.env)
+    image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB:-mlflowdb}
+      POSTGRES_USER: ${POSTGRES_USER:-mlflow}
+      # senha via Docker Secret
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     volumes:
       - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
+    secrets:
+      - source: postgres_password
+        target: postgres_password
     restart: unless-stopped
 
   minio:
-    image: minio/minio:RELEASE.2024-07-26T20-48-21Z
-    container_name: trustshield_minio
-    ports: ["9000:9000", "9001:9001"]
-    env_file: [../.env]
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    command: server /data --console-address ":9001"
+    image: minio/minio:latest
+    entrypoint: [ "/bin/sh","-c" ]
+    command: |
+      export MINIO_ROOT_USER="$(cat /run/secrets/minio_root_user)";
+      export MINIO_ROOT_PASSWORD="$(cat /run/secrets/minio_root_password)";
+      exec minio server /data --console-address ":9001"
+    ports:
+      - "${MINIO_PORT_API:-9000}:9000"
+      - "${MINIO_PORT_CONSOLE:-9001}:9001"
     volumes:
       - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/ready"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
+    secrets:
+      - source: minio_root_user
+        target: minio_root_user
+      - source: minio_root_password
+        target: minio_root_password
     restart: unless-stopped
 
+
+  # Cria o bucket s3://$MLFLOW_S3_BUCKET na primeira subida
+  minio-setup:
+    image: minio/mc
+    depends_on:
+      minio: { condition: service_started }
+    entrypoint: [ "/bin/sh","-c" ]
+    command: |
+      set -e
+      MINIO_ROOT_USER="$(cat /run/secrets/minio_root_user)"
+      MINIO_ROOT_PASSWORD="$(cat /run/secrets/minio_root_password)"
+      mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+      for i in $(seq 1 120); do
+        if mc ready local >/dev/null 2>&1; then break; fi
+        sleep 1
+      done
+      mc mb -p local/${MLFLOW_S3_BUCKET:-mlflow} || true
+    secrets:
+      - source: minio_root_user
+        target: minio_root_user
+      - source: minio_root_password
+        target: minio_root_password
+    restart: "no"
+
+
+  # Aplica as migrações do schema do MLflow antes do servidor
+  mlflow-dbinit:
+    build:
+      context: ..
+      dockerfile: docker/mlflow.Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+    entrypoint: [ "/bin/sh","-c" ]
+    command: |
+      PGPASS="$(cat /run/secrets/postgres_password)"
+      mlflow db upgrade postgresql://${POSTGRES_USER:-mlflow}:$PGPASS@postgres:5432/${POSTGRES_DB:-mlflowdb}
+    secrets:
+      - source: postgres_password
+        target: postgres_password
+    restart: "no"
+
+
+  # Tracking Server do MLflow (UI + proxy de artifacts)
   mlflow:
     build:
       context: ..
       dockerfile: docker/mlflow.Dockerfile
-    image: trustshield_mlflow:local
-    container_name: trustshield_mlflow
-    ports: ["5000:5000"]
-    env_file: [../.env]
-    environment:
-      BACKEND_STORE_URI: ${BACKEND_STORE_URI}
-      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
     depends_on:
-      postgres: { condition: service_healthy }
-      minio:    { condition: service_healthy }
-    command: >
-      mlflow server
-      --backend-store-uri ${BACKEND_STORE_URI}
-      --default-artifact-root s3://mlflow/
-      --host 0.0.0.0
-      --port 5000
+      postgres:      { condition: service_healthy }
+      minio:         { condition: service_started }
+      minio-setup:   { condition: service_completed_successfully }
+      mlflow-dbinit: { condition: service_completed_successfully }
+    entrypoint: ["/bin/sh","-c"]
+    command: |
+      export AWS_ACCESS_KEY_ID="$(cat /run/secrets/minio_root_user)";
+      export AWS_SECRET_ACCESS_KEY="$(cat /run/secrets/minio_root_password)";
+      export PGPASS="$(cat /run/secrets/postgres_password)";
+      mlflow server \
+        --host 0.0.0.0 --port 5000 \
+        --backend-store-uri postgresql://${POSTGRES_USER:-mlflow}:$PGPASS@postgres:5432/${POSTGRES_DB:-mlflowdb} \
+        --artifacts-destination s3://${MLFLOW_S3_BUCKET:-mlflow} \
+        --serve-artifacts
+    environment:
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-https://minio:9000}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5000/"]
-      interval: 10s
+      # evita depender de 'curl' nas imagens slim
+      test: ["CMD-SHELL", "python -c 'import urllib.request as u; u.urlopen(\"http://localhost:5000/version\"); print(1)'"]
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
       start_period: 10s
+    ports:
+      - "5000:5000"
+    secrets:
+      - source: minio_root_user
+        target: minio_root_user
+      - source: minio_root_password
+        target: minio_root_password
+      - source: postgres_password
+        target: postgres_password
     restart: unless-stopped
 
+  # API (FastAPI) — usa src/api/main.py e aguarda o MLflow
   api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: trustshield_api:local
-    container_name: trustshield_api
-    ports: ["8000:8000"]
-    env_file: [../.env]
+    depends_on:
+      mlflow: { condition: service_healthy }
     environment:
-      BACKEND_STORE_URI: ${BACKEND_STORE_URI}
-      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
-      API_HOST: 0.0.0.0
-      API_PORT: 8000
-      DATA_DIR: /app/data
-      OUTPUTS_DIR: /app/outputs
-      CONFIG_FILE: /app/config/config.yaml
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-https://minio:9000}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+    # entrypoint do container lê secrets e espera o MLflow (docker/entrypoint.sh)
+    command:
+      ["/usr/local/bin/entrypoint.sh",
+       "uvicorn","src.api.main:app","--host","0.0.0.0","--port","8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request as u; u.urlopen(\"http://localhost:8000/healthz\"); print(1)'"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+    ports:
+      - "8000:8000"
     volumes:
       - ../data:/app/data:rw
       - ../outputs:/app/outputs:rw
-      - ../mlruns:/app/mlruns:rw
       - ../config:/app/config:ro
-    depends_on:
-      postgres: { condition: service_healthy }
-      minio:    { condition: service_healthy }
-      mlflow:   { condition: service_healthy }
-    healthcheck:
-      # corrigido para /healthz (o seu main expõe este endpoint)
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
+    secrets:
+      - source: minio_root_user
+        target: minio_root_user
+      - source: minio_root_password
+        target: minio_root_password
     restart: unless-stopped
 
+  # Dashboard (Streamlit) — consumindo API e MLflow
   dashboard:
     build:
       context: ..
       dockerfile: docker/dashboard.Dockerfile
-    image: trustshield_dashboard:local
-    container_name: trustshield_dashboard
-    ports: ["8501:8501"]
-    env_file: [../.env]
-    environment:
-      API_URL: ${API_URL:-http://trustshield_api:8000}
-      STREAMLIT_SERVER_PORT: 8501
-      STREAMLIT_SERVER_ADDRESS: 0.0.0.0
-      CONFIG_FILE: /app/config/config.yaml
-    volumes:
-      - ../outputs:/app/outputs:ro
-      - ../config:/app/config:ro
     depends_on:
-      api: { condition: service_healthy }
+      api:    { condition: service_healthy }
+      mlflow: { condition: service_healthy }
+    environment:
+      API_URL: http://api:8000
+      API_BASE_URL: http://api:8000   # compatibilidade
+      MLFLOW_TRACKING_URI: http://mlflow:5000
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8501/_stcore/health"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request as u; u.urlopen(\"http://localhost:8501/_stcore/health\"); print(1)'"]
       interval: 10s
       timeout: 5s
-      retries: 15
-      start_period: 15s
+      retries: 20
+    ports:
+      - "8501:8501"
     restart: unless-stopped
 
 volumes:
   pgdata:
   minio_data:
+
+# Caminhos relativos a ESTE arquivo (pasta docker/)
+secrets:
+  minio_root_user:
+    file: ../secrets/minio_root_user.txt
+  minio_root_password:
+    file: ../secrets/minio_root_password.txt
+  postgres_password:
+    file: ../secrets/postgres_password.txt

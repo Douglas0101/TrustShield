@@ -1,287 +1,258 @@
-# Makefile — TrustShield (motor principal)
-# Orquestra Docker Compose, dados e pipelines de IA
-# Uso: `make help`
+# =========================
+# TrustShield - Makefile (infra + treino/retrain)
+# =========================
+# Uso rápido:
+#   make up                # sobe infra (Postgres/MinIO/MLflow/API/Dashboard) + health
+#   make pipeline          # dataset -> features -> train -> evaluate -> promote
+#   make retrain           # dataset -> features -> optimize -> train -> evaluate -> promote
+#   make train             # apenas treino (não-interativo)
+#   make optimize          # apenas HPO
+#   make evaluate          # avalia modelos recentes
+#   make promote           # promove último isolation_forest_* como default_model.joblib
+#   make nuke CONFIRM=1    # limpeza radical do projeto
+#   make logs-mlflow       # logs de um serviço específico (idem -api, -dashboard, -postgres, -minio)
+#
+# Parâmetros:
+#   make train EXPERIMENT=TrustShield RUN_TAG=manual
+#   make retrain EXPERIMENT=TrustShield HPO_TRIALS=50 RUN_TAG=retrain-2025-08
+#
+# Observação: todos os comandos de ML/ETL rodam DENTRO do serviço "api" via docker compose exec.
 
-SHELL := /bin/bash
-.ONESHELL:
-.EXPORT_ALL_VARIABLES:
+SHELL := /usr/bin/env bash -eo pipefail
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
+# ---------- Projeto / Compose ----------
+PROJECT ?= trustshield
+export COMPOSE_PROJECT_NAME := $(PROJECT)
 COMPOSE_FILE := docker/docker-compose.yml
 COMPOSE      := docker compose -f $(COMPOSE_FILE)
-SERVICES     := postgres minio mlflow api dashboard
 
-API_HEALTH   := http://localhost:8000/healthz
-DASH_HEALTH  := http://localhost:8501/_stcore/health
-MLFLOW_HEALTH:= http://localhost:5000/
+# ---------- Parametrização de Treino ----------
+EXPERIMENT ?= TrustShield
+RUN_TAG    ?= ad-hoc
+HPO_TRIALS ?= 30         # nº padrão de tentativas na otimização
+PY         ?= python
 
-.DEFAULT_GOAL := help
+# ---------- Secrets, portas e helpers ----------
+SECRETS := secrets/minio_root_user.txt secrets/minio_root_password.txt secrets/postgres_password.txt
+PORTS   := 5000 9000 9001 8000 8501
 
-# ---------------------------------------------------------------------------
-# Docker / Compose
-# ---------------------------------------------------------------------------
-up: ensure-dirs verify-secrets init-bucket ## Build e sobe todos os serviços (+build)
-	$(COMPOSE) up -d --build
+define check_file
+	@if [[ ! -s "$(1)" ]]; then echo "❌ Arquivo obrigatório ausente/vazio: $(1)"; exit 1; else echo "✅ OK: $(1)"; fi
+endef
 
-init-bucket: ## (Re)executa job para criar bucket 'mlflow' no MinIO
-	$(COMPOSE) run --rm minio-mc-init
+define check_port
+	@if command -v ss >/dev/null 2>&1; then \
+	  (ss -ltn | grep -qE ":(?:$(1))\b") && echo "⚠️  Porta $(1) em uso" || echo "✅ Porta $(1) livre"; \
+	elif command -v lsof >/dev/null 2>&1; then \
+	  (lsof -i :$(1) -sTCP:LISTEN -P -n >/dev/null 2>&1) && echo "⚠️  Porta $(1) em uso" || echo "✅ Porta $(1) livre"; \
+	else \
+	  echo "ℹ️  Nem ss nem lsof disponíveis; pulando checagem da porta $(1)"; \
+	fi
+endef
 
-build: ## Build das imagens
-	$(COMPOSE) build
+# Espera um endpoint HTTP ficar OK (host)
+define wait_url
+	@bash -lc 'for i in {1..180}; do curl -fsS "$(1)" >/dev/null && exit 0; sleep 1; done; echo "⏳ Timeout: $(1)"; exit 1'
+endef
 
-rebuild: ## Rebuild sem cache + up
-	$(COMPOSE) build --no-cache
-	$(COMPOSE) up -d
+# Executa um comando dentro do contêiner "api"
+define exec_api
+	$(COMPOSE) exec api sh -lc '$(1)'
+endef
 
-ps: ## Status dos serviços
-	$(COMPOSE) ps
+.PHONY: help
+help: ## mostra este help
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9\-_]+:.*##/ {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-logs: ## Logs de api, dashboard, mlflow
-	$(COMPOSE) logs -f api dashboard mlflow
-
-logs-%: ## Logs de um serviço. Ex: make logs-api
-	$(COMPOSE) logs -f $*
-
-restart: ## Reinicia api e dashboard
-	$(COMPOSE) restart api dashboard
-
-shell-%: ## Shell no container (bash/sh). Ex: make shell-api
-	-$(COMPOSE) exec $* bash || $(COMPOSE) exec $* sh
-
-down: ## Para e remove containers (mantém volumes)
-	$(COMPOSE) down
-
-clean: ## Para e remove containers + volumes
-	$(COMPOSE) down -v
-
-prune: ## Limpa imagens/volumes não usados
-	docker system prune -f
-
-orphan-clean: ## Remove órfãos (containers de versões antigas)
-	$(COMPOSE) down --remove-orphans || true
-
-# ---------------------------------------------------------------------------
-# Saúde / Abertura
-# ---------------------------------------------------------------------------
-health: ## Checa API, Dashboard e MLflow
-	@echo "API:"; curl -fsS $(API_HEALTH) && echo || exit 1
-	@echo "Dashboard:"; curl -fsS $(DASH_HEALTH) && echo || curl -fsS http://localhost:8501/ >/dev/null || exit 1
-	@echo "MLflow:"; curl -fsS $(MLFLOW_HEALTH) >/dev/null && echo "OK" || exit 1
-
-open: ## Abre UIs
-	@if command -v xdg-open >/dev/null; then \
-	  xdg-open http://localhost:8501; \
-	  xdg-open http://localhost:8000/docs; \
-	  xdg-open http://localhost:5000; \
+# ---------- Validações ----------
+.PHONY: check-env
+check-env: ## verifica .env (sem variáveis aninhadas) e existência
+	@if [[ ! -f ".env" ]]; then echo "⚠️  .env não encontrado (use .env.example -> .env)"; else echo "✅ .env encontrado"; fi
+	@if [[ -f ".env" ]] && grep -E '\$\{[A-Za-z_][A-Za-z0-9_]*\}' .env >/dev/null; then \
+		echo "❌ Seu .env contém variáveis aninhadas (\$\{VAR\}). Remova-as e deixe valores literais."; exit 1; \
 	fi
 
-wait-api: ## Aguarda API saudável (timeout 120s)
-	@echo "Aguardando API em $(API_HEALTH) ..."; \
-	for i in {1..60}; do \
-	  if curl -fsS $(API_HEALTH) >/dev/null; then echo "API OK"; exit 0; fi; \
-	  sleep 2; \
-	done; echo "Timeout aguardando API"; exit 1
+.PHONY: check-secrets
+check-secrets: ## verifica secrets obrigatórios
+	@for f in $(SECRETS); do \
+	  if [ ! -s "$$f" ]; then echo "❌ Arquivo obrigatório ausente/vazio: $$f"; exit 1; else echo "✅ OK: $$f"; fi; \
+	done
 
-# ---------------------------------------------------------------------------
-# Dev local (sem Docker)
-# ---------------------------------------------------------------------------
-api-local: ## Sobe API local
-	OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMBA_NUM_THREADS=1 \
-	uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+.PHONY: doctor
+doctor:
+	@command -v docker >/dev/null || { echo "❌ Docker não encontrado"; exit 1; }
+	@docker version >/dev/null && echo "✅ Docker OK"
+	@docker compose version >/dev/null && echo "✅ Docker Compose OK"
+	@command -v curl >/dev/null || { echo "❌ curl não encontrado (necessário p/ alguns checks)"; exit 1; }
+	@$(MAKE) check-env
+	@$(MAKE) check-secrets
+	@python - <<'PY'
+	import os, socket
+	ports = [5000, int(os.environ.get("MINIO_PORT_API", "9000")), int(os.environ.get("MINIO_PORT_CONSOLE","9001")), 8000, 8501]
+	def busy(p):
+		s=socket.socket(); s.settimeout(0.25)
+		try: s.connect(("127.0.0.1", p)); s.close(); return True
+		except: return False
+	for p in ports:
+		print(("⚠️  Porta %d em uso" if busy(p) else "✅ Porta %d livre") % p)
+	PY
 
-dash-local: ## Sobe Dashboard local apontando p/ API local
-	OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMBA_NUM_THREADS=1 \
-	API_URL=http://127.0.0.1:8000 \
-	streamlit run src/dashboard/app.py --server.headless=true --server.fileWatcherType=none --server.runOnSave=false --logger.level=error --server.port=8501 --server.address=0.0.0.0
 
-# ---------------------------------------------------------------------------
-# Pipelines (rodam dentro do container da API)
-# ---------------------------------------------------------------------------
-make-features: ## Gera features
-	$(COMPOSE) exec api python -m src.data.make_dataset
+# ---------- Compose ----------
+.PHONY: config
+config: ## mostra o docker compose já resolvido (bom pra diagnosticar variáveis)
+	$(COMPOSE) config
 
-train: ## Treina modelo padrão
-	$(COMPOSE) exec api python -m src.models.train_fraud_model
-
-retrain30: ## Re-treina os 30 modelos otimizados com logging no MLflow
-	$(COMPOSE) exec api python -c "from src.models.optimization import IntelI3Optimizer; IntelI3Optimizer().retrain_all_models_optimized()"
-
-validate: ## Validação / detecção de drift
-	$(COMPOSE) exec api python -c "from src.models.validation import ResilientTrustShieldValidator as V; v=V(); v.run_validation(data_path='data/interim/validation_sample.parquet', model_path='outputs/models/default_model.joblib', reference_data_path='data/features/featured_dataset.parquet', validation_types=['drift_detection']); print('Validation finished')"
-
-# Exemplo de avaliação (ajuste modelos conforme necessário)
-eval: ## Avalia modelos e gera relatório (ajuste lista de modelos)
-	$(COMPOSE) exec api python -m src.models.evaluate_models --data data/features/featured_dataset.parquet --types performance --config config/config.yaml || true
-
-# ---------------------------------------------------------------------------
-# Utilidades
-# ---------------------------------------------------------------------------
-ensure-dirs: ## Cria diretórios de runtime
-	mkdir -p data outputs outputs/validation outputs/interpretations outputs/temp_explanations
-
-verify-secrets: ## Verifica secrets necessários
-	@test -f secrets/minio_root_user.txt || (echo "Falta secrets/minio_root_user.txt" && exit 1)
-	@test -f secrets/minio_root_password.txt || (echo "Falta secrets/minio_root_password.txt" && exit 1)
-	@test -f secrets/postgres_password.txt || (echo "Falta secrets/postgres_password.txt" && exit 1)
-
-# ---------------------------------------------------------------------------
-# Diagnóstico
-# ---------------------------------------------------------------------------
-doctor: ## Diagnóstico do stack (config, saúde e conectividade)
-	@echo "== Compose config (trechos principais) =="; \
-	$(COMPOSE) config | sed -n '1,120p'; \
-	echo; echo "== Serviços =="; $(COMPOSE) ps; \
-	echo; echo "== Saúde =="; \
-	curl -fsS $(MLFLOW_HEALTH) >/dev/null && echo "MLflow OK" || echo "MLflow NOK"; \
-	curl -fsS $(API_HEALTH)     >/dev/null && echo "API OK"    || echo "API NOK"; \
-	curl -fsS $(DASH_HEALTH)    >/dev/null && echo "Dash OK"   || echo "Dash NOK";
-
-# ---------------------------------------------------------------------------
-# Ajuda
-# ---------------------------------------------------------------------------
-help: ## Mostra esta ajuda
-	@grep -E '^[a-zA-Z0-9_.-]+:.*?## ' $(MAKEFILE_LIST) | sed -e 's/:.*## /: /' | sort
-# Makefile — TrustShield (motor principal)
-# Orquestra Docker Compose, dados e pipelines de IA
-# Uso: `make help`
-
-SHELL := /bin/bash
-.ONESHELL:
-.EXPORT_ALL_VARIABLES:
-
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-COMPOSE_FILE := docker/docker-compose.yml
-COMPOSE      := docker compose -f $(COMPOSE_FILE)
-SERVICES     := postgres minio mlflow api dashboard
-
-API_HEALTH   := http://localhost:8000/healthz
-DASH_HEALTH  := http://localhost:8501/_stcore/health
-MLFLOW_HEALTH:= http://localhost:5000/
-
-.DEFAULT_GOAL := help
-
-# ---------------------------------------------------------------------------
-# Docker / Compose
-# ---------------------------------------------------------------------------
-up: ensure-dirs verify-secrets ## Build e sobe todos os serviços
+.PHONY: up
+up: doctor ## sobe tudo com build e valida saúde
 	$(COMPOSE) up -d --build
+	@$(call wait_url,http://localhost:5000/version)
+	@$(call wait_url,http://localhost:8000/healthz)
+	@$(MAKE) health
 
-build: ## Build das imagens
-	$(COMPOSE) build
-
-rebuild: ## Rebuild sem cache + up
-	$(COMPOSE) build --no-cache
+.PHONY: up-no-build
+up-no-build: ## sobe sem rebuild (idempotente)
 	$(COMPOSE) up -d
+	@$(call wait_url,http://localhost:5000/version) || true
+	@$(call wait_url,http://localhost:8000/healthz) || true
 
-ps: ## Status dos serviços
+.PHONY: build
+build: ## (re)build das imagens com pull de bases
+	$(COMPOSE) build --pull
+
+.PHONY: rebuild
+rebuild: ## rebuild completo sem cache
+	$(COMPOSE) build --no-cache --pull
+
+.PHONY: pull
+pull: ## atualiza imagens base
+	$(COMPOSE) pull
+
+.PHONY: restart
+restart: ## reinicia serviços
+	$(COMPOSE) restart
+
+.PHONY: ps
+ps: ## status
 	$(COMPOSE) ps
 
-logs: ## Logs de api, dashboard, mlflow
-	$(COMPOSE) logs -f api dashboard mlflow
+.PHONY: logs
+logs: ## logs de todos os serviços
+	$(COMPOSE) logs -f --tail=200
 
-logs-%: ## Logs de um serviço. Ex: make logs-api
-	$(COMPOSE) logs -f $*
+.PHONY: logs-mlflow logs-api logs-dashboard logs-postgres logs-minio
+logs-mlflow:    ; $(COMPOSE) logs -f --tail=200 mlflow
+logs-api:       ; $(COMPOSE) logs -f --tail=200 api
+logs-dashboard: ; $(COMPOSE) logs -f --tail=200 dashboard
+logs-postgres:  ; $(COMPOSE) logs -f --tail=200 postgres
+logs-minio:     ; $(COMPOSE) logs -f --tail=200 minio
 
-restart: ## Reinicia api e dashboard
-	$(COMPOSE) restart api dashboard
+.PHONY: down
+down: ## derruba (mantém volumes)
+	$(COMPOSE) down --remove-orphans
 
-shell-%: ## Shell no container (bash/sh). Ex: make shell-api
-	-$(COMPOSE) exec $* bash || $(COMPOSE) exec $* sh
+.PHONY: down-v
+down-v: ## derruba e remove volumes
+	$(COMPOSE) down -v --remove-orphans
 
-down: ## Para e remove containers (mantém volumes)
-	$(COMPOSE) down
+# ---------- Limpeza pesada ----------
+.PHONY: prune
+prune: ## remove recursos órfãos globais
+	@echo "⚠️  Isto removerá recursos DORMENTES globalmente."
+	@read -p "Continuar? [y/N] " ans; \
+	[[ $$ans == "y" || $$ans == "Y" ]] || exit 1
+	docker system prune -f
+	docker volume prune -f
+	docker builder prune -f
 
-clean: ## Para e remove containers + volumes
-	$(COMPOSE) down -v
-
-prune: ## Limpa imagens/volumes não usados
+.PHONY: nuke
+nuke: ## limpeza radical do projeto (down -v + volumes/redes/imagens do projeto). use: make nuke CONFIRM=1
+	@if [[ "$(CONFIRM)" != "1" ]]; then \
+		echo "❌ Proteção ativa. Rode: make nuke CONFIRM=1"; exit 1; \
+	fi
+	$(COMPOSE) down -v --remove-orphans || true
+	-docker volume rm -f $(PROJECT)_pgdata $(PROJECT)_minio_data 2>/dev/null || true
+	-docker network rm $(PROJECT)_default 2>/dev/null || true
+	-docker images --filter "label=com.docker.compose.project=$(PROJECT)" -q | xargs -r docker rmi -f
+	@echo "Executando prune final (imagens/containers órfãos)..."
 	docker system prune -f
 
-orphan-clean: ## Remove órfãos (containers de versões antigas)
-	$(COMPOSE) down --remove-orphans || true
+# ---------- Saúde ----------
+.PHONY: health
+health: ## checa endpoints principais (host)
+	@set -e; \
+	curl -fsS http://localhost:5000/version >/dev/null && echo "✅ MLflow OK" || (echo "❌ MLflow falhou" && false); \
+	curl -fsS http://localhost:9000/minio/health/ready >/dev/null && echo "✅ MinIO OK" || (echo "❌ MinIO falhou" && false); \
+	curl -fsS http://localhost:8000/healthz >/dev/null && echo "✅ API OK" || (echo "❌ API falhou" && false); \
+	curl -fsS http://localhost:8501/_stcore/health >/dev/null && echo "✅ Dashboard OK" || (echo "❌ Dashboard falhou" && false)
 
-# ---------------------------------------------------------------------------
-# Saúde / Abertura
-# ---------------------------------------------------------------------------
-health: ## Checa API, Dashboard e MLflow
-	@echo "API:"; curl -fsS $(API_HEALTH) && echo || exit 1
-	@echo "Dashboard:"; curl -fsS $(DASH_HEALTH) && echo || curl -fsS http://localhost:8501/ >/dev/null || exit 1
-	@echo "MLflow:"; curl -fsS $(MLFLOW_HEALTH) >/dev/null && echo "OK" || exit 1
+# ---------- Utilidades ----------
+.PHONY: psql
+psql: ## abre psql no Postgres do compose (usa secret)
+	@$(COMPOSE) exec -e PGPASSWORD="$$(cat secrets/postgres_password.txt 2>/dev/null || echo mlflow)" postgres \
+		sh -lc 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB'
 
-open: ## Abre UIs
-	@if command -v xdg-open >/dev/null; then \
-	  xdg-open http://localhost:8501; \
-	  xdg-open http://localhost:8000/docs; \
-	  xdg-open http://localhost:5000; \
-	fi
+.PHONY: mc
+mc: ## shell do MinIO Client autenticado (mesma rede do compose)
+	@docker run --rm -it \
+		--network $(PROJECT)_default \
+		-e MINIO_ROOT_USER="$$(cat secrets/minio_root_user.txt)" \
+		-e MINIO_ROOT_PASSWORD="$$(cat secrets/minio_root_password.txt)" \
+		minio/mc sh -lc '\
+		  mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && \
+		  echo "✅ mc conectado (alias: local)" && mc alias list && sh'
 
-wait-api: ## Aguarda API saudável (timeout 120s)
-	@echo "Aguardando API em $(API_HEALTH) ..."; \
-	for i in {1..60}; do \
-	  if curl -fsS $(API_HEALTH) >/dev/null; then echo "API OK"; exit 0; fi; \
-	  sleep 2; \
-	done; echo "Timeout aguardando API"; exit 1
+# =======================================================
+#                TREINAMENTO & RETRAINING
+# =======================================================
 
-# ---------------------------------------------------------------------------
-# Dev local (sem Docker)
-# ---------------------------------------------------------------------------
-api-local: ## Sobe API local
-	OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMBA_NUM_THREADS=1 \
-	uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+.PHONY: ensure-up
+ensure-up: ## sobe infra sem rebuild e espera MLflow/API ficarem OK
+	@$(MAKE) up-no-build
+	@$(call wait_url,http://localhost:5000/version) || true
+	@$(call wait_url,http://localhost:8000/healthz) || true
 
-dash-local: ## Sobe Dashboard local apontando p/ API local
-	OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMBA_NUM_THREADS=1 \
-	API_URL=http://127.0.0.1:8000 \
-	streamlit run src/dashboard/app.py --server.headless=true --server.fileWatcherType=none --server.runOnSave=false --logger.level=error --server.port=8501 --server.address=0.0.0.0
+.PHONY: experiment
+experiment: ensure-up ## cria (se necessário) experimento no MLflow com nome $(EXPERIMENT)
+	@$(call exec_api, mlflow experiments create --experiment-name "$(EXPERIMENT)" --artifact-location "s3://$${MLFLOW_S3_BUCKET:-mlflow}/$(EXPERIMENT)" || true)
+	@echo "✅ Experimento pronto: $(EXPERIMENT)"
 
-# ---------------------------------------------------------------------------
-# Pipelines (rodam dentro do container da API)
-# ---------------------------------------------------------------------------
-make-features: ## Gera features
-	$(COMPOSE) exec api python -m src.data.make_dataset
+.PHONY: data
+data: ensure-up ## ingestão/curadoria -> gera data/processed/primary_dataset.parquet
+	@$(call exec_api, $(PY) -m src.data.make_dataset)
 
-train: ## Treina modelo padrão
-	$(COMPOSE) exec api python -m src.models.train_fraud_model
+.PHONY: features
+features: ensure-up ## feature engineering -> gera data/features/featured_dataset.parquet
+	@$(call exec_api, $(PY) -m src.features.build_features)
 
-retrain30: ## Re-treina os 30 modelos otimizados com logging no MLflow
-	$(COMPOSE) exec api python -c "from src.models.optimization import IntelI3Optimizer; IntelI3Optimizer().retrain_all_models_optimized()"
+.PHONY: train
+train: ensure-up experiment ## treino otimizado (sem prompts) via IntelI3Optimizer
+	@$(call exec_api, $(PY) -c "from src.models.train_fraud_model import IntelI3Optimizer; IntelI3Optimizer().retrain_all_models_optimized()")
 
-validate: ## Validação / detecção de drift
-	$(COMPOSE) exec api python -c "from src.models.validation import ResilientTrustShieldValidator as V; v=V(); v.run_validation(data_path='data/interim/validation_sample.parquet', model_path='outputs/models/default_model.joblib', reference_data_path='data/features/featured_dataset.parquet', validation_types=['drift_detection']); print('Validation finished')"
+.PHONY: optimize
+optimize: ensure-up experiment ## HPO (Optuna) sobre featured_dataset.parquet
+	@$(call exec_api, $(PY) -m src.models.optimization --data data/features/featured_dataset.parquet --methods optuna --trials $(HPO_TRIALS))
 
-# Exemplo de avaliação (ajuste modelos conforme necessário)
-eval: ## Avalia modelos e gera relatório (ajuste lista de modelos)
-	$(COMPOSE) exec api python -m src.models.evaluate_models --data data/features/featured_dataset.parquet --types performance --config config/config.yaml || true
+.PHONY: evaluate
+evaluate: ensure-up
+	@$(call exec_api, MODELS=$$(ls -1t outputs/models/isolation_forest_*.joblib 2>/dev/null | head -n 5 || echo outputs/models/default_model.joblib); echo "Avaliando: $$MODELS"; $(PY) -m src.models.evaluate_models --data data/features/featured_dataset.parquet --models $$MODELS)
 
-# ---------------------------------------------------------------------------
-# Utilidades
-# ---------------------------------------------------------------------------
-ensure-dirs: ## Cria diretórios de runtime
-	mkdir -p data outputs outputs/validation outputs/interpretations outputs/temp_explanations
+.PHONY: promote stage
+promote stage: ensure-up ## último isolation_forest_* → default_model.joblib (consumido pela API)
+	@$(call exec_api, set -e; cd /app/outputs/models; LATEST=$$(ls -1t isolation_forest_*.joblib 2>/dev/null | head -n1); if [ -z "$$LATEST" ]; then echo "❌ Nenhum modelo isolation_forest_* encontrado"; exit 1; fi; cp "$$LATEST" default_model.joblib; echo "✅ Promovido: $$LATEST -> default_model.joblib")
 
-verify-secrets: ## Verifica secrets necessários
-	@test -f secrets/minio_root_user.txt || (echo "Falta secrets/minio_root_user.txt" && exit 1)
-	@test -f secrets/minio_root_password.txt || (echo "Falta secrets/minio_root_password.txt" && exit 1)
-	@test -f secrets/postgres_password.txt || (echo "Falta secrets/postgres_password.txt" && exit 1)
+.PHONY: pipeline
+pipeline: data features train evaluate stage ## E2E: dados → features → treino → avaliação → promoção
+	@echo "✅ Pipeline concluído (experimento: $(EXPERIMENT), tag: $(RUN_TAG))"
 
-# ---------------------------------------------------------------------------
-# Diagnóstico
-# ---------------------------------------------------------------------------
-doctor: ## Diagnóstico do stack (config, saúde e conectividade)
-	@echo "== Compose config (trechos principais) =="; \
-	$(COMPOSE) config | sed -n '1,120p'; \
-	echo; echo "== Serviços =="; $(COMPOSE) ps; \
-	echo; echo "== Saúde =="; \
-	curl -fsS $(MLFLOW_HEALTH) >/dev/null && echo "MLflow OK" || echo "MLflow NOK"; \
-	curl -fsS $(API_HEALTH)     >/dev/null && echo "API OK"    || echo "API NOK"; \
-	curl -fsS $(DASH_HEALTH)    >/dev/null && echo "Dash OK"   || echo "Dash NOK";
+.PHONY: retrain
+retrain: data features optimize train evaluate stage ## retraining com HPO + promoção
+	@echo "✅ Retraining concluído (exp: $(EXPERIMENT), trials: $(HPO_TRIALS), tag: $(RUN_TAG))"
 
-# ---------------------------------------------------------------------------
-# Ajuda
-# ---------------------------------------------------------------------------
-help: ## Mostra esta ajuda
-	@grep -E '^[a-zA-Z0-9_.-]+:.*?## ' $(MAKEFILE_LIST) | sed -e 's/:.*## /: /' | sort
+# ---------- Testes ----------
+.PHONY: test
+test: ## roda a suíte de testes (pytest) no host
+	pytest -q
+
+# target default
+.DEFAULT_GOAL := help

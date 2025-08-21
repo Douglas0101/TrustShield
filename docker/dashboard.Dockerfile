@@ -1,16 +1,18 @@
-FROM python:3.10-slim-bookworm
+# syntax=docker/dockerfile:1.7
+FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl && \
-    rm -rf /var/lib/apt/lists/*
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Dependências — ajuste se seu requirements cobre streamlit
+COPY requirements.txt .
+RUN pip install --upgrade pip && pip install -r requirements.txt streamlit>=1.35
 
-COPY src/dashboard ./src/dashboard
-COPY config ./config
+COPY src/dashboard/ src/dashboard/
+COPY src/utils/ src/utils/
+COPY config/ config/
 
 EXPOSE 8501
-CMD ["bash", "-lc", "streamlit run src/dashboard/app.py --server.port ${STREAMLIT_SERVER_PORT:-8501} --server.address ${STREAMLIT_SERVER_ADDRESS:-0.0.0.0}"]
+CMD ["streamlit","run","src/dashboard/app.py","--server.address=0.0.0.0","--server.port=8501"]
