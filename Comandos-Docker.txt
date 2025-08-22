@@ -1,67 +1,130 @@
-1) Preparação & diagnóstico
+# ==============================================================================
+# TrustShield — Guia Rápido de Comandos (Makefile + Docker)
+# ==============================================================================
+# Este guia espelha os alvos do Makefile e a arquitetura de containers do projeto.
+# Use SEMPRE os alvos do `make` — eles encapsulam Docker/Compose, variáveis,
+# parâmetros e boas práticas (rede, volumes, secrets e ordem de boot).
+#
+# Orquestração padrão (do zero à execução):
+#   1) make up
+#   2) make pipeline          # dados -> features -> treino -> avaliação -> promoção
+#   3) make retrain           # idem + HPO
+#   4) make down
+#
+# Portas e serviços (referência):
+#   • API (FastAPI) ......... 8000   | /healthz, /status, /predict
+#   • Dashboard (Streamlit).. 8501
+#   • MLflow Server ......... 5000
+#   • Postgres .............. 5432
+#   • MinIO S3 .............. 9000 (API) / 9001 (Console)
+# ==============================================================================
 
-make check-env        # .env presente e sem variáveis aninhadas
-make check-secrets    # confere secrets/ obrigatórios
-make doctor           # checagem completa: Docker/Compose/curl/.env/secrets/portas
-make config           # imprime o docker compose já resolvido
 
-2) Limpeza (leve → radical)
-
-make down             # derruba a stack (mantém volumes)
-make down-v           # derruba e remove volumes do projeto
-make prune            # remove recursos órfãos globais (confirma no prompt)
-make nuke CONFIRM=1   # ⚠️ limpeza radical do projeto (volumes/redes/imagens do compose)
-
-3) Subida da infraestrutura
-
-make build            # (re)build das imagens com pull de bases
-make up               # sobe tudo com build + healthchecks
-# ou:
-make up-no-build      # sobe sem rebuild (idempotente)
-make ps               # status dos serviços
-make health           # checa MLflow / MinIO / API / Dashboard
-
-4) Observabilidade & logs
-
-make logs             # tail de todos os serviços
-make logs-mlflow      # logs do MLflow
-make logs-api         # logs da API
-make logs-minio       # logs do MinIO
-make logs-dashboard   # logs do Dashboard
-
-5) Pipeline de dados e treino (alvos unitários)
-
-make data             # ingestão/curadoria -> data/processed/primary_dataset.parquet
-make features         # feature engineering -> data/features/featured_dataset.parquet
-make experiment EXPERIMENT=TrustShield
-make train    EXPERIMENT=TrustShield RUN_TAG=manual
-make evaluate         # avalia últimos modelos (ou default_model)
-make promote          # promove último isolation_forest_* -> default_model.joblib
-
-6) Pipeline E2E (recomendado)
-make pipeline EXPERIMENT=TrustShield RUN_TAG=setup
-# Executa: data -> features -> train -> evaluate -> promote
-
-7) Retreinamento com HPO
-make optimize  EXPERIMENT=TrustShield HPO_TRIALS=60
-make retrain   EXPERIMENT=TrustShield RUN_TAG=retrain-2025-08 HPO_TRIALS=60
-# Executa: data -> features -> optimize -> train -> evaluate -> promote
-
-8) Utilitários
-make psql      # abre psql no contêiner do Postgres (usa secret de senha)
-make mc        # abre um shell do MinIO Client já autenticado (alias: local)
-make restart   # reinicia serviços
-make pull      # atualiza imagens base do compose
-make test      # roda pytest no host
-
-9) Encerramento
-make down      # derruba os serviços (mantém volumes)
-# ou, para encerrar e limpar volumes do projeto:
-make down-v
-
-Sequência sugerida (do zero ao modelo publicado)
-make nuke CONFIRM=1
+# ==============================================================================
+# 1) INFRAESTRUTURA (Subir, parar, status)
+# ------------------------------------------------------------------------------
+# Sobe toda a stack (rede, volumes, secrets, ordem correta de boot).
 make up
-make pipeline EXPERIMENT=TrustShield RUN_TAG=initial
-make health
-make logs-mlflow
+
+# Para e remove os contêineres/recursos do projeto (mantém imagens).
+make down
+
+# Lista contêineres do projeto e seus estados.
+make ps
+
+# Reinicia rapidamente toda a stack (útil após ajustes pontuais).
+make restart
+
+# Segue logs de um serviço específico (parametrize com 'service=').
+# Exemplos:
+#   make logs service=api
+#   make logs service=mlflow
+#   make logs service=postgres
+make logs service=<api|mlflow|postgres|minio|dashboard>
+
+
+# ==============================================================================
+# 2) PIPELINES COMPLETOS (Ponta a ponta)
+# ------------------------------------------------------------------------------
+# Pipeline de produção padrão: data -> features -> train -> evaluate -> promote
+make pipeline
+
+# Retreinamento com otimização de hiperparâmetros (Optuna).
+# Parâmetros:
+#   hpo_trials=N   (padrão definido no config; ex.: make retrain hpo_trials=50)
+make retrain [hpo_trials=50]
+
+
+# ==============================================================================
+# 3) ETAPAS INDIVIDUAIS (Execução granular)
+# ------------------------------------------------------------------------------
+# Gera o dataset primário (data/processed/primary_dataset.parquet).
+make data
+
+# Engenharia de features (data/features/featured_dataset.parquet).
+make features
+
+# Treina um novo modelo com parâmetros padrão.
+# Dicas:
+#   • Parametrizável: make train experiment="Exp01" tag="ajuste-X"
+make train [experiment=Nome] [tag=rótulo]
+
+# Otimização de hiperparâmetros (Optuna).
+# Dicas:
+#   • Altere número de trials: make optimize hpo_trials=100
+make optimize [hpo_trials=100]
+
+# Avalia os modelos mais recentes e gera comparativos.
+make evaluate
+
+# Promove o último artefato válido para produção (outputs/models/default_model.joblib).
+make promote
+
+
+# ==============================================================================
+# 4) OPERAÇÃO & OBSERVABILIDADE (API/Dashboard/MLflow)
+# ------------------------------------------------------------------------------
+# Testes rápidos de saúde da API (em outra shell):
+#   curl -s http://127.0.0.1:8000/healthz
+#   curl -s http://127.0.0.1:8000/status | jq .
+#
+# Predição de amostra:
+#   curl -s -X POST http://127.0.0.1:8000/predict \
+#     -H "Content-Type: application/json" \
+#     -d '{"amount":250,"use_chip":"Chip","current_age":40,"retirement_age":65,
+#          "birth_year":1984,"gender":"M","latitude":34.05,"longitude":-118.25,
+#          "yearly_income":75000,"total_debt":15000,"credit_score":720,
+#          "num_credit_cards":4,"transaction_hour":15,"day_of_week":3,
+#          "is_weekend":false,"is_night_transaction":false,"amount_vs_avg":2.5}'
+#
+# MLflow UI:
+#   Acesse em http://127.0.0.1:5000  (tracking/artefatos pela stack)
+#
+# Dashboard:
+#   Acesse em http://127.0.0.1:8501
+
+
+# ==============================================================================
+# 5) LIMPEZA & RECUPERAÇÃO (Cautela)
+# ------------------------------------------------------------------------------
+# Limpeza RADICAL (containers, volumes, redes e imagens do projeto).
+# Pede confirmação interativa. Use apenas se necessário.
+make nuke
+
+
+# ==============================================================================
+# 6) PARÂMETROS E DICAS
+# ------------------------------------------------------------------------------
+# • Muitos alvos aceitam parâmetros:
+#     make logs service=api
+#     make retrain hpo_trials=50
+#     make train experiment="Exp01" tag="teste-A"
+#
+# • Secrets estão em ./secrets e são injetados pela stack (MinIO, Postgres, etc).
+# • O `requirements.txt` fixa versões compatíveis (Python 3.11), e o Makefile já
+#   cuida de build e cache de dependências dentro dos contêineres.
+# • Em caso de alteração nos Dockerfiles/docker-compose, reconstrua imagens:
+#     docker compose build --no-cache    # se precisar forçar rebuild
+#   (Normalmente desnecessário: o `make up` já cuida disso quando detecta mudanças)
+#
+# Fim do arquivo.

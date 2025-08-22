@@ -1,18 +1,11 @@
-# syntax=docker/dockerfile:1.7
-FROM python:3.11-slim
-
-ENV PIP_NO_CACHE_DIR=1 \
-    PYTHONUNBUFFERED=1
+# docker/dashboard.Dockerfile
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip \
+ && pip install -r /app/requirements.txt
 
-# Dependências — ajuste se seu requirements cobre streamlit
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt streamlit>=1.35
-
-COPY src/dashboard/ src/dashboard/
-COPY src/utils/ src/utils/
-COPY config/ config/
-
+COPY . /app
 EXPOSE 8501
-CMD ["streamlit","run","src/dashboard/app.py","--server.address=0.0.0.0","--server.port=8501"]
+CMD ["streamlit", "run", "src/dashboard/app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
