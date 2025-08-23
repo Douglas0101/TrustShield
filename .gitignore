@@ -118,3 +118,6 @@ Saidas-Algoritmo/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# MLflow tracking data
+mlruns/
