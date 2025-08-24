@@ -121,3 +121,10 @@ Thumbs.db
 
 # MLflow tracking data
 mlruns/
+
+# hardened
+secrets/
+mlruns/
+outputs/
+data/
+cache/
