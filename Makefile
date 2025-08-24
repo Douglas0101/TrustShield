@@ -16,7 +16,7 @@ SHELL := /bin/bash
 # ------------- Projeto / caminhos -------------
 PROJECT_NAME := trustshield
 COMPOSE_FILE := docker/docker-compose.yml
-DC := docker compose -f $(COMPOSE_FILE)
+DC := docker compose -p $(PROJECT_NAME) -f $(COMPOSE_FILE)
 
 PYTHON ?= python3
 PIP    ?= pip
@@ -91,8 +91,8 @@ up: ## Sobe a stack (build + up -d) e aguarda MLflow/API
 	$(call _wait_http,"http://127.0.0.1:5000","MLflow")
 	$(call _wait_http,"http://127.0.0.1:8000/healthz","API")
 
-down: ## Derruba a stack completa (containers, mas preserva volumes)
-	$(DC) down
+down: ## Derruba a stack completa (containers, volumes e órfãos)
+	$(DC) down --volumes --remove-orphans
 
 ps: ## Lista serviços da stack
 	$(DC) ps
@@ -258,6 +258,10 @@ nuke: ## ⚠️ Remove TUDO do projeto no Docker (containers, volumes, imagens)
 	@read -p "Confirma limpeza radical? (y/N) " ans; \
 	if [[ "$$ans" == "y" || "$$ans" == "Y" ]]; then \
 	  $(DC) down -v --rmi local --remove-orphans; \
+	  docker builder prune -a -f; \
+	  docker system prune -f; \
+	  docker network prune -f; \
+	  docker network rm trustshield trustshield_default docker_trustshield-net 2>/dev/null || true; \
 	  echo -e "$(YELLOW)[CUIDADO] Volumes/imagens removidos$(NC)"; \
 	else \
 	  echo "Cancelado."; \

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -xeuo pipefail
+echo "Starting entrypoint.sh"
 
 # Secrets -> env (se ainda não vieram)
 if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -f /run/secrets/minio_root_user ]; then
@@ -29,4 +30,5 @@ PY
 : "${MLFLOW_TRACKING_URI:=http://mlflow:5000}"
 wait_http_py "${MLFLOW_TRACKING_URI}/version" 180
 
+echo "Executing command: $@"
 exec "$@"

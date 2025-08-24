@@ -5,10 +5,10 @@
 # Observação: se instalar fora do Docker, mantenha Python 3.11 para máxima compatibilidade.
 
 # --- CORE DE CIÊNCIA DE DADOS E ML ---
-numpy==1.26.4
-pandas==2.2.2
-scikit-learn==1.4.2
-scipy==1.11.4
+numpy
+pandas>=2.2.3,<3.0
+scikit-learn
+scipy
 joblib==1.4.2
 
 # --- MLOPS: EXPERIMENTAÇÃO E OTIMIZAÇÃO ---
