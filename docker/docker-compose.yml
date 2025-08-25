@@ -74,11 +74,10 @@ services:
     image: quay.io/minio/minio:RELEASE.2024-05-28T17-19-04Z
     container_name: ts-minio
     networks: [trustshield]
-    command: >
-      /bin/sh -lc '
-      export MINIO_ROOT_USER=$$(cat /run/secrets/minio_root_user);
-      export MINIO_ROOT_PASSWORD=$$(cat /run/secrets/minio_root_password);
-      exec minio server /data --console-address ":9001" '
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    command: server /data --console-address ":9001"
     ports:
       - "9002:9000"
       - "9003:9001"
