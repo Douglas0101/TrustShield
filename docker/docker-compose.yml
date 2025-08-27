@@ -1,207 +1,128 @@
-# ============================================================================
-# TrustShield — docker-compose (otimizado e robusto)
-# ----------------------------------------------------------------------------
-# Principais melhorias:
-# - Nome do projeto e rede fixos (trustshield)
-# - Uso consistente de secrets para senhas/creds
-# - mlflow com backend Postgres + artefatos no MinIO (via secrets)
-# - api aguarda mlflow (via entrypoint.sh) e tem healthcheck
-# - logging com rotação (json-file)
-# - init job de MinIO resiliente (loop até estar pronto) + bucket 'mlflow'
-# ============================================================================
-
-name: trustshield
-
-x-logging: &default-logging
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
-
-x-common-env: &common_env
-  # Endpoint do S3/MinIO para SDKs/clients (mlflow client, boto3, etc.)
-  MLFLOW_S3_ENDPOINT_URL: http://minio:9000
-  # Bucket padrão para artefatos do MLflow
-  MLFLOW_ARTIFACT_BUCKET: mlflow
-
-networks:
-  trustshield:
-    name: trustshield
-    driver: bridge
-    attachable: true
-
-volumes:
-  postgres_data:
-  minio_data:
-
-secrets:
-  postgres_password:
-    file: ../secrets/postgres_password.txt
-  minio_root_user:
-    file: ../secrets/minio_root_user.txt
-  minio_root_password:
-    file: ../secrets/minio_root_password.txt
-
 services:
-  # --------------------------------------------------------------------------
-  # Banco de dados: Postgres para metadados do MLflow
-  # --------------------------------------------------------------------------
-  postgres:
-    image: postgres:16-alpine
-    container_name: ts-postgres
-    networks: [trustshield]
-    environment:
-      POSTGRES_DB: mlflow
-      POSTGRES_USER: mlflow
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets:
-      - postgres_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h localhost || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 5s
-    restart: unless-stopped
-    logging: *default-logging
-
-  # --------------------------------------------------------------------------
-  # MinIO: armazenamento de artefatos (S3-compatible)
-  # --------------------------------------------------------------------------
+  # ---------- Armazenamento de artefatos (S3 compatível) ----------
   minio:
-    image: quay.io/minio/minio:RELEASE.2024-05-28T17-19-04Z
-    container_name: ts-minio
-    networks: [trustshield]
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
     environment:
-      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
-      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
-    command: server /data --console-address ":9001"
-    ports:
-      - "9002:9000"
-      - "9003:9001"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
-      - minio_data:/data
-    secrets:
-      - minio_root_user
-      - minio_root_password
+      - minio-data:/data
+    # defaults evitam conflito; pode sobrescrever via env MINIO_HOST_PORT/MINIO_CONSOLE_HOST_PORT
+    ports:
+      - "${MINIO_HOST_PORT:-9900}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-9901}:9001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
-    logging: *default-logging
+    networks: [trustshield-net]
 
-  # --------------------------------------------------------------------------
-  # Job de init do MinIO: cria bucket 'mlflow' e aplica política
-  # --------------------------------------------------------------------------
+  # cria o bucket 'mlflow' no MinIO (roda uma vez e encerra)
   minio-init:
-    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
-    container_name: ts-minio-init
-    networks: [trustshield]
+    image: minio/mc:latest
     depends_on:
       minio:
-        condition: service_started
-    secrets:
-      - minio_root_user
-      - minio_root_password
-    entrypoint: ["/bin/sh","-lc"]
-    command: >
-      set -e;
-      echo "Aguardando MinIO...";
-      until (mc alias set local http://minio:9000 $$(cat /run/secrets/minio_root_user) $$(cat /run/secrets/minio_root_password)); do
-        sleep 2;
-      done;
-      mc mb -p local/mlflow || true;
-      # política privada (padrão); altere se desejar acesso público
-      mc anonymous set none local/mlflow || true;
-      echo "MinIO pronto e bucket 'mlflow' preparado."
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        set -x
+        mc alias set minio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin}
+        mc ls minio/mlflow || mc mb minio/mlflow
+        echo "Bucket 'mlflow' pronto."
+    networks: [trustshield-net]
+    restart: "no"
 
-  # --------------------------------------------------------------------------
-  # MLflow Tracking Server
-  # --------------------------------------------------------------------------
+  # ---------- MLflow Tracking Server ----------
   mlflow:
-    build:
-      context: ..
-      dockerfile: docker/mlflow.Dockerfile
-    image: trustshield-mlflow:latest
-    container_name: ts-mlflow
-    networks: [trustshield]
+    image: ghcr.io/mlflow/mlflow:v3.3.1
+    command:
+      [
+        "mlflow","server",
+        "--host","0.0.0.0",
+        "--port","5000",
+        "--backend-store-uri","sqlite:////mlflow/mlflow.db",
+        "--serve-artifacts",
+        "--artifacts-destination","s3://mlflow"
+      ]
     environment:
-      <<: *common_env
+      MLFLOW_EXPOSE_PROMETHEUS: "true"
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-http://minio:9000}
+    volumes:
+      - mlflow-data:/mlflow
+    # publicar a UI no host em porta que não conflite
+    ports:
+      - "${MLFLOW_HOST_PORT:-5500}:5000"
     depends_on:
-      postgres:
+      minio:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
-    secrets:
-      - minio_root_user
-      - minio_root_password
-      - postgres_password
-    entrypoint: ["/bin/sh","-lc"]
-    command: >
-      export AWS_ACCESS_KEY_ID=$$(cat /run/secrets/minio_root_user);
-      export AWS_SECRET_ACCESS_KEY=$$(cat /run/secrets/minio_root_password);
-      exec mlflow server
-        --backend-store-uri postgresql+psycopg2://mlflow:$$(cat /run/secrets/postgres_password)@postgres:5432/mlflow
-        --artifacts-destination s3://$${MLFLOW_ARTIFACT_BUCKET}
-        --host 0.0.0.0 --port 5000
-    ports:
-      - "5001:5000"
     restart: unless-stopped
-    logging: *default-logging
+    networks: [trustshield-net]
 
-  # --------------------------------------------------------------------------
-  # API (FastAPI/Uvicorn). Aguarda MLflow via entrypoint.sh
-  # --------------------------------------------------------------------------
-  api:
+  # ---------- API (FastAPI) ----------
+  trustshield-api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: trustshield-api:latest
-    container_name: ts-api
-    networks: [trustshield]
+    command: ["uvicorn","src.api.main:app","--host","0.0.0.0","--port","8000","--workers","1"]
     environment:
-      <<: *common_env
-      # API lê MLFLOW_TRACKING_URI e entrypoint.sh espera /version ficar OK
-      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_PATH: ${MODEL_PATH:-outputs/models/default_model.joblib}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-http://minio:9000}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # RW para salvar .joblib durante treino (os demais são RO)
+      - ../outputs:/app/outputs
+      - ../config:/app/config:ro
+      - ../data:/app/data:ro
+      - ../secrets:/app/secrets:ro
+    ports:
+      - "8080:8000"
+    healthcheck:
+      test: ["CMD-SHELL","curl -fsS http://localhost:8000/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    networks: [trustshield-net]
     depends_on:
       mlflow:
         condition: service_started
-    entrypoint: ["/bin/bash","/app/docker/entrypoint.sh"]
-    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
-    ports:
-      - "8001:8000"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthz > /dev/null || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-      start_period: 10s
-    restart: unless-stopped
-    logging: *default-logging
 
-  # --------------------------------------------------------------------------
-  # Dashboard (Streamlit)
-  # --------------------------------------------------------------------------
-  dashboard:
+  # ---------- Dashboard (Streamlit) ----------
+  trustshield-dashboard:
     build:
       context: ..
       dockerfile: docker/dashboard.Dockerfile
-    image: trustshield-dashboard:latest
-    container_name: ts-dashboard
-    networks: [trustshield]
-    depends_on:
-      api:
-        condition: service_healthy
     environment:
-      <<: *common_env
-      API_URL: http://api:8000
-    command: >
-      streamlit run src/dashboard/app.py
-      --server.headless=true
-      --server.port=8501
-      --server.fileWatcherType=none
-      --server.runOnSave=false
-      --browser.gatherUsageStats=false
+      # sempre use o NOME DO SERVIÇO na rede
+      API_URL: ${API_URL:-http://trustshield-api:8000}
+      STREAMLIT_SERVER_PORT: "8501"
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
     ports:
       - "8501:8501"
+    depends_on:
+      trustshield-api:
+        condition: service_healthy
     restart: unless-stopped
-    logging: *default-logging
+    networks: [trustshield-net]
+
+networks:
+  trustshield-net:
+    driver: bridge
+
+volumes:
+  mlflow-data:
+  minio-data:

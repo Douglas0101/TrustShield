@@ -22,6 +22,7 @@ import os
 import sys
 import time
 import warnings
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
 from enum import Enum
@@ -313,6 +314,7 @@ class MLflowObserver(APIObserver):
 # =============================================================================
 # App state & lifecycle
 # =============================================================================
+
 class AppState(State):
     predictor: Optional[TrustShieldPredictor]
     config: Dict[str, Any]
@@ -320,6 +322,28 @@ class AppState(State):
     monitor: ResourceMonitor
     subject: Subject
     model_path: Path
+    model_loading_task: Optional[asyncio.Task] = None
+
+
+async def load_model_in_background(app: FastAPI):
+    """Carrega o modelo em uma tarefa de fundo para não bloquear a inicialização."""
+    app_state: AppState = app.state
+    try:
+        project_root = Path(__file__).resolve().parents[2]
+        model_path_str = app_state.config.get("api", {}).get("model_path", "outputs/models/default_model.joblib")
+        model_path = project_root / model_path_str if not Path(model_path_str).is_absolute() else Path(model_path_str)
+        app_state.model_path = model_path
+
+        # A inicialização do TrustShieldPredictor é bloqueante, então a executamos em um thread
+        predictor = await asyncio.to_thread(TrustShieldPredictor, model_path=str(model_path))
+        
+        app_state.predictor = predictor
+        app_state.subject.notify(APIEvent.MODEL_LOADED, {
+            "model_type": app_state.predictor.model_type.value if getattr(app_state.predictor, 'model_type', None) else "unknown"
+        })
+    except Exception as e:
+        app_state.logger.log(logging.ERROR, f"Falha crítica ao carregar o modelo em background: {e}")
+        app_state.predictor = None
 
 
 @asynccontextmanager
@@ -335,6 +359,7 @@ async def lifespan(app: FastAPI):
     app.state.logger = AdvancedLogger("TrustShield-API")
     app.state.monitor = ResourceMonitor(app.state.logger)
     app.state.subject = Subject()
+    app.state.predictor = None # Inicia como None
 
     # Observers
     app.state.subject.attach(ConsoleLogObserver(app.state.logger))
@@ -343,22 +368,14 @@ async def lifespan(app: FastAPI):
 
     app.state.subject.notify(APIEvent.STARTUP, {})
 
-    # Modelo
-    try:
-        model_path_str = app.state.config.get("api", {}).get("model_path", "outputs/models/default_model.joblib")
-        model_path = project_root / model_path_str if not Path(model_path_str).is_absolute() else Path(model_path_str)
-        app.state.model_path = model_path
-        app.state.predictor = TrustShieldPredictor(model_path=str(model_path))
-        app.state.subject.notify(APIEvent.MODEL_LOADED, {
-            "model_type": app.state.predictor.model_type.value if getattr(app.state.predictor, 'model_type', None) else "unknown"
-        })
-    except Exception as e:
-        app.state.logger.log(logging.ERROR, f"Falha ao carregar o modelo: {e}")
-        app.state.predictor = None
+    # Inicia o carregamento do modelo em background
+    app.state.model_loading_task = asyncio.create_task(load_model_in_background(app))
 
     try:
         yield
     finally:
+        if app.state.model_loading_task:
+            app.state.model_loading_task.cancel()
         app.state.subject.notify(APIEvent.SHUTDOWN, {})
 
 

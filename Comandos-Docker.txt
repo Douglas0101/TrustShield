@@ -1,130 +1,204 @@
 # ==============================================================================
-# TrustShield — Guia Rápido de Comandos (Makefile + Docker)
-# ==============================================================================
-# Este guia espelha os alvos do Makefile e a arquitetura de containers do projeto.
-# Use SEMPRE os alvos do `make` — eles encapsulam Docker/Compose, variáveis,
-# parâmetros e boas práticas (rede, volumes, secrets e ordem de boot).
-#
-# Orquestração padrão (do zero à execução):
-#   1) make up
-#   2) make pipeline          # dados -> features -> treino -> avaliação -> promoção
-#   3) make retrain           # idem + HPO
-#   4) make down
-#
-# Portas e serviços (referência):
-#   • API (FastAPI) ......... 8000   | /healthz, /status, /predict
-#   • Dashboard (Streamlit).. 8501
-#   • MLflow Server ......... 5000
-#   • Postgres .............. 5432
-#   • MinIO S3 .............. 9000 (API) / 9001 (Console)
+# TrustShield — Sequência Básica com DOCKER COMPOSE (sem Make)
+# limpeza → dados → features → treino → avaliação → otimização → promoção → validação
 # ==============================================================================
 
+# Observações importantes:
+# - MinIO no host: porta padrão agora é 9900 (console 9901).
+#   Se quiser outras portas, exporte:
+#     export MINIO_HOST_PORT=9900
+#     export MINIO_CONSOLE_HOST_PORT=9901
+# - MLflow UI no host: porta padrão agora é 5500 (container continua 5000).
+#   Para customizar:
+#     export MLFLOW_HOST_PORT=5500
+# - Todos os comandos assumem que você está na RAIZ do projeto.
+# - O docker-compose já cria o bucket S3 "mlflow" via serviço minio-init.
 
 # ==============================================================================
-# 1) INFRAESTRUTURA (Subir, parar, status)
+# 0) VALIDAÇÃO DO COMPOSE EFETIVO (opcional, mas recomendado)
 # ------------------------------------------------------------------------------
-# Sobe toda a stack (rede, volumes, secrets, ordem correta de boot).
-make up
-
-# Para e remove os contêineres/recursos do projeto (mantém imagens).
-make down
-
-# Lista contêineres do projeto e seus estados.
-make ps
-
-# Reinicia rapidamente toda a stack (útil após ajustes pontuais).
-make restart
-
-# Segue logs de um serviço específico (parametrize com 'service=').
-# Exemplos:
-#   make logs service=api
-#   make logs service=mlflow
-#   make logs service=postgres
-make logs service=<api|mlflow|postgres|minio|dashboard>
-
+docker compose -p trustshield -f docker/docker-compose.yml config >/dev/null && echo "Compose OK"
 
 # ==============================================================================
-# 2) PIPELINES COMPLETOS (Ponta a ponta)
+# 1) LIMPEZA / RESET DA STACK
 # ------------------------------------------------------------------------------
-# Pipeline de produção padrão: data -> features -> train -> evaluate -> promote
-make pipeline
+DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 \
+docker compose -p trustshield -f docker/docker-compose.yml down --remove-orphans
 
-# Retreinamento com otimização de hiperparâmetros (Optuna).
-# Parâmetros:
-#   hpo_trials=N   (padrão definido no config; ex.: make retrain hpo_trials=50)
-make retrain [hpo_trials=50]
-
+# (Opcional) Limpeza mais pesada de recursos “sobrando” no host (cuidado!)
+# docker system prune -af --volumes
 
 # ==============================================================================
-# 3) ETAPAS INDIVIDUAIS (Execução granular)
+# 2) SUBIR A STACK (build + up) — COM PORTAS PARAMETRIZADAS
 # ------------------------------------------------------------------------------
-# Gera o dataset primário (data/processed/primary_dataset.parquet).
+# Subida padrão (MinIO: 9900/9901; MLflow UI: 5500)
+DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 \
+docker compose -p trustshield -f docker/docker-compose.yml up -d --build
+
+# Se quiser forçar outras portas no host:
+# MINIO_HOST_PORT=9800 MINIO_CONSOLE_HOST_PORT=9801 MLFLOW_HOST_PORT=5600 \
+# DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 \
+# docker compose -p trustshield -f docker/docker-compose.yml up -d --build
+
+# Garantir que a imagem do MLflow está atualizada (3.x):
+docker compose -p trustshield -f docker/docker-compose.yml pull mlflow
+
+# Verifique o status:
+docker compose -p trustshield -f docker/docker-compose.yml ps
+docker compose -p trustshield -f docker/docker-compose.yml logs -f trustshield-api
+
+# ==============================================================================
+# 3) AGUARDAR “HEALTHY” DA API E TESTAR /healthz
+# ------------------------------------------------------------------------------
+CID=$(docker compose -p trustshield -f docker/docker-compose.yml ps -q trustshield-api)
+for i in $(seq 1 60); do
+  STATUS=$(docker inspect -f '{{.State.Health.Status}}' "$CID" 2>/dev/null || echo "unknown")
+  echo "tentativa $i: $STATUS"
+  [ "$STATUS" = "healthy" ] && break
+  sleep 2
+done
+[ "$STATUS" = "healthy" ] || { echo "ERRO: API não ficou healthy a tempo."; exit 1; }
+curl -fsS http://127.0.0.1:8000/healthz && echo " - /healthz OK"
+
+# ==============================================================================
+# 4) PIPELINE DE DADOS E FEATURES (rodando dentro do container da API)
+# ------------------------------------------------------------------------------
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api \
+  python -m src.data.make_dataset
+
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api \
+  python -m src.features.build_features
+
+# ==============================================================================
+# 5) TREINO, AVALIAÇÃO, OTIMIZAÇÃO (gera *_optimized_*.joblib)
+# ------------------------------------------------------------------------------
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api \
+  python -m src.models.train_fraud_model
+
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api \
+  python -m src.models.evaluate_models
+
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api \
+  python -m src.models.optimization
+
+# (Opcional) Validação e interpretabilidade
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api \
+  python -m src.models.validation
+
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api \
+  python -m src.models.interpretation
+
+# ==============================================================================
+# 6) PROMOVER O MELHOR MODELO PARA default_model.joblib (SEM HEREDOC)
+# ------------------------------------------------------------------------------
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api \
+  python -c "from pathlib import Path; import shutil; p=Path('outputs/models'); \
+c=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); \
+print('Nenhum modelo otimizado encontrado.') if not c else (shutil.copy2(c[0], p/'default_model.joblib') or print(f'Promovido: {c[0].name}'))"
+
+# ==============================================================================
+# 7) REINICIAR A API E VALIDAR READINESS (/status)
+# ------------------------------------------------------------------------------
+docker compose -p trustshield -f docker/docker-compose.yml restart trustshield-api
+
+CID=$(docker compose -p trustshield -f docker/docker-compose.yml ps -q trustshield-api)
+for i in $(seq 1 60); do
+  STATUS=$(docker inspect -f '{{.State.Health.Status}}' "$CID" 2>/dev/null || echo "unknown")
+  echo "tentativa $i: $STATUS"
+  [ "$STATUS" = "healthy" ] && break
+  sleep 2
+done
+[ "$STATUS" = "healthy" ] || { echo "ERRO: API não ficou healthy após restart."; exit 1; }
+
+curl -fsS http://127.0.0.1:8000/status && echo " - /status OK"
+
+# ==============================================================================
+# 8) TESTE RÁPIDO /predict (ajuste o payload ao seu schema)
+# ------------------------------------------------------------------------------
+curl -s -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"amount":250,"use_chip":"Chip","current_age":40,"retirement_age":65,
+       "birth_year":1984,"gender":"M","latitude":-20.31,"longitude":-40.29,
+       "yearly_income":75000,"total_debt":15000,"credit_score":720,
+       "num_credit_cards":4,"transaction_hour":15,"day_of_week":3,
+       "is_weekend":false,"is_night_transaction":false,"amount_vs_avg":2.5}' | jq .
+
+# ==============================================================================
+# 9) CICLO COMPLETO EM UMA LINHA (SEM HEREDOCS)
+# ------------------------------------------------------------------------------
+DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p trustshield -f docker/docker-compose.yml down --remove-orphans && \
+MINIO_HOST_PORT=${MINIO_HOST_PORT:-9900} MINIO_CONSOLE_HOST_PORT=${MINIO_CONSOLE_HOST_PORT:-9901} MLFLOW_HOST_PORT=${MLFLOW_HOST_PORT:-5500} \
+DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p trustshield -f docker/docker-compose.yml up -d --build && \
+CID=$(docker compose -p trustshield -f docker/docker-compose.yml ps -q trustshield-api) && \
+for i in $(seq 1 60); do STATUS=$(docker inspect -f '{{.State.Health.Status}}' "$CID" 2>/dev/null || echo "unknown"); \
+echo "tentativa $i: $STATUS"; [ "$STATUS" = "healthy" ] && break; sleep 2; done && \
+[ "$STATUS" = "healthy" ] && \
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.data.make_dataset && \
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.features.build_features && \
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.models.train_fraud_model && \
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.models.evaluate_models && \
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.models.optimization && \
+docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api \
+  python -c "from pathlib import Path; import shutil; p=Path('outputs/models'); \
+c=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); \
+assert c, 'Nenhum modelo otimizado encontrado.'; shutil.copy2(c[0], p/'default_model.joblib'); \
+print(f'Promovido: {c[0].name}')" && \
+docker compose -p trustshield -f docker/docker-compose.yml restart trustshield-api && \
+CID=$(docker compose -p trustshield -f docker/docker-compose.yml ps -q trustshield-api) && \
+for i in $(seq 1 60); do STATUS=$(docker inspect -f '{{.State.Health.Status}}' "$CID" 2>/dev/null || echo "unknown"); \
+echo "tentativa $i: $STATUS"; [ "$STATUS" = "healthy" ] && break; sleep 2; done && \
+curl -fsS http://127.0.0.1:8000/status && echo " - /status OK"
+
+# ==============================================================================
+# TrustShield — Guia rápido só com MAKE (iniciante)
+# ==============================================================================
+
+# 0) (Opcional) Se as portas padronizadas estiverem ocupadas:
+# export MINIO_HOST_PORT=9900
+# export MINIO_CONSOLE_HOST_PORT=9901
+# export MLFLOW_HOST_PORT=5500
+
+# 1) Subir stack e aguardar saúde
+make up           # build + up -d + espera a API ficar healthy
+make logs         # (opcional) ver tudo
+make api-logs     # (opcional) ver só a API
+
+# 2) Preparar dados e features
 make data
-
-# Engenharia de features (data/features/featured_dataset.parquet).
 make features
 
-# Treina um novo modelo com parâmetros padrão.
-# Dicas:
-#   • Parametrizável: make train experiment="Exp01" tag="ajuste-X"
-make train [experiment=Nome] [tag=rótulo]
+# 3) Treino, avaliação e otimização
+make train
+make eval
+make optimize
 
-# Otimização de hiperparâmetros (Optuna).
-# Dicas:
-#   • Altere número de trials: make optimize hpo_trials=100
-make optimize [hpo_trials=100]
+# 4) (opcional) Validação e interpretabilidade
+make validate
+make interpret
 
-# Avalia os modelos mais recentes e gera comparativos.
-make evaluate
-
-# Promove o último artefato válido para produção (outputs/models/default_model.joblib).
+# 5) Promover melhor modelo e recarregar API
 make promote
+make reload
+make wait         # espera a API ficar healthy após reload
+make smoke        # /healthz e /status OK
 
+# 6) Teste rápido /predict (exemplo de payload)
+# curl -s -X POST http://127.0.0.1:8000/predict \
+#   -H "Content-Type: application/json" \
+#   -d '{"amount":250,"use_chip":"Chip","current_age":40,"retirement_age":65,
+#        "birth_year":1984,"gender":"M","latitude":-20.31,"longitude":-40.29,
+#        "yearly_income":75000,"total_debt":15000,"credit_score":720,
+#        "num_credit_cards":4,"transaction_hour":15,"day_of_week":3,
+#        "is_weekend":false,"is_night_transaction":false,"amount_vs_avg":2.5}' | jq .
 
-# ==============================================================================
-# 4) OPERAÇÃO & OBSERVABILIDADE (API/Dashboard/MLflow)
-# ------------------------------------------------------------------------------
-# Testes rápidos de saúde da API (em outra shell):
-#   curl -s http://127.0.0.1:8000/healthz
-#   curl -s http://127.0.0.1:8000/status | jq .
-#
-# Predição de amostra:
-#   curl -s -X POST http://127.0.0.1:8000/predict \
-#     -H "Content-Type: application/json" \
-#     -d '{"amount":250,"use_chip":"Chip","current_age":40,"retirement_age":65,
-#          "birth_year":1984,"gender":"M","latitude":34.05,"longitude":-118.25,
-#          "yearly_income":75000,"total_debt":15000,"credit_score":720,
-#          "num_credit_cards":4,"transaction_hour":15,"day_of_week":3,
-#          "is_weekend":false,"is_night_transaction":false,"amount_vs_avg":2.5}'
-#
-# MLflow UI:
-#   Acesse em http://127.0.0.1:5000  (tracking/artefatos pela stack)
-#
-# Dashboard:
-#   Acesse em http://127.0.0.1:8501
+# 7) Tudo em 1 comando (ciclo completo padrão)
+make cycle
 
+# 8) Do zero em 1 comando (reset → subir → ciclo)
+make quick
 
-# ==============================================================================
-# 5) LIMPEZA & RECUPERAÇÃO (Cautela)
-# ------------------------------------------------------------------------------
-# Limpeza RADICAL (containers, volumes, redes e imagens do projeto).
-# Pede confirmação interativa. Use apenas se necessário.
-make nuke
-
-
-# ==============================================================================
-# 6) PARÂMETROS E DICAS
-# ------------------------------------------------------------------------------
-# • Muitos alvos aceitam parâmetros:
-#     make logs service=api
-#     make retrain hpo_trials=50
-#     make train experiment="Exp01" tag="teste-A"
-#
-# • Secrets estão em ./secrets e são injetados pela stack (MinIO, Postgres, etc).
-# • O `requirements.txt` fixa versões compatíveis (Python 3.11), e o Makefile já
-#   cuida de build e cache de dependências dentro dos contêineres.
-# • Em caso de alteração nos Dockerfiles/docker-compose, reconstrua imagens:
-#     docker compose build --no-cache    # se precisar forçar rebuild
-#   (Normalmente desnecessário: o `make up` já cuida disso quando detecta mudanças)
-#
-# Fim do arquivo.
+# Dicas:
+# • Forçar rebuild sem cache: NO_CACHE=1 make up   (ou: make rebuild)
+# • Forçar pull de bases:     PULL=1 make up
+# • Diagnóstico dentro da API: make api-shell  (então rode python -m ... conforme necessidade)
+# • Healthcheck: /healthz é liveness (200). /status é readiness (pode 503 até o modelo carregar).

@@ -55,14 +55,11 @@ except ImportError:
     class BaseModel:
         pass
 
-
     class ValidationError(Exception):
         pass
 
-
     def field_validator(*args, **kwargs):
         return lambda x: x
-
 
     confloat = None
     PYDANTIC_AVAILABLE = False
@@ -82,9 +79,7 @@ try:
 except ImportError:
     def circuit(*args, **kwargs):
         def decorator(func): return func
-
         return decorator
-
 
     CIRCUITBREAKER_AVAILABLE = False
 
@@ -98,7 +93,6 @@ except ImportError:
     class DummyType:
         pass
 
-
     FastAPI, HTTPException, Request, Depends, JSONResponse, State = (DummyType,) * 6
     FASTAPI_AVAILABLE = False
 
@@ -109,17 +103,12 @@ try:
 except ImportError:
     class DummyPrometheusMetric:
         def inc(self, *args, **kwargs): pass
-
         def observe(self, *args, **kwargs): pass
-
         def set(self, *args, **kwargs): pass
-
         def labels(self, *args, **kwargs): return self
-
 
     def start_http_server(*args, **kwargs):
         pass
-
 
     Counter, Histogram, Gauge = DummyPrometheusMetric, DummyPrometheusMetric, DummyPrometheusMetric
     PROMETHEUS_AVAILABLE = False
@@ -353,8 +342,7 @@ class MLflowObserver(PredictionObserver):
 
 class BasePredictionStrategy:
     def __init__(self, config: Dict[str, Any], logger: AdvancedLogger):
-        self.config = config;
-        self.logger = logger
+        self.config = config; self.logger = logger
 
     def _prepare_input_data(self, df: pd.DataFrame, model_features: List[str]) -> pd.DataFrame:
         categorical_cols = {'gender', 'use_chip'}
@@ -396,14 +384,69 @@ class IsolationForestPredictionStrategy(BasePredictionStrategy, PredictionStrate
                                     success=False, error=str(e))
 
     def batch_predict(self, data: pd.DataFrame, model: Any, scaler: Any) -> List[PredictionResult]:
-        pass  # Omitido por brevidade
+        """Predição vetorizada com retorno por linha, otimizada para baixa latência.
+        - Prepara dados para o conjunto completo (one-hot + alinhamento de features do modelo).
+        - Aplica `scaler` quando presente (mantém compatibilidade com treinos anteriores).
+        - Realiza `model.predict` e calcula uma métrica de confiança estável (decision_function/score_samples).
+        - Em caso de erro, retorna uma lista com um único PredictionResult `success=False`.
+        """
+        t0 = time.time()
+        try:
+            # 1) Preparar o batch inteiro conforme o contrato de features do modelo
+            df = self._prepare_input_data(data, model.feature_names_in_)
+
+            # 2) Escalonamento opcional
+            if scaler is not None:
+                df = pd.DataFrame(scaler.transform(df), columns=df.columns, index=df.index)
+
+            # 3) Predição e confiança vetorizadas
+            preds = model.predict(df)                  # shape: (n,)
+            confs = self._calculate_confidence(model, df)  # shape: (n,)
+
+            elapsed_ms = (time.time() - t0) * 1000.0
+            model_ver = getattr(model, 'version', 'unknown')
+
+            # 4) Construção de resultados — um por linha
+            results: List[PredictionResult] = []
+            for pred, conf in zip(preds, confs):
+                p = int(pred)
+                results.append(
+                    PredictionResult(
+                        prediction=p,
+                        prediction_label='ANOMALIA' if p == -1 else 'NORMAL',
+                        confidence_score=float(conf),
+                        inference_time_ms=elapsed_ms,   # tempo total do batch compartilhado (barato e consistente)
+                        model_type='IsolationForest',
+                        model_version=model_ver,
+                        timestamp=datetime.now(),
+                        success=True,
+                    )
+                )
+            return results
+        except Exception as e:
+            return [
+                PredictionResult(
+                    prediction=1,
+                    prediction_label='ERROR',
+                    confidence_score=0.0,
+                    inference_time_ms=(time.time() - t0) * 1000.0,
+                    model_type='IsolationForest',
+                    model_version=getattr(model, 'version', 'unknown'),
+                    timestamp=datetime.now(),
+                    success=False,
+                    error=str(e),
+                )
+            ]
 
 
 class AutoencoderPredictionStrategy(BasePredictionStrategy, PredictionStrategy):
-    def predict(self, data: pd.DataFrame, model: Any, scaler: Any) -> PredictionResult: pass  # Omitido por brevidade
+    def predict(self, data: pd.DataFrame, model: Any, scaler: Any) -> PredictionResult:
+        # Mantido como placeholder; implementação específica dependerá do backend do autoencoder
+        raise NotImplementedError("AutoencoderPredictionStrategy.predict não implementado")
 
-    def batch_predict(self, data: pd.DataFrame, model: Any, scaler: Any) -> List[
-        PredictionResult]: pass  # Omitido por brevidade
+    def batch_predict(self, data: pd.DataFrame, model: Any, scaler: Any) -> List[PredictionResult]:
+        # Mantido como placeholder; implementação específica dependerá do backend do autoencoder
+        raise NotImplementedError("AutoencoderPredictionStrategy.batch_predict não implementado")
 
 
 class PredictionStrategyFactory:
@@ -513,7 +556,6 @@ if FASTAPI_AVAILABLE and isinstance(FastAPI, type):
     class AppState(State):
         predictor: Optional[TrustShieldPredictor] = None
 
-
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         print("🚀 Iniciando API TrustShield...")
@@ -533,18 +575,14 @@ if FASTAPI_AVAILABLE and isinstance(FastAPI, type):
         yield
         print("🛑 Finalizando API TrustShield...")
 
-
     app = FastAPI(title="TrustShield Prediction API", version="5.2.1", lifespan=lifespan)
-
 
     def get_predictor(request: Request) -> TrustShieldPredictor:
         if not request.app.state.predictor or not request.app.state.predictor.model:
             raise HTTPException(status_code=503, detail="Modelo não carregado.")
         return request.app.state.predictor
 
-
     PredictorDep = Annotated[TrustShieldPredictor, Depends(get_predictor)]
-
 
     @app.post("/predict", response_model=Dict[str, Any])
     async def predict(transaction: TransactionInput, predictor: PredictorDep):
@@ -553,7 +591,6 @@ if FASTAPI_AVAILABLE and isinstance(FastAPI, type):
             return JSONResponse(content=json.loads(json.dumps(result, cls=CustomJSONEncoder)))
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-
 
     @app.post("/batch-predict", response_model=List[Dict[str, Any]])
     async def batch_predict(transactions: BatchTransactionInput, predictor: PredictorDep):
@@ -564,11 +601,9 @@ if FASTAPI_AVAILABLE and isinstance(FastAPI, type):
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-
     @app.get("/status", response_model=Dict[str, Any])
     async def status(predictor: PredictorDep):
         return JSONResponse(content=json.loads(json.dumps(predictor.get_status(), cls=CustomJSONEncoder)))
-
 
     @app.get("/health")
     async def health_check():
@@ -578,6 +613,7 @@ if FASTAPI_AVAILABLE and isinstance(FastAPI, type):
 # =====================================================================================
 # 🚀 PONTO DE ENTRADA DA APLICAÇÃO
 # =====================================================================================
+
 def main():
     parser = argparse.ArgumentParser(description="Sistema de Predição TrustShield")
     parser.add_argument("--model", type=str, help="Caminho para o modelo via CLI")
