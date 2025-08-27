@@ -1,20 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 TrustShield Dashboard (Streamlit) — versão otimizada e completa
-- API_URL fixo em http://127.0.0.1:8000
-- Leitura paginada de Parquet usando pyarrow.dataset (com filtros)
-- Limites de exibição para evitar travamentos
-- Threads BLAS limitadas no topo
-- Nada de polling agressivo; ações dirigidas por botões
+- API_URL agora lê a variável de ambiente, com fallback para o nome do serviço Docker.
+- Leitura paginada de Parquet usando pyarrow.dataset (com filtros).
+- Limites de exibição para evitar travamentos.
+- Threads BLAS limitadas no topo.
+- Nada de polling agressivo; ações dirigidas por botões.
 
 Como executar (a partir da raiz do projeto):
-    cd ~/PycharmProjects/TrustShield
-    OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMBA_NUM_THREADS=1 \
-    streamlit run src/dashboard/app.py \
-      --server.headless=true \
-      --server.fileWatcherType=none \
-      --server.runOnSave=false \
-      --logger.level=error
+    # Dentro do Docker, já é executado automaticamente.
+    # Localmente (para desenvolvimento da UI, se a API estiver rodando via 'make up'):
+    streamlit run src/dashboard/app.py
 """
 
 # -----------------------------------------------------------------------------
@@ -52,7 +48,10 @@ st.caption("Painel otimizado para análise operacional, investigativa e de perfo
 # -----------------------------------------------------------------------------
 # Config e limites
 # -----------------------------------------------------------------------------
-API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
+# --- CORREÇÃO APLICADA AQUI ---
+# A URL da API agora usa o nome do serviço Docker 'trustshield-api' como padrão,
+# permitindo a comunicação entre contêineres. Pode ser sobrescrita pela variável de ambiente.
+API_URL = os.environ.get("API_URL", "http://trustshield-api:8000")
 PARQUET_PATH = "data/features/featured_dataset.parquet"
 
 MAX_FEED_ROWS = 2000   # máximo de linhas no feed em memória

@@ -13,7 +13,11 @@ DASH_SERVICE   ?= trustshield-dashboard
 MLFLOW_SERVICE ?= mlflow
 MINIO_SERVICE  ?= minio
 
-HOST_API_URL   ?= http://localhost:8000
+# --- CORREÇÃO APLICADA AQUI ---
+# A URL da API agora usa uma variável de ambiente, com 8080 como padrão.
+# Para usar outra porta, execute: export API_HOST_PORT=8001 && make up
+API_HOST_PORT  ?= 8080
+HOST_API_URL   ?= http://localhost:$(API_HOST_PORT)
 HOST_DASH_URL  ?= http://localhost:8501
 HOST_MLFLOW_URL?= http://localhost:5500
 

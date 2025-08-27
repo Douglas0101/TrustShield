@@ -4,8 +4,8 @@ TrustShield API (FastAPI) — versão otimizada e robusta
 
 Principais melhorias em relação à base anterior:
 - `ResourceMonitor.get_stats()` implementado (evita 500 no /status).
-- Rota raiz `/` amigável e `/healthz` para probes.
-- Carregamento resiliente de configurações (fallback se `config.yaml` ausente).
+- Rota raiz `/` amigável e `/healthz` para probes de liveness.
+- Carregamento de modelo assíncrono e resiliente no startup.
 - Limite conservador de threads numéricas no processo (OMP/BLAS/Numba).
 - Logs consistentes e observabilidade via Observers (Console, Prometheus, MLflow) preservados.
 - Tratamento robusto de caminhos e artefatos (modelo) durante o startup.
@@ -31,7 +31,6 @@ from pathlib import Path
 from typing import Dict, Any, Annotated, Optional, List, Protocol, runtime_checkable
 
 import json
-import tempfile
 
 import psutil
 import yaml
@@ -40,7 +39,7 @@ import pandas as pd
 
 from fastapi import FastAPI, HTTPException, Request, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from starlette.datastructures import State
 from pydantic import BaseModel, ValidationError, field_validator
 from pydantic.types import confloat
@@ -53,25 +52,28 @@ from src.models.interpretation import ResilientModelInterpreter
 # Dependências opcionais
 try:
     from prometheus_client import Counter, Histogram
+
     PROMETHEUS_AVAILABLE = True
 except Exception:
     PROMETHEUS_AVAILABLE = False
 
 try:
     from circuitbreaker import circuit
+
     CIRCUITBREAKER_AVAILABLE = True
 except Exception:
     CIRCUITBREAKER_AVAILABLE = False
 
 # Configuração global de warnings e threads numéricas
 warnings.filterwarnings("ignore")
-os.environ.setdefault("OMP_NUM_THREADS", "1")           # conservador para evitar tempestade de threads
+os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("NUMBA_NUM_THREADS", "1")
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 API_VERSION = "5.3.0-optimized"
+
 
 # =============================================================================
 # Infra — logging e config
@@ -111,12 +113,10 @@ class ConfigManager:
             try:
                 with open(config_path, "r") as f:
                     loaded = yaml.safe_load(f) or {}
-                    # merge raso — apenas chaves conhecidas
                     for k in ("api", "mlflow"):
                         if k in loaded and isinstance(loaded[k], dict):
                             self.settings[k].update(loaded[k])
             except Exception as e:
-                # mantém defaults e segue
                 print(f"[ConfigManager] Falha ao ler config.yaml: {e}")
 
     def get_config(self) -> Dict[str, Any]:
@@ -307,7 +307,6 @@ class MLflowObserver(APIObserver):
                 if mlflow.active_run():
                     mlflow.end_run()
         except Exception:
-            # observabilidade não deve derrubar a API
             pass
 
 
@@ -326,7 +325,7 @@ class AppState(State):
 
 
 async def load_model_in_background(app: FastAPI):
-    """Carrega o modelo em uma tarefa de fundo para não bloquear a inicialização."""
+    """Carrega o modelo em uma tarefa de fundo de forma resiliente."""
     app_state: AppState = app.state
     try:
         project_root = Path(__file__).resolve().parents[2]
@@ -334,12 +333,18 @@ async def load_model_in_background(app: FastAPI):
         model_path = project_root / model_path_str if not Path(model_path_str).is_absolute() else Path(model_path_str)
         app_state.model_path = model_path
 
-        # A inicialização do TrustShieldPredictor é bloqueante, então a executamos em um thread
+        if not model_path.exists():
+            app_state.logger.log(logging.WARNING,
+                                 f"Modelo '{model_path}' não encontrado. API iniciará sem capacidade de predição.")
+            app_state.predictor = None
+            return
+
         predictor = await asyncio.to_thread(TrustShieldPredictor, model_path=str(model_path))
-        
+
         app_state.predictor = predictor
         app_state.subject.notify(APIEvent.MODEL_LOADED, {
-            "model_type": app_state.predictor.model_type.value if getattr(app_state.predictor, 'model_type', None) else "unknown"
+            "model_type": app_state.predictor.model_type.value if getattr(app_state.predictor, 'model_type',
+                                                                          None) else "unknown"
         })
     except Exception as e:
         app_state.logger.log(logging.ERROR, f"Falha crítica ao carregar o modelo em background: {e}")
@@ -359,7 +364,7 @@ async def lifespan(app: FastAPI):
     app.state.logger = AdvancedLogger("TrustShield-API")
     app.state.monitor = ResourceMonitor(app.state.logger)
     app.state.subject = Subject()
-    app.state.predictor = None # Inicia como None
+    app.state.predictor = None
 
     # Observers
     app.state.subject.attach(ConsoleLogObserver(app.state.logger))
@@ -368,7 +373,6 @@ async def lifespan(app: FastAPI):
 
     app.state.subject.notify(APIEvent.STARTUP, {})
 
-    # Inicia o carregamento do modelo em background
     app.state.model_loading_task = asyncio.create_task(load_model_in_background(app))
 
     try:
@@ -385,7 +389,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS (liberal para dev; ajuste em prod)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -402,8 +405,10 @@ app.add_middleware(
 def get_predictor(request: Request) -> TrustShieldPredictor:
     predictor = request.app.state.predictor
     if not predictor:
-        raise HTTPException(status_code=503, detail="Serviço indisponível: Modelo não carregado.")
+        raise HTTPException(status_code=503,
+                            detail="Serviço indisponível: Modelo não carregado ou em processo de carregamento.")
     return predictor
+
 
 PredictorDep = Annotated[TrustShieldPredictor, Depends(get_predictor)]
 
@@ -447,40 +452,43 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
 
 
 # =============================================================================
-# Circuit breakers (opcional)
+# Circuit breakers
 # =============================================================================
 if CIRCUITBREAKER_AVAILABLE:
     @circuit(failure_threshold=5, recovery_timeout=60)
-    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor, transaction_data: Dict[str, Any]) -> PredictionResult:
+    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor,
+                                           transaction_data: Dict[str, Any]) -> PredictionResult:
         return predictor.predict(transaction_data)
+
 
     @circuit(failure_threshold=3, recovery_timeout=30)
-    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor, transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
+    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor,
+                                                 transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
         return predictor.batch_predict(transaction_data)
 else:
-    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor, transaction_data: Dict[str, Any]) -> PredictionResult:
+    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor,
+                                           transaction_data: Dict[str, Any]) -> PredictionResult:
         return predictor.predict(transaction_data)
 
-    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor, transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
+
+    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor,
+                                                 transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
         return predictor.batch_predict(transaction_data)
 
 
 # =============================================================================
-# Endpoints — raiz/health
+# Endpoints
 # =============================================================================
 @app.get("/", include_in_schema=False)
 async def root():
     return {"message": "TrustShield API is running. See /docs and /status."}
 
 
-@app.get("/healthz", tags=["Health"])  # simples para probes
+@app.get("/healthz", tags=["Health"])
 async def healthz():
     return {"status": "ok", "version": API_VERSION}
 
 
-# =============================================================================
-# Endpoints — predição e explicabilidade
-# =============================================================================
 @app.post("/predict", tags=["Prediction"], response_model=Dict[str, Any])
 async def predict_transaction(transaction: TransactionInput, predictor: PredictorDep):
     try:
@@ -502,25 +510,18 @@ async def batch_predict_transactions(batch: BatchTransactionInput, predictor: Pr
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---- Explicabilidade assíncrona -------------------------------------------------
-
 def run_explanation(interpreter: ResilientModelInterpreter, data_path: str, output_path: str):
-    """Executa a interpretação e salva o resultado em um arquivo específico."""
     try:
         interpreter.run_interpretation(data_path=data_path, methods=['shap'])
-        # Encontrar o último resultado gerado no diretório padrão e movê-lo para o output esperado
         project_root = Path(__file__).resolve().parents[2]
         source_dir = project_root / "outputs" / "interpretations" / "shap"
         result_files = list(source_dir.glob('*.json'))
-        if not result_files:
-            return
+        if not result_files: return
         latest_result_file = max(result_files, key=os.path.getctime)
         os.rename(latest_result_file, output_path)
     finally:
-        # Limpa o arquivo temporário de entrada, se existir
         try:
-            if os.path.exists(data_path):
-                os.unlink(data_path)
+            if os.path.exists(data_path): os.unlink(data_path)
         except Exception:
             pass
 
@@ -529,26 +530,16 @@ def run_explanation(interpreter: ResilientModelInterpreter, data_path: str, outp
 async def explain_transaction_async(transaction: TransactionInput, background_tasks: BackgroundTasks, request: Request):
     app_state: AppState = request.app.state
     model_path = str(app_state.model_path)
-
-    # ID único para o job
     job_id = f"explanation_{datetime.now().strftime('%Y%m%d%H%M%S')}_{os.urandom(4).hex()}"
     project_root = Path(__file__).resolve().parents[2]
-
-    # Pastas temporárias
     temp_dir = project_root / "outputs" / "temp_explanations"
     temp_dir.mkdir(exist_ok=True)
-
     input_data_path = temp_dir / f"{job_id}_input.parquet"
     output_result_path = temp_dir / f"{job_id}_result.json"
-
-    # Persistir entrada em parquet
     df = pd.DataFrame([transaction.model_dump()])
     df.to_parquet(input_data_path)
-
-    # Interpretador + background task
     interpreter = ResilientModelInterpreter(model_path=model_path)
     background_tasks.add_task(run_explanation, interpreter, str(input_data_path), str(output_result_path))
-
     return {"job_id": job_id, "status": "explanation_started"}
 
 
@@ -556,27 +547,20 @@ async def explain_transaction_async(transaction: TransactionInput, background_ta
 async def get_explanation_result(job_id: str):
     project_root = Path(__file__).resolve().parents[2]
     output_path = project_root / "outputs" / "temp_explanations" / f"{job_id}_result.json"
-
     if not output_path.exists():
         raise HTTPException(status_code=202, detail="Explanation result not ready yet.")
-
     with open(output_path, "r") as f:
         explanation = json.load(f)
-
-    # opcional: remover o arquivo após leitura
-    # os.unlink(output_path)
-
     return explanation
 
 
-# =============================================================================
-# Endpoints — status e validação
-# =============================================================================
 @app.get("/status", tags=["Health"], response_model=Dict[str, Any])
-async def get_status(predictor: PredictorDep, request: Request):
-    status = predictor.get_status()
+async def get_status(request: Request):
+    app_state: AppState = request.app.state
+    predictor = app_state.predictor
+    status = predictor.get_status() if predictor else {"status": "NOT_LOADED", "model_type": None}
     status["version"] = API_VERSION
-    status["api_metrics"] = request.app.state.monitor.get_stats()
+    status["api_metrics"] = app_state.monitor.get_stats()
     return status
 
 
@@ -596,6 +580,5 @@ async def validate_model(background_tasks: BackgroundTasks, request: Request):
     app_state = request.app.state
     if not app_state.config.get('api', {}).get('model_validation', False):
         raise HTTPException(status_code=400, detail="Validação de modelo não habilitada.")
-
     background_tasks.add_task(run_model_validation, app_state)
     return {"status": "validation_started"}

@@ -1,48 +1,31 @@
-A ferramenta de execução de código não permite a execução de comandos de shell do sistema operacional como `sudo lsof`. **Você deve executar esse comando no seu próprio terminal do Ubuntu** para ver qual processo está usando a porta 9000.
+# Descrição do problema (comportamento observado)
 
-Independentemente do processo encontrado, a solução permanente e recomendada continua sendo a mesma. Prossiga com os passos seguintes.
+* O comando **`make up`** constrói com êxito as imagens `trustshield-api` e `trustshield-dashboard` (builds finalizam sem erros).
+* Na fase **`docker compose up -d`**, os serviços são criados e iniciados; **MinIO** reporta **Healthy** e o `minio-init` conclui (**Exited**).
+* O contêiner **`trustshield-mlflow-1`** entra no estado **Error/Unhealthy** após \~134 s. Em consequência, o Compose interrompe o bootstrap e retorna:
 
----
-**Passo 2: Modificação Estratégica da Porta no Docker Compose**
-Esta é a correção principal. Você irá alterar a porta que o serviço `minio` expõe na sua máquina (host), sem alterar a porta interna do contêiner.
+  > dependency failed to start: container trustshield-mlflow-1 is unhealthy
+  > O alvo `up` do Makefile falha com **`Erro 1`** (linha 45), e a pilha não fica de pé.
 
-1.  **Abra o arquivo de configuração:**
-    ```bash
-    gedit docker/docker-compose.yml
-    ```
+# Precisão do escopo (o que está e o que não está falhando)
 
-2.  **Localize e altere a seção `ports` do serviço `minio`:**
+* **Funciona:** build das imagens; subida do **MinIO** (saúde OK) e finalização do **minio-init**.
+* **Falha:** **saúde do serviço MLflow** em runtime (não é erro de build). O Compose **bloqueia** por política de dependência/healthcheck (provavelmente `depends_on: condition: service_healthy`), portanto outros serviços ficam **Created/Recreated** mas a orquestração é abortada.
 
-    **Encontre este bloco:**
-    ```yaml
-    services:
-      minio:
-        # ... outras chaves de configuração ...
-        ports:
-          - "9000:9000"  # <-- LINHA DO CONFLITO
-          - "9001:9001"
-    ```
+# Sintoma raiz imediato
 
-    **Altere-o para o seguinte:**
-    ```yaml
-    services:
-      minio:
-        # ... outras chaves de configuração ...
-        ports:
-          - "9900:9000"  # <-- CORREÇÃO APLICADA
-          - "9901:9001"  # Recomendado alterar a porta da console também
-    ```
-    *   **Justificativa Técnica:** Esta alteração mapeia a porta `9900` (livre) do seu host para a porta `9000` interna do contêiner `minio`. A comunicação entre os outros contêineres (ex: `api` -> `minio`) não é afetada, pois ocorre na rede interna do Docker, que continuará usando `minio:9000`.
+* **Causa imediata (não a causa técnica profunda):** o **healthcheck do `trustshield-mlflow-1`** não atinge estado **healthy** no prazo; o contêiner entra em **Error/Unhealthy**, e o Compose encerra com falha de dependência. **Não há evidência, neste log, de conflito de porta, erro de build ou falha do MinIO** — o gatilho é exclusivamente o **estado unhealthy do MLflow**.
 
-**Passo 3: Re-execução e Validação do Ambiente**
-Após salvar o arquivo `docker/docker-compose.yml` modificado, execute novamente o comando para subir a stack.
+# Linha do tempo (resumo factual)
 
-1.  **Execute o `make up`:**
-    ```bash
-    make up
-    ```
-    O comando agora deve ser concluído com sucesso, sem o erro de alocação de porta.
+1. `make up` inicia e executa builds (27/27 etapas da API; 5/5 do dashboard) → **sucesso**.
+2. `docker compose up -d` sobe serviços:
 
-2.  **Valide o acesso:**
-    Para confirmar que o serviço está no ar, acesse a interface do MinIO no seu navegador utilizando a **nova porta**:
-    `http://localhost:9900`
+   * `trustshield-minio-1`: **Healthy**,
+   * `trustshield-minio-init-1`: **Exited**,
+   * `trustshield-mlflow-1`: **Error** após \~134 s,
+   * `trustshield-trustshield-api-1`: **Recreated**,
+   * `trustshield-trustshield-dashboard-1`: **Created**.
+3. Compose aborta: **“dependency failed to start: container trustshield-mlflow-1 is unhealthy”** → `make` encerra com erro.
+
+> Em suma, **o problema é a não-saúde do contêiner MLflow durante a subida**, que aciona a política de dependências do Compose e derruba o `make up`. Para determinar a **causa técnica profunda** (ex.: parâmetros do servidor MLflow, backend store/DB inacessível, configuração S3/MinIO, entrypoint, porta, migrações), é necessário inspecionar os **logs do contêiner `trustshield-mlflow-1`** e o **healthcheck** definido para ele.
