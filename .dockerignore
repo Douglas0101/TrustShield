@@ -1,15 +1,30 @@
-# .dockerignore (na raiz do repo)
-.git
-__pycache__/
-*.ipynb_checkpoints
-.cache/
+# Python
+**/__pycache__/
+*.pyo
+*.pyd
+*.so
+
+# Virtual envs
 .venv/
-notebooks/
+venv/
+
+# Dados/artefatos grandes (montados por volume)
+outputs/
 mlruns/
-outputs/models/*.joblib
-outputs/temp_explanations/
-cache/
-data/raw/
-data/interim/
-data/processed/
-data/features/featured_dataset.parquet
+.cache/
+
+# Dados de treino
+data/
+
+# Notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# VCS / editor
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Docs pesados
+*.pdf
