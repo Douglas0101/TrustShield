@@ -3,7 +3,7 @@
 ![CI/CD](https://img.shields.io/badge/CI%2FCd-passing-green?style=for-the-badge&logo=githubactions)
 ![Docker](https://img.shields.io/badge/Docker-ready-blue?style=for-the-badge&logo=docker)
 ![MLflow](https://img.shields.io/badge/MLflow-enabled-orange?style=for-the-badge&logo=m)
-![Python](https://img.shields.io/badge/Python-3.10-blue?style=for-the-badge&logo=python)
+![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python)
 ![Licença](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 **Versão Empresarial: 5.1.0-stable**
@@ -53,7 +53,7 @@ O TrustShield adota uma **Arquitetura Hexagonal (Portas e Adaptadores)**, separa
 
 ## **Tecnologias Utilizadas**
 
--   **Linguagem**: Python 3.10+
+-   **Linguagem**: Python 3.11+
 -   **Bibliotecas de Dados**: Pandas, NumPy, Scikit-learn, PyArrow, Dask
 -   **MLOps e Orquestração**: Docker, Docker Compose, MLflow, MinIO, PostgreSQL
 -   **API**: FastAPI, Uvicorn
@@ -113,52 +113,64 @@ TrustShield/
 
 ### **Executando o Pipeline Completo**
 
-O `Makefile` automatiza todo o processo. Os comandos devem ser executados na raiz do projeto.
+O `Makefile` simplifica a execução do projeto com os seguintes comandos:
 
-1.  **Limpeza Total (Recomendado para a primeira execução ou após alterações):**
-    Este comando para e remove todos os contentores, volumes e redes, além de limpar o cache do Docker para evitar conflitos.
+1.  **Subir o Ambiente Completo:**
+    Este comando constrói as imagens, sobe todos os serviços (API, Dashboard, MLflow, MinIO) e aguarda a API ficar saudável.
     ```bash
-    make docker-stop && docker system prune -a -f
+    make up
     ```
 
-2.  **Construir a Imagem Docker:**
-    Este comando constrói a imagem principal com todas as dependências do projeto.
+2.  **Executar o Pipeline de Treino (Ciclo Completo):**
+    Após o ambiente estar no ar, este comando executa todas as etapas do pipeline de MLOps: processamento de dados, engenharia de features, treino, avaliação, otimização, validação, interpretação e promoção do modelo.
     ```bash
-    make docker-build
+    make cycle
+    ```
+    *Para executar uma etapa individualmente (ex: `make train`), consulte o `Makefile`.*
+
+3.  **Acompanhar os Logs:**
+    Para visualizar os logs de todos os serviços em tempo real:
+    ```bash
+    make logs
+    ```
+    Para logs de um serviço específico (ex: API):
+    ```bash
+    make api-logs
     ```
 
-3.  **Executar o Ambiente e o Pipeline:**
-    Este comando sobe todos os serviços (PostgreSQL, MinIO, MLflow) e inicia o contentor de treino, que executará o pipeline completo de dados e ML.
+4.  **Aceder aos Serviços:**
+    -   **API (Health Check)**: [http://localhost:8080/healthz](http://localhost:8080/healthz)
+    -   **Dashboard**: [http://localhost:8501](http://localhost:8501)
+    -   **MLflow**: [http://localhost:5500](http://localhost:5500)
+
+5.  **Parar o Ambiente:**
+    Este comando para e remove todos os contêineres e redes.
     ```bash
-    make docker-run
+    make down
     ```
 
-4.  **Acompanhar os Logs:**
-    Para ver o progresso do pipeline em tempo real, use este comando:
+6.  **Limpeza Completa:**
+    Para uma limpeza mais profunda, removendo também os volumes, utilize:
     ```bash
-    make docker-logs
+    make clean
     ```
-
-5.  **Aceder à Interface do MLflow:**
-    Abra o seu navegador e aceda a **[http://localhost:5000](http://localhost:5000)** para ver os experimentos, execuções e modelos registados.
-
-6.  **Parar o Ambiente:**
-    Quando terminar, use este comando para parar e remover todos os contentores e volumes.
+    Para limpar todo o cache do Docker (use com cuidado):
     ```bash
-    make docker-stop
+    make prune
     ```
 
 ## **Fluxo do Pipeline de Dados e ML**
 
-Quando `make docker-run` é executado, o seguinte pipeline é orquestrado dentro do contentor `trustshield-trainer`:
+O pipeline de MLOps é orquestrado pelo `Makefile` e executado dentro do contêiner de serviço da API (`trustshield-api`). O comando `make cycle` dispara a sequência completa:
 
-1.  **`src/data/make_dataset.py`**: Carrega os dados brutos de `data/raw`, limpa-os e cria um *dataset* primário em `data/processed`.
-2.  **`src/features/build_features.py`**: Aplica engenharia de *features* sobre o *dataset* primário e salva o *dataset* final em `data/features`.
-3.  **`src/models/train_fraud_model.py`**:
-    -   Conecta-se ao servidor MLflow.
-    -   Carrega o *dataset* de *features*.
-    -   Treina o modelo campeão (**Isolation Forest**).
-    -   Regista parâmetros, métricas e o artefacto do modelo no MLflow.
+1.  **`make data`**: Executa `src/data/make_dataset.py` para carregar os dados brutos de `data/raw`, limpá-los e criar um *dataset* primário em `data/processed`.
+2.  **`make features`**: Executa `src/features/build_features.py` para aplicar engenharia de *features* e salvar o *dataset* final em `data/features`.
+3.  **`make train`**: Executa `src/models/train_fraud_model.py` para treinar o modelo campeão (**Isolation Forest**), conectando-se ao MLflow para registrar parâmetros, métricas e o artefato do modelo.
+4.  **`make eval`**: Avalia o modelo treinado.
+5.  **`make optimize`**: Otimiza os hiperparâmetros do modelo.
+6.  **`make promote`**: Promove o melhor modelo para produção.
+7.  **`make reload`**: Reinicia o serviço da API para carregar o novo modelo.
+8.  **`make smoke`**: Realiza um teste rápido para garantir que a API está funcionando corretamente.
 
 ## **Qualidade de Código e Testes**
 
