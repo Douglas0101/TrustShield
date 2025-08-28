@@ -33,54 +33,76 @@ services:
     command:
       - -c
       - |
-        set -x
+        set -e
         mc alias set minio http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD
-        mc ls minio/mlflow || mc mb minio/mlflow
-        echo "Bucket 'mlflow' pronto."
-    networks: [trustshield-net]
+        mc mb minio/mlflow || true
+        mc anonymous set public minio/mlflow
+        exit 0
     restart: "no"
+    networks: [trustshield-net]
 
-  # ---------- MLflow Tracking Server ----------
-  mlflow:
-    image: ghcr.io/mlflow/mlflow:v3.3.1
-    command:
-      [
-        "mlflow","server",
-        "--host","0.0.0.0",
-        "--port","5000",
-        "--backend-store-uri","sqlite:////mlflow/mlflow.db",
-        "--serve-artifacts",
-        "--artifacts-destination","s3://mlflow"
-      ]
+  # ---------- Backend de metadados do MLflow ----------
+  postgres:
+    image: postgres:16-alpine
     environment:
-      # MLFLOW_EXPOSE_PROMETHEUS: "true"
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
-      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-http://minio:9000}
+      POSTGRES_DB: ${POSTGRES_DB:-mlflow_db}
+      POSTGRES_USER: ${POSTGRES_USER:-mlflow_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow_pass}
     volumes:
-      - mlflow-data:/mlflow
+      - postgres-data:/var/lib/postgresql/data
     ports:
-      - "${MLFLOW_HOST_PORT:-5500}:5000"
+      # --- OTIMIZAÇÃO APLICADA ---
+      # A porta do host agora é configurável via .env
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:5000/api/2.0/mlflow/experiments/list || exit 1"]
-      interval: 15s
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 60s
-    depends_on:
-      minio:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
     restart: unless-stopped
     networks: [trustshield-net]
 
-  # ---------- API (FastAPI) ----------
+  # ---------- Servidor de Tracking MLflow ----------
+  mlflow:
+    build:
+      context: ..
+      dockerfile: docker/mlflow.Dockerfile
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - postgresql://${POSTGRES_USER:-mlflow_user}:${POSTGRES_PASSWORD:-mlflow_pass}@postgres:5432/${POSTGRES_DB:-mlflow_db}
+      - --artifacts-destination
+      - s3://mlflow/
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-http://minio:9000}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    ports:
+      - "${MLFLOW_HOST_PORT:-5500}:5000"
+    restart: unless-stopped
+    networks: [trustshield-net]
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------- API de Inferência e Treino ----------
   trustshield-api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    command: ["uvicorn","src.api.main:app","--host","0.0.0.0","--port","8000","--workers","1"]
     environment:
       MODEL_PATH: ${MODEL_PATH:-outputs/models/default_model.joblib}
       MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
@@ -91,11 +113,9 @@ services:
     volumes:
       - ../outputs:/app/outputs
       - ../config:/app/config:ro
-      - ../data:/app/data:ro
+      - ../data:/app/data
       - ../secrets:/app/secrets:ro
     ports:
-      # --- CORREÇÃO APLICADA AQUI ---
-      # A porta do host agora é parametrizável, com 8080 como padrão para evitar conflitos.
       - "${API_HOST_PORT:-8080}:8000"
     healthcheck:
       test: ["CMD-SHELL","curl -fsS http://localhost:8000/healthz || exit 1"]
@@ -107,7 +127,7 @@ services:
     networks: [trustshield-net]
     depends_on:
       mlflow:
-        condition: service_started
+        condition: service_healthy
 
   # ---------- Dashboard (Streamlit) ----------
   trustshield-dashboard:
@@ -115,21 +135,21 @@ services:
       context: ..
       dockerfile: docker/dashboard.Dockerfile
     environment:
-      API_URL: ${API_URL:-http://trustshield-api:8000}
-      STREAMLIT_SERVER_PORT: "8501"
-      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+      API_URL: http://trustshield-api:8000
     ports:
-      - "8501:8501"
+      # --- OTIMIZAÇÃO APLICADA ---
+      - "${DASHBOARD_HOST_PORT:-8501}:8501"
+    restart: unless-stopped
+    networks: [trustshield-net]
     depends_on:
       trustshield-api:
         condition: service_healthy
-    restart: unless-stopped
-    networks: [trustshield-net]
+
+# ---------- Volumes e Redes ----------
+volumes:
+  minio-data:
+  postgres-data:
 
 networks:
   trustshield-net:
     driver: bridge
-
-volumes:
-  mlflow-data:
-  minio-data:

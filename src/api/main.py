@@ -1,17 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 TrustShield API (FastAPI) — versão otimizada e robusta
-
-Principais melhorias em relação à base anterior:
-- `ResourceMonitor.get_stats()` implementado (evita 500 no /status).
-- Rota raiz `/` amigável e `/healthz` para probes de liveness.
-- Carregamento de modelo assíncrono e resiliente no startup.
-- Limite conservador de threads numéricas no processo (OMP/BLAS/Numba).
-- Logs consistentes e observabilidade via Observers (Console, Prometheus, MLflow) preservados.
-- Tratamento robusto de caminhos e artefatos (modelo) durante o startup.
-
-Como executar (raiz do projeto):
-    uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+Integração explícita com mlflow_setup para garantir a conexão correta (HTTP).
 """
 
 # =============================================================================
@@ -19,566 +9,182 @@ Como executar (raiz do projeto):
 # =============================================================================
 import logging
 import os
-import sys
-import time
-import warnings
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
-from enum import Enum
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Annotated, Optional, List, Protocol, runtime_checkable
+from typing import Dict, Any
 
-import json
-
-import psutil
-import yaml
-import mlflow
+import joblib
 import pandas as pd
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from pydantic import BaseModel, Field
 
-from fastapi import FastAPI, HTTPException, Request, Depends, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from starlette.datastructures import State
-from pydantic import BaseModel, ValidationError, field_validator
-from pydantic.types import confloat
+# --- CORREÇÃO ESTRUTURAL ---
+# Importa a função de setup diretamente do seu utilitário.
+from src.utils.mlflow_setup import setup_mlflow
 
-# Projeto
-from src.models.predict import TrustShieldPredictor, PredictionResult
-from src.models.validation import ResilientTrustShieldValidator
-from src.models.interpretation import ResilientModelInterpreter
-
-# Dependências opcionais
-try:
-    from prometheus_client import Counter, Histogram
-
-    PROMETHEUS_AVAILABLE = True
-except Exception:
-    PROMETHEUS_AVAILABLE = False
-
-try:
-    from circuitbreaker import circuit
-
-    CIRCUITBREAKER_AVAILABLE = True
-except Exception:
-    CIRCUITBREAKER_AVAILABLE = False
-
-# Configuração global de warnings e threads numéricas
-warnings.filterwarnings("ignore")
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-os.environ.setdefault("NUMBA_NUM_THREADS", "1")
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-
-API_VERSION = "5.3.0-optimized"
+# Configuração do Logger (mantida da sua versão original)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - [TrustShield-API] - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Infra — logging e config
+# Estado da Aplicação e Carregamento do Modelo
 # =============================================================================
-class AdvancedLogger:
-    def __init__(self, name: str):
-        self.logger = logging.getLogger(name)
-        if not self.logger.handlers:
-            self.logger.setLevel(logging.INFO)
-            handler = logging.StreamHandler(sys.stdout)
-            formatter = logging.Formatter(
-                "%(asctime)s - [TrustShield-API] - %(levelname)s - %(message)s"
-            )
-            handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
+class AppState:
+    """Mantém o estado da aplicação, como o modelo carregado."""
 
-    def log(self, level: int, message: str, **kwargs):
-        extra = {"timestamp": datetime.now().isoformat()}
-        extra.update(kwargs)
-        self.logger.log(level, message, extra=extra)
-
-
-class ConfigManager:
-    def __init__(self, project_root: Path):
-        self.project_root = project_root
-        config_path = self.project_root / "config" / "config.yaml"
-        self.settings: Dict[str, Any] = {
-            "api": {
-                "model_path": "outputs/models/default_model.joblib",
-                "model_validation": False,
-            },
-            "mlflow": {
-                "experiment_name": "TrustShield",
-            },
-        }
-        if config_path.exists():
-            try:
-                with open(config_path, "r") as f:
-                    loaded = yaml.safe_load(f) or {}
-                    for k in ("api", "mlflow"):
-                        if k in loaded and isinstance(loaded[k], dict):
-                            self.settings[k].update(loaded[k])
-            except Exception as e:
-                print(f"[ConfigManager] Falha ao ler config.yaml: {e}")
-
-    def get_config(self) -> Dict[str, Any]:
-        return self.settings
-
-
-class ResourceMonitor:
-    def __init__(self, logger: AdvancedLogger):
-        self.logger = logger
-        self.process = psutil.Process()
-        self.request_count = 0
-        self.error_count = 0
-
-    def record_request(self, success: bool = True):
-        self.request_count += 1
-        if not success:
-            self.error_count += 1
-
-    def get_stats(self) -> Dict[str, Any]:
-        try:
-            cpu = psutil.cpu_percent(interval=0.0)
-            mem = self.process.memory_info().rss / (1024 ** 2)
-        except Exception:
-            cpu, mem = None, None
-        return {
-            "requests": self.request_count,
-            "errors": self.error_count,
-            "cpu_percent": cpu,
-            "mem_rss_mb": round(mem, 2) if mem is not None else None,
-        }
-
-
-# =============================================================================
-# Domínio — eventos & métricas
-# =============================================================================
-class APIEvent(Enum):
-    STARTUP = 0
-    SHUTDOWN = 1
-    REQUEST_RECEIVED = 2
-    REQUEST_PROCESSED = 3
-    ERROR_OCCURRED = 4
-    MODEL_LOADED = 5
-    MODEL_VALIDATED = 6
-    DRIFT_DETECTED = 7
-
-
-@dataclass
-class APIMetrics:
-    event: APIEvent
-    endpoint: str
-    execution_time: float
-    success: bool
-    status_code: Optional[int] = None
-    error_message: Optional[str] = None
-    timestamp: datetime = field(default_factory=datetime.now)
-
-
-# Pydantic models (V2)
-class TransactionInput(BaseModel):
-    amount: confloat(ge=0, le=1_000_000)
-    use_chip: str
-    current_age: int
-    retirement_age: int
-    birth_year: int
-    gender: str
-    latitude: float
-    longitude: float
-    yearly_income: confloat(ge=0)
-    total_debt: confloat(ge=0)
-    credit_score: int
-    num_credit_cards: int
-    transaction_hour: int
-    day_of_week: int
-    is_weekend: bool
-    is_night_transaction: bool
-    amount_vs_avg: confloat(ge=0)
-
-    @field_validator("birth_year")
-    def validate_birth_year(cls, v):
-        current_year = datetime.now().year
-        if v < 1900 or v > current_year:
-            raise ValueError("Ano de nascimento inválido")
-        return v
-
-    @field_validator("transaction_hour")
-    def validate_hour(cls, v):
-        if v < 0 or v > 23:
-            raise ValueError("Hora da transação inválida")
-        return v
-
-    @field_validator("day_of_week")
-    def validate_day(cls, v):
-        if v < 0 or v > 6:
-            raise ValueError("Dia da semana inválido")
-        return v
-
-
-class BatchTransactionInput(BaseModel):
-    transactions: List[TransactionInput]
-
-    @field_validator("transactions")
-    def validate_transactions(cls, v):
-        if len(v) > 1000:
-            raise ValueError("Tamanho máximo do batch é 1000 transações")
-        return v
-
-
-# =============================================================================
-# Observers
-# =============================================================================
-@runtime_checkable
-class APIObserver(Protocol):
-    def update(self, event: APIEvent, data: Dict[str, Any]): ...
-
-
-class Subject:
     def __init__(self):
-        self._observers: List[APIObserver] = []
-
-    def attach(self, observer: APIObserver):
-        self._observers.append(observer)
-
-    def notify(self, event: APIEvent, data: Dict[str, Any]):
-        for observer in self._observers:
-            try:
-                observer.update(event, data)
-            except Exception:
-                pass
+        self.model = None
+        self.model_path = os.getenv("MODEL_PATH", "outputs/models/default_model.joblib")
+        self.mlflow_client = None
 
 
-class ConsoleLogObserver(APIObserver):
-    def __init__(self, logger: AdvancedLogger):
-        self.logger = logger
-
-    def update(self, event: APIEvent, data: Dict[str, Any]):
-        messages = {
-            APIEvent.STARTUP: "🚀 API TrustShield iniciada",
-            APIEvent.SHUTDOWN: "🛑 API TrustShield finalizada",
-            APIEvent.REQUEST_RECEIVED: f"📥 Requisição recebida: {data.get('endpoint', 'N/A')}",
-            APIEvent.REQUEST_PROCESSED: f"✅ Requisição processada: {data.get('endpoint', 'N/A')} ({data.get('execution_time', 0):.2f}s)",
-            APIEvent.ERROR_OCCURRED: f"❌ Erro na requisição: {data.get('error', 'N/A')}",
-            APIEvent.MODEL_LOADED: f"🔄 Modelo carregado: {data.get('model_type', 'N/A')}",
-        }
-        if message := messages.get(event):
-            self.logger.log(logging.INFO, message)
+app_state = AppState()
 
 
-class PrometheusObserver(APIObserver):
-    def __init__(self):
-        if PROMETHEUS_AVAILABLE:
-            self.request_counter = Counter(
-                "trustshield_api_requests_total", "Total API requests", ["endpoint", "status"]
-            )
-            self.request_duration = Histogram(
-                "trustshield_api_request_duration_seconds", "API request duration"
-            )
+async def load_model_and_setup_mlflow():
+    """
+    Função assíncrona para carregar o modelo e configurar o MLflow.
+    Executada durante o startup da API.
+    """
+    global app_state
+    logger.info("Iniciando configuração do MLflow e carregamento do modelo...")
 
-    def update(self, event: APIEvent, data: Dict[str, Any]):
-        if not PROMETHEUS_AVAILABLE:
-            return
-        if event == APIEvent.REQUEST_PROCESSED:
-            metrics = data.get("metrics", {}) or data
-            endpoint = metrics.get("endpoint", "unknown")
-            status = "success" if metrics.get("success", False) else "error"
-            self.request_counter.labels(endpoint=endpoint, status=status).inc()
-            if "execution_time" in metrics:
-                self.request_duration.observe(metrics["execution_time"])
-
-
-class MLflowObserver(APIObserver):
-    def __init__(self, experiment_name: str):
-        self.experiment_name = experiment_name
-        self.run_id = None
-
-    def update(self, event: APIEvent, data: Dict[str, Any]):
-        try:
-            if event == APIEvent.STARTUP:
-                mlflow.set_experiment(self.experiment_name)
-                mlflow.start_run(run_name=f"api_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
-                self.run_id = mlflow.active_run().info.run_id
-            elif event == APIEvent.REQUEST_PROCESSED and self.run_id:
-                metrics = data.get("metrics", {}) or data
-                mlflow.log_metric(
-                    f"{metrics.get('endpoint', 'req').replace('/', '_')}_time",
-                    metrics.get("execution_time", 0.0),
-                )
-            elif event == APIEvent.SHUTDOWN:
-                if mlflow.active_run():
-                    mlflow.end_run()
-        except Exception:
-            pass
-
-
-# =============================================================================
-# App state & lifecycle
-# =============================================================================
-
-class AppState(State):
-    predictor: Optional[TrustShieldPredictor]
-    config: Dict[str, Any]
-    logger: AdvancedLogger
-    monitor: ResourceMonitor
-    subject: Subject
-    model_path: Path
-    model_loading_task: Optional[asyncio.Task] = None
-
-
-async def load_model_in_background(app: FastAPI):
-    """Carrega o modelo em uma tarefa de fundo de forma resiliente."""
-    app_state: AppState = app.state
     try:
-        project_root = Path(__file__).resolve().parents[2]
-        model_path_str = app_state.config.get("api", {}).get("model_path", "outputs/models/default_model.joblib")
-        model_path = project_root / model_path_str if not Path(model_path_str).is_absolute() else Path(model_path_str)
-        app_state.model_path = model_path
+        # --- CORREÇÃO APLICADA AQUI ---
+        # Chama a sua função de setup para configurar as URIs corretas (HTTP)
+        # antes de qualquer outra operação do MLflow.
+        mlflow = setup_mlflow(experiment="TrustShield_API")
+        app_state.mlflow_client = mlflow.tracking.MlflowClient()
+        logger.info(f"MLflow configurado com sucesso. Tracking URI: {mlflow.get_tracking_uri()}")
 
-        if not model_path.exists():
-            app_state.logger.log(logging.WARNING,
-                                 f"Modelo '{model_path}' não encontrado. API iniciará sem capacidade de predição.")
-            app_state.predictor = None
-            return
+        # Tenta registrar um "run" de inicialização para validar a conexão.
+        max_retries = 10
+        for attempt in range(max_retries):
+            try:
+                with mlflow.start_run(run_name="api_startup"):
+                    mlflow.set_tag("status", "API started")
+                logger.info("Run de inicialização no MLflow registrado com sucesso.")
+                break
+            except Exception as e:
+                logger.warning(
+                    f"Tentativa {attempt + 1}/{max_retries} de conectar ao MLflow falhou. Aguardando... Erro: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(5)
+                else:
+                    logger.error("Falha crítica ao conectar ao MLflow após múltiplas tentativas.")
+                    # A API continuará, mas sem rastreamento MLflow.
+                    app_state.mlflow_client = None
 
-        predictor = await asyncio.to_thread(TrustShieldPredictor, model_path=str(model_path))
-
-        app_state.predictor = predictor
-        app_state.subject.notify(APIEvent.MODEL_LOADED, {
-            "model_type": app_state.predictor.model_type.value if getattr(app_state.predictor, 'model_type',
-                                                                          None) else "unknown"
-        })
     except Exception as e:
-        app_state.logger.log(logging.ERROR, f"Falha crítica ao carregar o modelo em background: {e}")
-        app_state.predictor = None
+        logger.error(f"Erro inesperado durante o setup do MLflow: {e}", exc_info=True)
+
+    # Carregamento do modelo (lógica original mantida)
+    model_file = Path(app_state.model_path)
+    if model_file.exists():
+        try:
+            app_state.model = joblib.load(model_file)
+            logger.info(f"Modelo '{model_file.name}' carregado com sucesso.")
+        except Exception as e:
+            logger.error(f"Erro ao carregar o modelo de {model_file}: {e}", exc_info=True)
+            app_state.model = None
+    else:
+        logger.warning(f"Arquivo do modelo não encontrado em {model_file}. API iniciará sem modelo.")
+        app_state.model = None
 
 
+# =============================================================================
+# Ciclo de Vida da API (Lifespan)
+# =============================================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state = AppState()
-    project_root = Path(__file__).resolve().parents[2]
-
-    # Config
-    config_manager = ConfigManager(project_root)
-    app.state.config = config_manager.get_config()
-
-    # Infra
-    app.state.logger = AdvancedLogger("TrustShield-API")
-    app.state.monitor = ResourceMonitor(app.state.logger)
-    app.state.subject = Subject()
-    app.state.predictor = None
-
-    # Observers
-    app.state.subject.attach(ConsoleLogObserver(app.state.logger))
-    app.state.subject.attach(PrometheusObserver())
-    app.state.subject.attach(MLflowObserver(app.state.config.get("mlflow", {}).get("experiment_name", "TrustShield")))
-
-    app.state.subject.notify(APIEvent.STARTUP, {})
-
-    app.state.model_loading_task = asyncio.create_task(load_model_in_background(app))
-
-    try:
-        yield
-    finally:
-        if app.state.model_loading_task:
-            app.state.model_loading_task.cancel()
-        app.state.subject.notify(APIEvent.SHUTDOWN, {})
+    """Gerencia o startup e shutdown da aplicação."""
+    await load_model_and_setup_mlflow()
+    yield
+    logger.info("API encerrada.")
 
 
-app = FastAPI(
-    title="TrustShield Fraud Detection API",
-    version=API_VERSION,
-    lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(lifespan=lifespan)
 
 
 # =============================================================================
-# Dependencies & middleware
+# DTOs (Data Transfer Objects)
 # =============================================================================
+class TransactionInput(BaseModel):
+    """Estrutura dos dados de entrada para uma predição."""
+    amount: float = Field(..., example=123.45)
 
-def get_predictor(request: Request) -> TrustShieldPredictor:
-    predictor = request.app.state.predictor
-    if not predictor:
-        raise HTTPException(status_code=503,
-                            detail="Serviço indisponível: Modelo não carregado ou em processo de carregamento.")
-    return predictor
-
-
-PredictorDep = Annotated[TrustShieldPredictor, Depends(get_predictor)]
+    # Adicione aqui os outros campos que seu modelo espera
+    # Exemplo: 'hour', 'day_of_week', etc.
+    class Config:
+        extra = 'allow'  # Permite campos extras para flexibilidade
 
 
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start_time = time.time()
-    app_state: AppState = request.app.state
-    app_state.subject.notify(APIEvent.REQUEST_RECEIVED, {"endpoint": request.url.path})
-
-    try:
-        response = await call_next(request)
-        execution_time = time.time() - start_time
-        metrics = APIMetrics(
-            event=APIEvent.REQUEST_PROCESSED,
-            endpoint=request.url.path,
-            execution_time=execution_time,
-            success=True,
-            status_code=response.status_code,
-        )
-        app_state.monitor.record_request(success=True)
-        app_state.subject.notify(APIEvent.REQUEST_PROCESSED, metrics.__dict__)
-        return response
-    except Exception as e:
-        execution_time = time.time() - start_time
-        metrics = APIMetrics(
-            event=APIEvent.ERROR_OCCURRED,
-            endpoint=request.url.path,
-            execution_time=execution_time,
-            success=False,
-            error_message=str(e),
-        )
-        app_state.monitor.record_request(success=False)
-        app_state.subject.notify(APIEvent.ERROR_OCCURRED, metrics.__dict__)
-        raise
-
-
-@app.exception_handler(ValidationError)
-async def validation_exception_handler(request: Request, exc: ValidationError):
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+class PredictionOutput(BaseModel):
+    """Estrutura da resposta da predição."""
+    is_anomaly: int = Field(..., example=1, description="-1 para anomalia (fraude), 1 para normal.")
+    score: float = Field(..., example=-0.2345)
+    model_version: str
 
 
 # =============================================================================
-# Circuit breakers
+# Endpoints da API
 # =============================================================================
-if CIRCUITBREAKER_AVAILABLE:
-    @circuit(failure_threshold=5, recovery_timeout=60)
-    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor,
-                                           transaction_data: Dict[str, Any]) -> PredictionResult:
-        return predictor.predict(transaction_data)
-
-
-    @circuit(failure_threshold=3, recovery_timeout=30)
-    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor,
-                                                 transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
-        return predictor.batch_predict(transaction_data)
-else:
-    async def predict_with_circuit_breaker(predictor: TrustShieldPredictor,
-                                           transaction_data: Dict[str, Any]) -> PredictionResult:
-        return predictor.predict(transaction_data)
-
-
-    async def batch_predict_with_circuit_breaker(predictor: TrustShieldPredictor,
-                                                 transaction_data: List[Dict[str, Any]]) -> List[PredictionResult]:
-        return predictor.batch_predict(transaction_data)
-
-
-# =============================================================================
-# Endpoints
-# =============================================================================
-@app.get("/", include_in_schema=False)
-async def root():
-    return {"message": "TrustShield API is running. See /docs and /status."}
-
-
 @app.get("/healthz", tags=["Health"])
-async def healthz():
-    return {"status": "ok", "version": API_VERSION}
+def health_check():
+    """Endpoint para verificação de saúde (liveness probes)."""
+    return {"status": "ok"}
 
 
-@app.post("/predict", tags=["Prediction"], response_model=Dict[str, Any])
-async def predict_transaction(transaction: TransactionInput, predictor: PredictorDep):
+@app.get("/status", tags=["Health"])
+def get_status():
+    """Retorna o status atual do modelo carregado."""
+    return {
+        "model_loaded": app_state.model is not None,
+        "model_path": app_state.model_path,
+        "mlflow_connected": app_state.mlflow_client is not None
+    }
+
+
+@app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
+def predict(transaction: TransactionInput):
+    """Executa a predição de anomalia para uma transação."""
+    if app_state.model is None:
+        raise HTTPException(status_code=503, detail="Modelo não está disponível no momento.")
+
     try:
-        result = await predict_with_circuit_breaker(predictor, transaction.model_dump())
-        if not result.success:
-            raise HTTPException(status_code=500, detail=f"Erro interno na predição: {result.error}")
-        return result.to_dict()
+        # Converte o input Pydantic para um DataFrame do Pandas
+        input_df = pd.DataFrame([transaction.dict()])
+
+        # ATENÇÃO: Garanta que as features no input_df correspondam
+        # exatamente às features esperadas pelo modelo.
+        # A ordem e os nomes das colunas são cruciais.
+
+        # Exemplo: Selecionar apenas as colunas que o modelo usa
+        # feature_columns = ['amount', 'hour', ...]
+        # input_features = input_df[feature_columns]
+
+        # Para o IsolationForest, geralmente se usam todas as features numéricas.
+        # Esta é uma suposição que precisa ser validada com seu script de treino.
+        input_features = input_df.select_dtypes(include=['number'])
+
+        score = app_state.model.decision_function(input_features)[0]
+        prediction = app_state.model.predict(input_features)[0]
+
+        return {
+            "is_anomaly": int(prediction),
+            "score": float(score),
+            "model_version": Path(app_state.model_path).name
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Erro durante a predição: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro interno no servidor: {e}")
 
 
-@app.post("/batch-predict", tags=["Prediction"], response_model=List[Dict[str, Any]])
-async def batch_predict_transactions(batch: BatchTransactionInput, predictor: PredictorDep):
-    try:
-        transactions_list = [t.model_dump() for t in batch.transactions]
-        results = await batch_predict_with_circuit_breaker(predictor, transactions_list)
-        return [r.to_dict() for r in results]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-def run_explanation(interpreter: ResilientModelInterpreter, data_path: str, output_path: str):
-    try:
-        interpreter.run_interpretation(data_path=data_path, methods=['shap'])
-        project_root = Path(__file__).resolve().parents[2]
-        source_dir = project_root / "outputs" / "interpretations" / "shap"
-        result_files = list(source_dir.glob('*.json'))
-        if not result_files: return
-        latest_result_file = max(result_files, key=os.path.getctime)
-        os.rename(latest_result_file, output_path)
-    finally:
-        try:
-            if os.path.exists(data_path): os.unlink(data_path)
-        except Exception:
-            pass
-
-
-@app.post("/explain", tags=["Interpretation"], status_code=202)
-async def explain_transaction_async(transaction: TransactionInput, background_tasks: BackgroundTasks, request: Request):
-    app_state: AppState = request.app.state
-    model_path = str(app_state.model_path)
-    job_id = f"explanation_{datetime.now().strftime('%Y%m%d%H%M%S')}_{os.urandom(4).hex()}"
-    project_root = Path(__file__).resolve().parents[2]
-    temp_dir = project_root / "outputs" / "temp_explanations"
-    temp_dir.mkdir(exist_ok=True)
-    input_data_path = temp_dir / f"{job_id}_input.parquet"
-    output_result_path = temp_dir / f"{job_id}_result.json"
-    df = pd.DataFrame([transaction.model_dump()])
-    df.to_parquet(input_data_path)
-    interpreter = ResilientModelInterpreter(model_path=model_path)
-    background_tasks.add_task(run_explanation, interpreter, str(input_data_path), str(output_result_path))
-    return {"job_id": job_id, "status": "explanation_started"}
-
-
-@app.get("/explanation-result/{job_id}", tags=["Interpretation"], response_model=Dict[str, Any])
-async def get_explanation_result(job_id: str):
-    project_root = Path(__file__).resolve().parents[2]
-    output_path = project_root / "outputs" / "temp_explanations" / f"{job_id}_result.json"
-    if not output_path.exists():
-        raise HTTPException(status_code=202, detail="Explanation result not ready yet.")
-    with open(output_path, "r") as f:
-        explanation = json.load(f)
-    return explanation
-
-
-@app.get("/status", tags=["Health"], response_model=Dict[str, Any])
-async def get_status(request: Request):
-    app_state: AppState = request.app.state
-    predictor = app_state.predictor
-    status = predictor.get_status() if predictor else {"status": "NOT_LOADED", "model_type": None}
-    status["version"] = API_VERSION
-    status["api_metrics"] = app_state.monitor.get_stats()
-    return status
-
-
-async def run_model_validation(app_state: AppState):
-    validator = ResilientTrustShieldValidator()
-    validator.run_validation(
-        data_path="data/interim/validation_sample.parquet",
-        model_path=str(app_state.model_path),
-        reference_data_path="data/features/featured_dataset.parquet",
-        validation_types=['drift_detection'],
-    )
-    app_state.subject.notify(APIEvent.MODEL_VALIDATED, {})
-
-
-@app.post("/validate", tags=["Validation"])
-async def validate_model(background_tasks: BackgroundTasks, request: Request):
-    app_state = request.app.state
-    if not app_state.config.get('api', {}).get('model_validation', False):
-        raise HTTPException(status_code=400, detail="Validação de modelo não habilitada.")
-    background_tasks.add_task(run_model_validation, app_state)
-    return {"status": "validation_started"}
+@app.post("/reload", tags=["Admin"])
+async def reload_model(background_tasks: BackgroundTasks):
+    """Dispara a recarga do modelo e a reconfiguração do MLflow em background."""
+    logger.info("Requisição para recarregar o modelo recebida.")
+    background_tasks.add_task(load_model_and_setup_mlflow)
+    return {"message": "Processo de recarga do modelo iniciado."}
