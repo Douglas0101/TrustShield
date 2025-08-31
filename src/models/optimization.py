@@ -49,6 +49,7 @@ from sklearn.preprocessing import StandardScaler  # noqa: F401
 try:
     import great_expectations as ge
     from great_expectations.core import ExpectationSuite, ExpectationConfiguration
+    from great_expectations.checkpoint import Checkpoint
     GE_AVAILABLE = True
 except ImportError:
     ge = ExpectationSuite = ExpectationConfiguration = None
@@ -103,8 +104,9 @@ class AdvancedLogger:
         self.logger.log(level, message, extra={'timestamp': datetime.now().isoformat(), **kwargs})
 
 class ConfigManager:
-    def __init__(self, project_root: Path):
+    def __init__(self, project_root: Path, logger: AdvancedLogger):
         self.project_root = project_root
+        self.logger = logger
         if DYNACONF_AVAILABLE and Dynaconf:
             self.settings = Dynaconf(settings_files=[str(project_root / "config" / "config.yaml")], environments=True, env_switcher="ENV_FOR_DYNACONF", load_dotenv=True)
         else:
@@ -113,6 +115,7 @@ class ConfigManager:
     def get_config(self) -> Dict[str, Any]:
         if DYNACONF_AVAILABLE and self.settings:
             config = self.settings.to_dict()
+            self.logger.log(logging.INFO, f"Config loaded from dynaconf: {config}")
             env = os.getenv("ENV", "development")
             if env == "production":
                 config['hyper_optimization']['n_trials'] = 100
@@ -153,12 +156,57 @@ class DataValidator:
             self.logger.log(logging.WARNING, "Great Expectations não disponível - pulando validação")
             return True, {}
         try:
-            suite = ExpectationSuite(expectation_suite_name="optimization_suite")
-            suite.add_expectation(ExpectationConfiguration(expectation_type="expect_column_values_to_not_be_null", kwargs={"column": "amount"}))
-            suite.add_expectation(ExpectationConfiguration(expectation_type="expect_table_row_count_to_be_between", kwargs={"min_value": 100, "max_value": 1000000}))
-            batch = self.context.get_batch(datasource_name="my_datasource", data_connector_name="default_inferred_data_connector_name", data_asset_name="transactions", batch_kwargs={"dataset": df})
-            results = self.context.run_validation_operator("action_list_operator", assets_to_validate=[batch], expectation_suite=[suite])
-            validation_results = {'success': results["success"], 'statistics': results["results"].get('statistics', {}), 'failed_expectations': len([r for r in results["results"]["results"] if not r["success"]])}
+            datasource = self.context.sources.add_pandas(name="my_pandas_datasource")
+            data_asset = datasource.add_dataframe_asset(name="my_dataframe_asset", dataframe=df)
+
+            expectation_suite_name = "optimization_suite"
+            self.context.add_or_update_expectation_suite(expectation_suite_name=expectation_suite_name)
+
+            validator = self.context.get_validator(
+                batch_request=data_asset.build_batch_request(),
+                expectation_suite_name=expectation_suite_name,
+            )
+
+            validator.expect_column_values_to_not_be_null("amount")
+            validator.expect_table_row_count_to_be_between(min_value=100, max_value=15000000)
+            validator.save_expectation_suite(discard_failed_expectations=False)
+
+            checkpoint = Checkpoint(
+                name="my_in_memory_checkpoint",
+                data_context=self.context,
+                validations=[
+                    {
+                        "batch_request": data_asset.build_batch_request(),
+                        "expectation_suite_name": expectation_suite_name,
+                    },
+                ],
+                action_list=[
+                    {
+                        "name": "store_validation_result",
+                        "action": {"class_name": "StoreValidationResultAction"},
+                    },
+                    {
+                        "name": "update_data_docs",
+                        "action": {"class_name": "UpdateDataDocsAction"},
+                    },
+                ],
+            )
+            checkpoint_result = checkpoint.run()
+
+            run_results = checkpoint_result.run_results
+            validation_result_identifier = list(run_results.keys())[0]
+            validation_result = run_results[validation_result_identifier]["validation_result"]
+
+
+            validation_results = {
+                'success': validation_result.success,
+                'statistics': validation_result.statistics,
+                'failed_expectations': len([r for r in validation_result.results if not r.success])
+            }
+
+            if not validation_results['success']:
+                self.logger.log(logging.ERROR, f"Validation failed. Results: {validation_result}")
+
             self.logger.log(logging.INFO if validation_results['success'] else logging.ERROR, f"Validação de dados: {'Sucesso' if validation_results['success'] else 'Falha'}", **validation_results)
             return validation_results['success'], validation_results
         except Exception as e:
@@ -239,7 +287,8 @@ class MLflowObserver(OptimizationObserver):
     def __init__(self, experiment_name: str, project_root: Path): self.experiment_name, self.project_root = experiment_name, project_root
     def update(self, event: OptimizationEvent, data: Dict[str, Any]):
         if event == OptimizationEvent.OPTIMIZATION_START:
-            mlflow.start_run(run_name=f"optimization_{datetime.now().strftime('%Y%m%d-%H%M%S')}", experiment_name=self.experiment_name)
+            mlflow.set_experiment(self.experiment_name)
+            mlflow.start_run(run_name=f"optimization_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
             mlflow.log_params(data.get('config', {}).get('hyper_optimization', {}))
         elif event == OptimizationEvent.OPTIMIZATION_METHOD_COMPLETE:
             mlflow.log_metrics(data['metrics'].to_dict())
@@ -366,7 +415,7 @@ class ResilientHyperparameterOptimizer(Subject):
         self.config_path = config_path
         self.logger = AdvancedLogger('TrustShield-Optimizer')
         self.monitor = ResourceMonitor(self.logger)
-        self.config_manager = ConfigManager(self.project_root)
+        self.config_manager = ConfigManager(self.project_root, self.logger)
         self.config = self.config_manager.get_config()
         self.data_validator = DataValidator(self.config, self.logger)
         self.attach(ConsoleLogObserver(self.logger))

@@ -113,7 +113,7 @@ data:      ; $(DC) exec $(API_SERVICE) python -m src.data.make_dataset
 features:  ; $(DC) exec $(API_SERVICE) python -m src.features.build_features
 train:     ; $(DC) exec $(API_SERVICE) python -m src.models.train_fraud_model
 eval:      ; $(DC) exec $(API_SERVICE) python -m src.models.evaluate_models
-optimize:  ; $(DC) exec $(API_SERVICE) python -m src.models.optimization
+optimize:  ; $(DC) exec $(API_SERVICE) python -m src.models.optimization --data data/features/featured_dataset.parquet
 validate:  ; $(DC) exec $(API_SERVICE) python -m src.models.validation
 interpret: ; $(DC) exec $(API_SERVICE) python -m src.models.interpretation
 promote:   ; $(DC) exec $(API_SERVICE) python -c "from pathlib import Path; import shutil,sys; p=Path('outputs/models'); c=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); sys.exit(0) if not c else (shutil.copy2(c[0], p/'default_model.joblib') or print('Promovido:', c[0].name))"
