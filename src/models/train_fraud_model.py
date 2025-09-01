@@ -331,6 +331,9 @@ class IntelI3Optimizer:
         # Carregar dados uma vez só (cache)
         df = self.optimize_data_loading('data/features/featured_dataset.parquet')
 
+        # Criar exemplo de entrada para a assinatura do modelo MLflow
+        input_example = df.head()
+
         # Split
         print("\n📊 Preparando dados para treinamento...")
         X_train, X_test = train_test_split(
@@ -427,7 +430,8 @@ class IntelI3Optimizer:
                     mlflow.sklearn.log_model(
                         sk_model=result['model'],
                         artifact_path="model",
-                        registered_model_name=model_name
+                        registered_model_name=model_name,
+                        input_example=input_example
                     )
                     
                     # Log do scaler
@@ -595,7 +599,9 @@ def main():
     print("3. Benchmark de modelo existente")
     print("4. Análise completa + Re-treinamento")
 
-    choice = input("\nEscolha uma opção (1-4): ")
+    # Hardcoded choice for non-interactive execution, placed after the menu is printed.
+    choice = "1"
+    print(f"\nOpção '{choice}' selecionada automaticamente para execução não-interativa.")
 
     if choice == '1':
         # Re-treinar todos
@@ -655,6 +661,7 @@ def main():
        export MODEL_PATH='outputs/models/isolation_forest_optimized_00_*.joblib'
        uvicorn src.api.main:app --reload
     """)
+)
 
 
 if __name__ == "__main__":

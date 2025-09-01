@@ -1,29 +1,35 @@
-# 1. Crie ou atualize seu arquivo .gitignore na raiz do projeto.
-# Certifique-se de que ele contenha as seguintes linhas:
-echo "
-# MLOps Artifacts & Cache
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Dados e Modelos
+data/
 mlruns/
 outputs/
 cache/
-Saida_Algoritmo.txt
+models/
 
-# Python cache
-__pycache__/
-*.pyc
+# Notebooks
+notebooks/
 
-# IDE files
+# IDE
 .idea/
-.vscode/
-" >> .gitignore
+*.iml
 
-# 2. Remova os diretórios do tracking do Git (sem apagá-los do seu disco)
-git rm -r --cached mlruns/
-git rm -r --cached outputs/
-git rm -r --cached cache/
-git rm --cached Saida_Algoritmo.txt
-
-# 3. Faça o commit desta limpeza
-git add .gitignore
-git commit -m "chore: Adiciona artefatos de ML e cache ao .gitignore"
-
-echo "✅ Repositório higienizado. Artefatos não serão mais versionados."
+# Outros
+.DS_Store
+local_settings.py

@@ -9,7 +9,7 @@ RUN python -m pip install --upgrade pip && python -m pip wheel -r requirements.t
 # ---- runtime ----
 FROM python:3.11-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMBA_NUM_THREADS=1
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl git && rm -rf /var/lib/apt/lists/*
 RUN useradd -ms /bin/bash appuser
 WORKDIR /app
 COPY --from=builder /wheels /wheels
