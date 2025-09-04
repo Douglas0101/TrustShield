@@ -1,41 +1,68 @@
 from __future__ import annotations
-import os, json, time
+import os, json, time, yaml
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 import mlflow
 
-_DEF_TRACKING_DOCKER = "http://trustshield_mlflow:5000"
-_DEF_TRACKING_HOST   = "http://localhost:5000"
 _DEF_S3_DOCKER       = "http://trustshield_minio:9000"
 _DEF_S3_HOST         = "http://localhost:9000"
 _DEF_BUCKET          = "mlflow"
-
-def _guess_in_container() -> bool:
-    try:
-        return "docker" in open("/proc/1/cgroup").read() or "containerd" in open("/proc/1/cgroup").read()
-    except Exception:
-        return False
 
 def _coalesce(*vals: Optional[str]) -> Optional[str]:
     for v in vals:
         if v: return v
     return None
 
-def setup_mlflow(experiment: str="TrustShield", tracking_uri: Optional[str]=None,
-                 s3_endpoint: Optional[str]=None, ensure_bucket: bool=True,
-                 bucket_name: str=_DEF_BUCKET) -> mlflow:
-    in_c = _guess_in_container()
-    tracking_uri = _coalesce(tracking_uri, os.getenv("MLFLOW_TRACKING_URI"),
-                             _DEF_TRACKING_DOCKER if in_c else _DEF_TRACKING_HOST)
-    s3_endpoint  = _coalesce(s3_endpoint, os.getenv("MLFLOW_S3_ENDPOINT_URL"),
-                             _DEF_S3_DOCKER if in_c else _DEF_S3_HOST)
+def _get_project_root() -> Path:
+    return Path(__file__).resolve().parents[2]
 
-    os.environ["MLFLOW_TRACKING_URI"] = tracking_uri
-    os.environ["MLFLOW_S3_ENDPOINT_URL"] = s3_endpoint
-    mlflow.set_tracking_uri(tracking_uri)
-    mlflow.set_experiment(experiment)
-    if ensure_bucket: _ensure_minio_bucket(bucket_name, s3_endpoint)
+def _load_config() -> Dict[str, Any]:
+    """Carrega a configuração principal do projeto."""
+    root = _get_project_root()
+    config_path = root / "config" / "config.yaml"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Arquivo de configuração não encontrado em: {config_path}")
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+def setup_mlflow(experiment: str = "TrustShield", tracking_uri: Optional[str] = None,
+                 s3_endpoint: Optional[str] = None, ensure_bucket: bool = True,
+                 bucket_name: str = _DEF_BUCKET) -> mlflow:
+    """
+    Configura o MLflow usando o `config.yaml` como fonte de verdade.
+    A ordem de precedência para a URI de tracking é:
+    1. Argumento `tracking_uri` passado para a função.
+    2. Variável de ambiente `MLFLOW_TRACKING_URI`.
+    3. Valor de `mlflow.tracking_uri` no `config.yaml`.
+    4. Fallback para localhost se nada for encontrado.
+    """
+    config = _load_config()
+    mlflow_config = config.get("mlflow", {})
+
+    # Determina a URI de Tracking
+    config_uri = mlflow_config.get("tracking_uri")
+    final_tracking_uri = _coalesce(tracking_uri, os.getenv("MLFLOW_TRACKING_URI"), config_uri, "http://localhost:5000")
+
+    # Determina o endpoint S3
+    in_c = "docker" in open("/proc/1/cgroup").read() or "containerd" in open("/proc/1/cgroup").read()
+    final_s3_endpoint  = _coalesce(s3_endpoint, os.getenv("MLFLOW_S3_ENDPOINT_URL"),
+                                   _DEF_S3_DOCKER if in_c else _DEF_S3_HOST)
+
+    os.environ["MLFLOW_TRACKING_URI"] = final_tracking_uri
+    os.environ["MLFLOW_S3_ENDPOINT_URL"] = final_s3_endpoint
+
+    mlflow.set_tracking_uri(final_tracking_uri)
+
+    # Usa o nome do experimento do config.yaml se não for passado um específico
+    final_experiment_name = experiment if experiment != "TrustShield" else mlflow_config.get("experiment_name", "TrustShield")
+    mlflow.set_experiment(final_experiment_name)
+
+    if ensure_bucket:
+        _ensure_minio_bucket(bucket_name, final_s3_endpoint)
+
+    print(f"MLflow setup complete. Tracking URI: {final_tracking_uri}, Experiment: {final_experiment_name}")
+
     return mlflow
 
 def _ensure_minio_bucket(bucket_name: str, endpoint_url: str) -> None:

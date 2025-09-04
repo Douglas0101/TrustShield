@@ -63,3 +63,4 @@ hyper_optimization:
 # === MLFLOW ===
 mlflow:
   experiment_name: "TrustShield-Advanced"
+  tracking_uri: "http://trustshield_mlflow:5000"
