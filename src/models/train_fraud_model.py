@@ -39,6 +39,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 import mlflow
+from src.utils.mlflow_setup import setup_mlflow
 
 # Tentativa de imports otimizados
 try:
@@ -357,10 +358,7 @@ class IntelI3Optimizer:
         best_config = self.parallel_hyperparameter_search(X_train, X_test)
         
         # MLflow setup
-        mlflow.set_tracking_uri("http://mlflow:5000")
-        experiment_name = "TrustShield Fraud Detection"
-        mlflow.set_experiment(experiment_name)
-        print(f"\n📦 MLflow experiment '{experiment_name}' configurado.")
+        setup_mlflow()
 
         # Re-treinar modelos existentes
         print("\n" + "=" * 60)
@@ -661,7 +659,6 @@ def main():
        export MODEL_PATH='outputs/models/isolation_forest_optimized_00_*.joblib'
        uvicorn src.api.main:app --reload
     """)
-)
 
 
 if __name__ == "__main__":
