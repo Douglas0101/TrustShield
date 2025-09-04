@@ -661,7 +661,6 @@ def main():
        export MODEL_PATH='outputs/models/isolation_forest_optimized_00_*.joblib'
        uvicorn src.api.main:app --reload
     """)
-)
 
 
 if __name__ == "__main__":

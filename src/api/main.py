@@ -112,13 +112,22 @@ app = FastAPI(lifespan=lifespan)
 # DTOs (Data Transfer Objects)
 # =============================================================================
 class TransactionInput(BaseModel):
-    """Estrutura dos dados de entrada para uma predição."""
+    """
+    Estrutura dos dados de entrada para uma predição.
+    Define um contrato de API estrito para uma única transação.
+    """
+    client_id: int = Field(..., example=12345)
     amount: float = Field(..., example=123.45)
+    current_age: int = Field(..., example=35)
+    per_capita_income: float = Field(..., example=50000.0)
+    yearly_income: float = Field(..., example=100000.0)
+    total_debt: float = Field(..., example=25000.0)
+    date: str = Field(..., example="2024-01-15T14:30:00")
+    use_chip: str = Field(..., example="Swipe Transaction")
+    gender: str = Field(..., example="F")
 
-    # Adicione aqui os outros campos que seu modelo espera
-    # Exemplo: 'hour', 'day_of_week', etc.
     class Config:
-        extra = 'allow'  # Permite campos extras para flexibilidade
+        extra = 'forbid'  # Não permite campos extras, garantindo um contrato rígido.
 
 
 class PredictionOutput(BaseModel):
@@ -150,33 +159,28 @@ def get_status():
 @app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
 def predict(transaction: TransactionInput):
     """Executa a predição de anomalia para uma transação."""
-    if app_state.model is None:
-        raise HTTPException(status_code=503, detail="Modelo não está disponível no momento.")
+    if app_state.model is None or 'model' not in app_state.model or 'features' not in app_state.model:
+        raise HTTPException(status_code=503, detail="Modelo não está disponível ou está mal configurado.")
 
     try:
         # Converte o input Pydantic para um DataFrame do Pandas
-        input_df = pd.DataFrame([transaction.dict()])
+        input_df = pd.DataFrame([transaction.model_dump()])
 
-        # ATENÇÃO: Garanta que as features no input_df correspondam
-        # exatamente às features esperadas pelo modelo.
-        # A ordem e os nomes das colunas são cruciais.
+        # Usa a lista de features do artefato do modelo para garantir consistência
+        features = app_state.model['features']
+        input_features = input_df[features]
 
-        # Exemplo: Selecionar apenas as colunas que o modelo usa
-        # feature_columns = ['amount', 'hour', ...]
-        # input_features = input_df[feature_columns]
-
-        # Para o IsolationForest, geralmente se usam todas as features numéricas.
-        # Esta é uma suposição que precisa ser validada com seu script de treino.
-        input_features = input_df.select_dtypes(include=['number'])
-
-        score = app_state.model.decision_function(input_features)[0]
-        prediction = app_state.model.predict(input_features)[0]
+        score = app_state.model['model'].decision_function(input_features)[0]
+        prediction = app_state.model['model'].predict(input_features)[0]
 
         return {
             "is_anomaly": int(prediction),
             "score": float(score),
             "model_version": Path(app_state.model_path).name
         }
+    except KeyError as e:
+        logger.error(f"Erro de feature não encontrada durante a predição: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Payload de entrada inválido. Feature ausente: {e}")
     except Exception as e:
         logger.error(f"Erro durante a predição: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro interno no servidor: {e}")
