@@ -35,9 +35,11 @@ os.environ['NUMBA_NUM_THREADS'] = '2'
 
 # Importações científicas
 from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 import mlflow
 
 # Tentativa de imports otimizados
@@ -141,15 +143,10 @@ class IntelI3Optimizer:
                             "client_id", "id_transaction"]
         df = df.drop(columns=[col for col in features_to_drop if col in df.columns])
 
-        # One-hot encoding otimizado
-        categorical = ["use_chip", "gender"]
-        for col in categorical:
-            if col in df.columns:
-                # Usar sparse matrix para economizar memória
-                df = pd.get_dummies(df, columns=[col], sparse=False, dtype='int8')
-
-        # Selecionar apenas numéricas e converter para float32
-        df = df.select_dtypes(include='number').fillna(0).astype('float32')
+        # One-hot encoding foi movido para o pipeline de treino.
+        # Apenas garante que as colunas numéricas são float32.
+        for col in df.select_dtypes(include='number').columns:
+            df[col] = df[col].astype('float32')
 
         # Salvar cache
         cache_path.parent.mkdir(exist_ok=True)
@@ -321,145 +318,114 @@ class IntelI3Optimizer:
 
     def retrain_all_models_optimized(self):
         """
-        Re-treina todos os 30 modelos com otimizações extremas.
-        Tempo estimado: 30 minutos total (1 min/modelo)
+        Re-treina todos os 30 modelos com otimizações extremas usando SKLEARN PIPELINES.
         """
         print("\n" + "=" * 60)
-        print("🚀 INICIANDO RE-TREINAMENTO OTIMIZADO DOS 30 MODELOS")
+        print("🚀 INICIANDO RE-TREINAMENTO OTIMIZADO COM PIPELINES")
         print("=" * 60)
 
-        # Carregar dados uma vez só (cache)
+        # Carregar dados (sem one-hot encoding manual)
         df = self.optimize_data_loading('data/features/featured_dataset.parquet')
 
-        # Criar exemplo de entrada para a assinatura do modelo MLflow
-        input_example = df.head()
+        # Definir colunas para o preprocessor
+        categorical_features = [col for col in ["use_chip", "gender"] if col in df.columns]
+        numeric_features = df.drop(columns=categorical_features, errors='ignore').select_dtypes(include=np.number).columns.tolist()
 
-        # Split
-        print("\n📊 Preparando dados para treinamento...")
-        X_train, X_test = train_test_split(
-            df.values,  # Usar numpy array (mais rápido)
-            test_size=0.15,
-            random_state=42
+        print(f"Identificadas {len(numeric_features)} features numéricas e {len(categorical_features)} categóricas.")
+
+        # Criar o preprocessor
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', StandardScaler(), numeric_features),
+                ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_features)
+            ],
+            remainder='drop'
         )
 
-        # Normalização vetorizada
-        print("🔧 Normalizando dados...")
-        scaler = StandardScaler()
+        # Criar exemplo de entrada para a assinatura do modelo
+        input_example = df.head()
 
-        # Usar float32 para economizar memória e acelerar
-        X_train = scaler.fit_transform(X_train).astype('float32')
-        X_test = scaler.transform(X_test).astype('float32')
+        # Split do DataFrame
+        print("\n📊 Preparando dados para treinamento...")
+        train_df, test_df = train_test_split(df, test_size=0.15, random_state=42)
+        print(f"   Train shape: {train_df.shape}")
+        print(f"   Test shape: {test_df.shape}")
 
-        print(f"   Train shape: {X_train.shape}")
-        print(f"   Test shape: {X_test.shape}")
+        # Usar config de hiperparâmetros padrão (busca com pipeline é mais complexa)
+        best_config = {'n_estimators': 100, 'max_features': 1.0, 'contamination': 0.1}
+        print(f"\n🏆 Usando configuração de hiperparâmetros padrão: {best_config}")
 
-        # Buscar melhores hiperparâmetros
-        best_config = self.parallel_hyperparameter_search(X_train, X_test)
-        
         # MLflow setup
         mlflow.set_tracking_uri("http://mlflow:5000")
         experiment_name = "TrustShield Fraud Detection"
         mlflow.set_experiment(experiment_name)
         print(f"\n📦 MLflow experiment '{experiment_name}' configurado.")
 
-        # Re-treinar modelos existentes
         print("\n" + "=" * 60)
-        print("📦 RE-TREINANDO 30 MODELOS COM CONFIGURAÇÃO OTIMIZADA")
+        print("📦 RE-TREINANDO 30 MODELOS COM PIPELINES")
         print("=" * 60)
 
         models_dir = Path('outputs/models')
-        existing_models = sorted(models_dir.glob('isolation_forest_*.joblib'))[:30]
-
-        if not existing_models:
-            print("⚠️ Nenhum modelo existente encontrado. Criando 30 novos...")
-            existing_models = [f"model_{i}" for i in range(30)]
+        models_dir.mkdir(exist_ok=True)
 
         results = []
         total_start = time.time()
 
-        # Processar modelos em batches para não sobrecarregar
-        batch_size = 5  # Treinar 5 por vez
+        for model_idx in range(30):
+            with mlflow.start_run(run_name=f"Pipeline_Model_{model_idx:02d}"):
+                print(f"\n{'=' * 40}\nModelo {model_idx + 1}/30\n{'=' * 40}")
 
-        for batch_idx in range(0, len(existing_models), batch_size):
-            batch = existing_models[batch_idx:batch_idx + batch_size]
-            batch_results = []
+                start_time = time.time()
+                config = best_config.copy()
+                config['random_state'] = 42 + model_idx
 
-            print(f"\n📦 Batch {batch_idx // batch_size + 1}/{len(existing_models) // batch_size + 1}")
+                n_samples = len(train_df)
+                max_samples = min(50000, n_samples // 10) if n_samples > 100000 else 'auto'
 
-            for i, model_ref in enumerate(batch):
-                model_idx = batch_idx + i
-                
-                with mlflow.start_run(run_name=f"Optimized_Model_{model_idx:02d}"):
-                    print(f"\n{'=' * 40}")
-                    print(f"Modelo {model_idx + 1}/30")
-                    print(f"{'=' * 40}")
+                pipeline = Pipeline(steps=[
+                    ('preprocessor', preprocessor),
+                    ('classifier', IsolationForest(
+                        n_estimators=config.get('n_estimators', 100),
+                        max_samples=max_samples,
+                        max_features=config.get('max_features', 1.0),
+                        contamination=config.get('contamination', 0.1),
+                        n_jobs=self.n_jobs_optimal,
+                        random_state=config['random_state'],
+                        bootstrap=False
+                    ))
+                ])
 
-                    # Configuração com variação para diversidade
-                    config = best_config.copy()
-                    config['random_state'] = 42 + model_idx
+                print(f"   📉 Treinando com {max_samples if max_samples != 'auto' else n_samples} amostras...")
+                pipeline.fit(train_df)
+                train_time = time.time() - start_time
 
-                    # Adicionar alguma variação
-                    if model_idx % 3 == 0:
-                        config['n_estimators'] = min(200, config['n_estimators'] + 50)
-                    elif model_idx % 3 == 1:
-                        config['max_features'] = max(0.5, config['max_features'] - 0.1)
+                y_pred_test = pipeline.predict(test_df.head(10000))
+                anomaly_rate_test = (y_pred_test == -1).mean()
+                print(f"   ✅ Concluído em {train_time:.2f}s | Anomaly Rate: {anomaly_rate_test:.2%}")
 
-                    mlflow.log_params(config)
-                    mlflow.set_tag("optimization_level", "i3-optimized")
-                    mlflow.set_tag("model_index", f"{model_idx:02d}")
+                mlflow.log_params(config)
+                mlflow.log_metrics({'train_time': train_time, 'anomaly_rate_test': anomaly_rate_test})
+                mlflow.set_tag("architecture", "pipeline")
 
-                    # Treinar
-                    result = self.train_single_model_optimized(
-                        X_train, X_test, config, model_idx
-                    )
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                model_name = f"isolation_forest_pipeline_{model_idx:02d}_{timestamp}"
+                mlflow.sklearn.log_model(
+                    sk_model=pipeline,
+                    artifact_path="model_pipeline",
+                    registered_model_name=model_name,
+                    input_example=input_example
+                )
 
-                    metrics = {
-                        'train_time': result['train_time'],
-                        'anomaly_rate_test': result['anomaly_rate_test'],
-                        'anomaly_rate_train': result['anomaly_rate_train'],
-                        'score_mean': result['score_mean'],
-                        'score_std': result['score_std'],
-                    }
-                    mlflow.log_metrics(metrics)
+                # Salvar pipeline localmente para a API
+                local_model_path = models_dir / f"isolation_forest_optimized_{model_idx:02d}_{timestamp}.joblib"
+                joblib.dump(pipeline, local_model_path, compress=self.compression_level)
+                print(f"   💾 Pipeline salvo localmente em: {local_model_path}")
 
-                    # Salvar modelo otimizado
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    model_name = f"isolation_forest_optimized_{model_idx:02d}_{timestamp}"
-                    
-                    # Log do modelo no MLflow
-                    mlflow.sklearn.log_model(
-                        sk_model=result['model'],
-                        artifact_path="model",
-                        registered_model_name=model_name,
-                        input_example=input_example
-                    )
-                    
-                    # Log do scaler
-                    scaler_path = f"scaler_{model_idx:02d}.joblib"
-                    joblib.dump(scaler, scaler_path)
-                    mlflow.log_artifact(scaler_path, "scaler")
-                    os.remove(scaler_path)
-
-                    print(f"   ✅ Modelo e métricas salvos no MLflow para a run: {mlflow.active_run().info.run_name}")
-
-                    batch_results.append(result)
-
-                    # Limpar memória periodicamente
-                    if (model_idx + 1) % 10 == 0:
-                        gc.collect()
-
-            results.extend(batch_results)
-
-            # Pausa entre batches para não superaquecer o i3
-            if batch_idx + batch_size < len(existing_models):
-                print("\n⏸️  Pausa de 5 segundos para resfriar CPU...")
-                time.sleep(5)
+                results.append({'train_time': train_time, 'anomaly_rate_test': anomaly_rate_test, 'model_id': model_idx})
+                gc.collect()
 
         total_time = time.time() - total_start
-
-        # Relatório final
         self.print_final_report(results, total_time)
-
         return results
 
     def print_final_report(self, results: List[Dict], total_time: float):

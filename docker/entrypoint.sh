@@ -1,30 +1,26 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-log(){ echo "[entrypoint] $(date -Is) $*"; }
-log "Starting entrypoint.sh"
+# ====================================================================
+# SCRIPT DE ENTRADA INTELIGENTE PARA O TRUSTSHIELD API
+#
+# Função: Resolver segredos do Docker para variáveis de ambiente
+# que a aplicação (boto3/mlflow) espera.
+# ====================================================================
 
-# Docker secrets -> env
-if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -f /run/secrets/minio_root_user ]; then
-  export AWS_ACCESS_KEY_ID="$(cat /run/secrets/minio_root_user)"
-fi
-if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ] && [ -f /run/secrets/minio_root_password ]; then
-  export AWS_SECRET_ACCESS_KEY="$(cat /run/secrets/minio_root_password)"
-fi
-
-# opcional: aguardar MLflow se for configurar MLFLOW_TRACKING_URI
-: "${MLFLOW_TRACKING_URI:=}"
-if [ -n "${MLFLOW_TRACKING_URI}" ]; then
-  python - <<'PY' || true
-import os, time, urllib.request
-url = os.environ['MLFLOW_TRACKING_URI'].rstrip('/') + '/version'
-for _ in range(180):
-    try:
-        with urllib.request.urlopen(url, timeout=2) as r:
-            if 200 <= r.getcode() < 500: break
-    except Exception: time.sleep(1)
-PY
+# Se a variável AWS_ACCESS_KEY_ID_FILE existir, leia o segredo do arquivo
+# e exporte-o para a variável AWS_ACCESS_KEY_ID.
+if [ -n "$AWS_ACCESS_KEY_ID_FILE" ]; then
+    export AWS_ACCESS_KEY_ID=$(cat "$AWS_ACCESS_KEY_ID_FILE")
 fi
 
-log "Executing: $*"
+# Faça o mesmo para a Secret Key.
+if [ -n "$AWS_SECRET_ACCESS_KEY_FILE" ]; then
+    export AWS_SECRET_ACCESS_KEY=$(cat "$AWS_SECRET_ACCESS_KEY_FILE")
+fi
+
+# Agora, execute o comando principal que foi passado para o container
+# (por exemplo, 'uvicorn', 'python -m ...', etc.).
+# O `exec "$@"` garante que este script substitua seu próprio processo
+# pelo processo da aplicação, o que é uma prática recomendada.
 exec "$@"

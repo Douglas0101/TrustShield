@@ -146,11 +146,18 @@ def health_check():
     return {"status": "ok"}
 
 
-@app.get("/status", tags=["Health"])
-def get_status():
-    """Retorna o status atual do modelo carregado."""
+@app.get("/readyz", tags=["Health"])
+def ready_check():
+    """
+    Endpoint de Readiness.
+    Verifica se a API está pronta para receber tráfego (modelo carregado).
+    Retorna 503 se o modelo não estiver pronto.
+    """
+    if app_state.model is None:
+        raise HTTPException(status_code=503, detail="Modelo não está disponível.")
+    
     return {
-        "model_loaded": app_state.model is not None,
+        "model_loaded": True,
         "model_path": app_state.model_path,
         "mlflow_connected": app_state.mlflow_client is not None
     }
@@ -159,28 +166,22 @@ def get_status():
 @app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
 def predict(transaction: TransactionInput):
     """Executa a predição de anomalia para uma transação."""
-    if app_state.model is None or 'model' not in app_state.model or 'features' not in app_state.model:
-        raise HTTPException(status_code=503, detail="Modelo não está disponível ou está mal configurado.")
+    if app_state.model is None:
+        raise HTTPException(status_code=503, detail="Modelo não está disponível.")
 
     try:
         # Converte o input Pydantic para um DataFrame do Pandas
         input_df = pd.DataFrame([transaction.model_dump()])
 
-        # Usa a lista de features do artefato do modelo para garantir consistência
-        features = app_state.model['features']
-        input_features = input_df[features]
-
-        score = app_state.model['model'].decision_function(input_features)[0]
-        prediction = app_state.model['model'].predict(input_features)[0]
+        # O pipeline carregado em app_state.model cuidará do pré-processamento
+        score = app_state.model.decision_function(input_df)[0]
+        prediction = app_state.model.predict(input_df)[0]
 
         return {
             "is_anomaly": int(prediction),
             "score": float(score),
             "model_version": Path(app_state.model_path).name
         }
-    except KeyError as e:
-        logger.error(f"Erro de feature não encontrada durante a predição: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"Payload de entrada inválido. Feature ausente: {e}")
     except Exception as e:
         logger.error(f"Erro durante a predição: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro interno no servidor: {e}")

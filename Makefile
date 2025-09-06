@@ -1,5 +1,5 @@
 # ===============================
-# TrustShield — Makefile (Docker) V2
+# TrustShield — Makefile (Docker) V2.3 - CORRIGIDO
 # ===============================
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -13,13 +13,10 @@ DASH_SERVICE   ?= trustshield-dashboard
 MLFLOW_SERVICE ?= mlflow
 MINIO_SERVICE  ?= minio
 
-# --- CORREÇÃO APLICADA AQUI ---
-# A URL da API agora usa uma variável de ambiente, com 8080 como padrão.
-# Para usar outra porta, execute: export API_HOST_PORT=8001 && make up
-API_HOST_PORT  ?= 8080
+API_HOST_PORT  ?= 8000
 HOST_API_URL   ?= http://localhost:$(API_HOST_PORT)
 HOST_DASH_URL  ?= http://localhost:8501
-HOST_MLFLOW_URL?= http://localhost:5500
+HOST_MLFLOW_URL?= http://localhost:5000
 
 NO_CACHE ?= 0
 PULL     ?= 0
@@ -73,6 +70,8 @@ wait:
 	  sleep 2; \
 	done; \
 	[ "$$s" = "healthy" ] || { echo "ERRO: API não ficou healthy a tempo."; exit 1; }; \
+	echo "Container está healthy. Dando um respiro de 2s para a aplicação estabilizar..."; \
+	sleep 2; \
 	curl -fsS $(HOST_API_URL)/healthz >/dev/null && echo "OK: /healthz"
 
 health:
@@ -98,6 +97,8 @@ check:
 clean: down
 	@vols=$$(docker volume ls -q | grep -E '^$(PROJECT)_' || true); \
 	[ -n "$$vols" ] && docker volume rm $$vols || echo "Sem volumes nomeados para remover."
+	@echo "Limpando cache local..."
+	@rm -f cache/data_cache.pkl
 
 prune:
 	@echo "ATENÇÃO: limpa imagens/containers/volumes não usados (host inteiro)"; docker system prune -af --volumes
@@ -109,16 +110,16 @@ env:
 	@echo "BUILD_ARGS='$(BUILD_ARGS)'"
 
 # ---- pipeline de treino ----
-data:      ; $(DC) exec $(API_SERVICE) python -m src.data.make_dataset
-features:  ; $(DC) exec $(API_SERVICE) python -m src.features.build_features
-train:     ; $(DC) exec $(API_SERVICE) python -m src.models.train_fraud_model
-eval:      ; $(DC) exec $(API_SERVICE) python -m src.models.evaluate_models
-optimize:  ; $(DC) exec $(API_SERVICE) python -m src.models.optimization --data data/features/featured_dataset.parquet
-validate:  ; $(DC) exec $(API_SERVICE) python -m src.models.validation
-interpret: ; $(DC) exec $(API_SERVICE) python -m src.models.interpretation
+data:      ; $(DC) exec $(API_SERVICE) /app/docker/entrypoint.sh python -m src.data.make_dataset
+features:  ; $(DC) exec $(API_SERVICE) /app/docker/entrypoint.sh python -m src.features.build_features
+train:     ; $(DC) exec $(API_SERVICE) /app/docker/entrypoint.sh python -m src.models.train_fraud_model
+eval:      ; $(DC) exec $(API_SERVICE) /app/docker/entrypoint.sh python -m src.models.evaluate_models --data data/features/featured_dataset.parquet --models outputs/models/default_model.joblib
+optimize:  ; $(DC) exec $(API_SERVICE) /app/docker/entrypoint.sh python -m src.models.optimization --data data/features/featured_dataset.parquet
+validate:  ; $(DC) exec $(API_SERVICE) /app/docker/entrypoint.sh python -m src.models.validation
+interpret: ; $(DC) exec $(API_SERVICE) /app/docker/entrypoint.sh python -m src.models.interpretation
 promote:   ; $(DC) exec $(API_SERVICE) python -c "from pathlib import Path; import shutil,sys; p=Path('outputs/models'); c=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); sys.exit(0) if not c else (shutil.copy2(c[0], p/'default_model.joblib') or print('Promovido:', c[0].name))"
 reload:    ; $(DC) restart $(API_SERVICE)
 smoke:     ; curl -fsS $(HOST_API_URL)/healthz >/dev/null && echo "OK: /healthz" && curl -fsS $(HOST_API_URL)/status >/dev/null && echo "OK: /status"
 
-cycle: data features train eval optimize promote reload wait smoke
+cycle: data features train promote eval optimize reload wait smoke
 quick: clean up cycle
