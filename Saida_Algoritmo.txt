@@ -1,744 +1,186 @@
-(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ make quick
-DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p trustshield -f docker/docker-compose.yml down --remove-orphans
-[+] Running 7/7
- ✔ Container trustshield-dashboard      Removed                                                                                                                                                                                0.2s
- ✔ Container trustshield-api            Removed                                                                                                                                                                                0.7s
- ✔ Container trustshield-mlflow         Removed                                                                                                                                                                               10.1s
- ✔ Container trustshield-minio-init     Removed                                                                                                                                                                                0.0s
- ✔ Container trustshield-postgres       Removed                                                                                                                                                                                0.1s
- ✔ Container trustshield-minio          Removed                                                                                                                                                                                0.2s
- ✔ Network trustshield_trustshield-net  Removed                                                                                                                                                                                0.1s
-trustshield_minio-data
-trustshield_postgres-data
-Limpando cache local...
-OK: pré-checagens passaram.
-DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p trustshield -f docker/docker-compose.yml build
-WARN[0000] Docker Compose is configured to build using Bake, but buildx isn't installed
-[+] Building 3.2s (34/34) FINISHED                                                                                                                                                                                   docker:default
- => [mlflow internal] load build definition from mlflow.Dockerfile                                                                                                                                                             0.0s
- => => transferring dockerfile: 213B                                                                                                                                                                                           0.0s
- => [mlflow internal] load metadata for ghcr.io/mlflow/mlflow:v3.3.1                                                                                                                                                           1.0s
- => [mlflow internal] load .dockerignore                                                                                                                                                                                       0.0s
- => => transferring context: 317B                                                                                                                                                                                              0.0s
- => [mlflow 1/2] FROM ghcr.io/mlflow/mlflow:v3.3.1@sha256:aa5d656e7d2d2bb737fcf2dca0e9b79a9471830dde9cd63daeaaa7da534c2e2f                                                                                                     0.0s
- => CACHED [mlflow 2/2] RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* && pip install prometheus-flask-exporter psycopg2-binary                                                                  0.0s
- => [mlflow] exporting to image                                                                                                                                                                                                0.0s
- => => exporting layers                                                                                                                                                                                                        0.0s
- => => writing image sha256:89a64b2dd97b0bcc4a6ec67c0e5443a11082b573a454ef5062cdbd799c944d1a                                                                                                                                   0.0s
- => => naming to docker.io/library/trustshield-mlflow                                                                                                                                                                          0.0s
- => [mlflow] resolving provenance for metadata file                                                                                                                                                                            0.0s
- => [trustshield-api internal] load build definition from Dockerfile                                                                                                                                                           0.0s
- => => transferring dockerfile: 1.18kB                                                                                                                                                                                         0.0s
- => [trustshield-dashboard internal] load metadata for docker.io/library/python:3.11-slim-bookworm                                                                                                                             1.7s
- => [trustshield-api internal] load .dockerignore                                                                                                                                                                              0.0s
- => => transferring context: 317B                                                                                                                                                                                              0.0s
- => [trustshield-api internal] load build context                                                                                                                                                                              0.0s
- => => transferring context: 8.95kB                                                                                                                                                                                            0.0s
- => [trustshield-dashboard 1/5] FROM docker.io/library/python:3.11-slim-bookworm@sha256:838ff46ae6c481e85e369706fa3dea5166953824124735639f3c9f52af85f319                                                                       0.0s
- => CACHED [trustshield-api runtime 2/8] RUN apt-get update && apt-get install -y --no-install-recommends curl git && rm -rf /var/lib/apt/lists/*                                                                              0.0s
- => CACHED [trustshield-api runtime 3/8] RUN useradd -ms /bin/bash appuser                                                                                                                                                     0.0s
- => CACHED [trustshield-api runtime 4/8] WORKDIR /app                                                                                                                                                                          0.0s
- => CACHED [trustshield-api builder 2/5] RUN apt-get update && apt-get install -y --no-install-recommends build-essential gcc && rm -rf /var/lib/apt/lists/*                                                                   0.0s
- => CACHED [trustshield-api builder 3/5] WORKDIR /wheels                                                                                                                                                                       0.0s
- => CACHED [trustshield-api builder 4/5] COPY requirements.lock .                                                                                                                                                              0.0s
- => CACHED [trustshield-api builder 5/5] RUN python -m pip install --upgrade pip && python -m pip wheel -r requirements.lock --wheel-dir /wheels                                                                               0.0s
- => CACHED [trustshield-api runtime 5/8] COPY --from=builder /wheels /wheels                                                                                                                                                   0.0s
- => CACHED [trustshield-api runtime 6/8] RUN python -m pip install --no-index --find-links=/wheels -r /wheels/requirements.lock && rm -rf /wheels                                                                              0.0s
- => [trustshield-api runtime 7/8] COPY . /app                                                                                                                                                                                  0.0s
- => [trustshield-api runtime 8/8] RUN chmod +x docker/entrypoint.sh && chown -R appuser:appuser /app                                                                                                                           0.2s
- => [trustshield-api] exporting to image                                                                                                                                                                                       0.0s
- => => exporting layers                                                                                                                                                                                                        0.0s
- => => writing image sha256:757adbd2c5cea8ad13ea7774820ab997f16ecbda1dcd6ff8ec34b56bdba0d656                                                                                                                                   0.0s
- => => naming to docker.io/library/trustshield-trustshield-api                                                                                                                                                                 0.0s
- => [trustshield-api] resolving provenance for metadata file                                                                                                                                                                   0.0s
- => [trustshield-dashboard internal] load build definition from dashboard.Dockerfile                                                                                                                                           0.0s
- => => transferring dockerfile: 624B                                                                                                                                                                                           0.0s
- => [trustshield-dashboard internal] load .dockerignore                                                                                                                                                                        0.0s
- => => transferring context: 317B                                                                                                                                                                                              0.0s
- => [trustshield-dashboard internal] load build context                                                                                                                                                                        0.0s
- => => transferring context: 3.17kB                                                                                                                                                                                            0.0s
- => CACHED [trustshield-dashboard 2/5] WORKDIR /app                                                                                                                                                                            0.0s
- => CACHED [trustshield-dashboard 3/5] COPY requirements.txt /app/requirements.txt                                                                                                                                             0.0s
- => CACHED [trustshield-dashboard 4/5] RUN python -m pip install --upgrade pip && python -m pip install -r /app/requirements.txt                                                                                               0.0s
- => [trustshield-dashboard 5/5] COPY . /app                                                                                                                                                                                    0.0s
- => [trustshield-dashboard] exporting to image                                                                                                                                                                                 0.0s
- => => exporting layers                                                                                                                                                                                                        0.0s
- => => writing image sha256:3743954506fa9662c6fe60f985fa1df2551d8e182ada4b07e957fa666810c150                                                                                                                                   0.0s
- => => naming to docker.io/library/trustshield-trustshield-dashboard                                                                                                                                                           0.0s
- => [trustshield-dashboard] resolving provenance for metadata file                                                                                                                                                             0.0s
-[+] Building 3/3
- ✔ mlflow                 Built                                                                                                                                                                                                0.0s
- ✔ trustshield-api        Built                                                                                                                                                                                                0.0s
- ✔ trustshield-dashboard  Built                                                                                                                                                                                                0.0s
-DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p trustshield -f docker/docker-compose.yml up -d
-[+] Running 9/9
- ✔ Network trustshield_trustshield-net  Created                                                                                                                                                                                0.1s
- ✔ Volume "trustshield_postgres-data"   Created                                                                                                                                                                                0.0s
- ✔ Volume "trustshield_minio-data"      Created                                                                                                                                                                                0.0s
- ✔ Container trustshield-minio          Healthy                                                                                                                                                                               11.2s
- ✔ Container trustshield-postgres       Healthy                                                                                                                                                                               11.2s
- ✔ Container trustshield-minio-init     Exited                                                                                                                                                                                 7.0s
- ✔ Container trustshield-mlflow         Healthy                                                                                                                                                                               16.1s
- ✔ Container trustshield-api            Started                                                                                                                                                                               16.2s
- ✔ Container trustshield-dashboard      Started                                                                                                                                                                               16.4s
-make[1]: Entrando no diretório '/home/douglas/PycharmProjects/TrustShield'
-Aguardando saúde da API (trustshield-api)...
-  tentativa 1: starting
-  tentativa 2: starting
-  tentativa 3: starting
-  tentativa 4: healthy
-Container está healthy. Dando um respiro de 2s para a aplicação estabilizar...
-OK: /healthz
-make[1]: Saindo do diretório '/home/douglas/PycharmProjects/TrustShield'
-DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api /app/docker/entrypoint.sh python -m src.data.make_dataset
-{"timestamp": "2025-09-06 04:01:58,293", "level": "INFO", "message": "Pipeline de cria\u00e7\u00e3o de dataset iniciado.", "module": "__main__"}
-{"timestamp": "2025-09-06 04:01:58,294", "level": "INFO", "message": "Iniciando carregamento de dados do diret\u00f3rio: /app/data/raw", "module": "__main__"}
-{"timestamp": "2025-09-06 04:02:10,022", "level": "INFO", "message": "Dados carregados com sucesso: 13305915 transa\u00e7\u00f5es, 2000 usu\u00e1rios, 109 c\u00f3digos MCC.", "module": "__main__"}
-{"timestamp": "2025-09-06 04:02:10,022", "level": "INFO", "message": "Iniciando valida\u00e7\u00e3o de schema dos dados.", "module": "__main__"}
-{"timestamp": "2025-09-06 04:02:10,022", "level": "INFO", "message": "Valida\u00e7\u00e3o de schema conclu\u00edda com sucesso.", "module": "__main__"}
-{"timestamp": "2025-09-06 04:02:10,022", "level": "INFO", "message": "Iniciando a mesclagem dos datasets de transa\u00e7\u00f5es e usu\u00e1rios.", "module": "__main__"}
-{"timestamp": "2025-09-06 04:02:13,958", "level": "INFO", "message": "Mesclagem conclu\u00edda. Dataset final possui 13305915 registros.", "module": "__main__"}
-{"timestamp": "2025-09-06 04:02:13,958", "level": "INFO", "message": "Salvando dataset processado em: /app/data/processed", "module": "__main__"}
-{"timestamp": "2025-09-06 04:02:25,147", "level": "INFO", "message": "Dataset salvo com sucesso em /app/data/processed/primary_dataset.parquet.", "module": "__main__"}
-{"timestamp": "2025-09-06 04:02:25,147", "level": "INFO", "message": "Pipeline de cria\u00e7\u00e3o de dataset conclu\u00eddo com sucesso.", "module": "__main__"}
-DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api /app/docker/entrypoint.sh python -m src.features.build_features
-2025-09-06 04:02:26,297 - [TrustShield] - INFO - 🚀 Pipeline de engenharia de features iniciado.
-2025-09-06 04:02:26,297 - [TrustShield] - INFO - Carregando dados de /app/data/processed/primary_dataset.parquet
-2025-09-06 04:02:32,727 - [TrustShield] - INFO - Iniciando limpeza de dados...
-2025-09-06 04:02:57,479 - [TrustShield] - INFO - Limpeza de dados concluída.
-2025-09-06 04:02:57,480 - [TrustShield] - INFO - Iniciando engenharia de features...
-2025-09-06 04:02:58,400 - [TrustShield] - INFO - Engenharia de features concluída.
-2025-09-06 04:02:58,400 - [TrustShield] - INFO - Salvando dataset com features em /app/data/features/featured_dataset.parquet
-2025-09-06 04:03:08,323 - [TrustShield] - INFO - ✅ Pipeline de engenharia de features concluído com sucesso.
-DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api /app/docker/entrypoint.sh python -m src.models.train_fraud_model
-
-    ╔══════════════════════════════════════════════════════════════╗
-    ║                                                              ║
-    ║         TRUSTSHIELD EXTREME OPTIMIZATION SYSTEM             ║
-    ║              Intel Core i3 Specialized Edition              ║
-    ║                                                              ║
-    ║   Transformando 4 horas em 30 minutos com ciência!         ║
-    ║                                                              ║
-    ╚══════════════════════════════════════════════════════════════╝
-
-🔍 Verificando ambiente...
-
-╔══════════════════════════════════════════════════════════════╗
-║           TRUSTSHIELD PHD-LEVEL OPTIMIZER V2.0               ║
-║                  Intel i3 Specialized Edition                ║
-╚══════════════════════════════════════════════════════════════╝
-
-🖥️  Hardware Detectado:
-    • CPU: Intel i3 - 2 cores / 4 threads
-    • RAM: 19.3 GB total / 11.1 GB disponível
-    • Otimização: Ativada para CPU limitada + RAM abundante
-
-
-📋 OPÇÕES DE OTIMIZAÇÃO:
-1. Re-treinar TODOS os 30 modelos (estimado: 30 minutos)
-2. Treinar apenas 1 modelo de teste (estimado: 1 minuto)
-3. Benchmark de modelo existente
-4. Análise completa + Re-treinamento
-
-Opção '1' selecionada automaticamente para execução não-interativa.
-
-============================================================
-🚀 INICIANDO RE-TREINAMENTO OTIMIZADO DOS 30 MODELOS
-============================================================
-
-📊 FASE 1: Carregamento Otimizado de Dados
---------------------------------------------------
-📖 Lendo dataset...
-🔧 Otimizando tipos de dados...
-   💾 Memória reduzida: 6722.7MB → 965.6MB (85.6% economia)
-✅ Dados preparados em 22.98s
-   Shape: (13305915, 22)
-   Memória: 1116.7 MB
-
-📊 Preparando dados para treinamento...
-🔧 Normalizando dados...
-   Train shape: (11310027, 22)
-   Test shape: (1995888, 22)
-
-🔬 FASE 2: Otimização de Hiperparâmetros
---------------------------------------------------
-📋 Testando 10 configurações...
-
-🎯 Treinando Modelo 0
-
-🎯 Treinando Modelo 1
-   ✅ Concluído em 0.77s | Anomaly Rate: 15.07%
-
-🎯 Treinando Modelo 2
-   ✅ Concluído em 0.78s | Anomaly Rate: 5.14%
-
-🎯 Treinando Modelo 3
-   ✅ Concluído em 0.55s | Anomaly Rate: 9.97%
-
-🎯 Treinando Modelo 4
-   ✅ Concluído em 0.20s | Anomaly Rate: 9.89%
-
-🎯 Treinando Modelo 5
-   ✅ Concluído em 0.96s | Anomaly Rate: 4.94%
-
-🎯 Treinando Modelo 6
-   ✅ Concluído em 0.42s | Anomaly Rate: 5.04%
-
-🎯 Treinando Modelo 7
-   ✅ Concluído em 0.28s | Anomaly Rate: 14.89%
-
-🎯 Treinando Modelo 8
-   ✅ Concluído em 0.93s | Anomaly Rate: 10.34%
-
-🎯 Treinando Modelo 9
-   ✅ Concluído em 0.63s | Anomaly Rate: 5.30%
-   ✅ Concluído em 0.38s | Anomaly Rate: 14.99%
-
-🏆 Melhor configuração encontrada:
-   • n_estimators: 100
-   • max_features: 1.0
-   • contamination: 0.1
-   • Anomaly Rate: 9.97%
-2025/09/06 04:03:43 INFO mlflow.tracking.fluent: Experiment with name 'TrustShield Fraud Detection' does not exist. Creating a new experiment.
-
-📦 MLflow experiment 'TrustShield Fraud Detection' configurado.
-
-============================================================
-📦 RE-TREINANDO 30 MODELOS COM CONFIGURAÇÃO OTIMIZADA
-============================================================
-
-📦 Batch 1/7
-
-========================================
-Modelo 1/30
-========================================
-
-🎯 Treinando Modelo 0
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 175.54s | Anomaly Rate: 10.08%
-2025/09/06 04:06:40 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_00_20250906_040640'.
-2025/09/06 04:06:43 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_00_20250906_040640, version 1
-Created version '1' of model 'isolation_forest_optimized_00_20250906_040640'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_00
-🏃 View run Optimized_Model_00 at: http://mlflow:5000/#/experiments/2/runs/72995428af794653931db696c2345e5c
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 2/30
-========================================
-
-🎯 Treinando Modelo 1
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 275.32s | Anomaly Rate: 10.28%
-2025/09/06 04:11:19 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_01_20250906_041119'.
-2025/09/06 04:11:22 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_01_20250906_041119, version 1
-Created version '1' of model 'isolation_forest_optimized_01_20250906_041119'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_01
-🏃 View run Optimized_Model_01 at: http://mlflow:5000/#/experiments/2/runs/25df7f4f0a1e40dca09f932e0c3001cb
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 3/30
-========================================
-
-🎯 Treinando Modelo 2
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 114.38s | Anomaly Rate: 10.07%
-2025/09/06 04:13:17 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_02_20250906_041317'.
-2025/09/06 04:13:20 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_02_20250906_041317, version 1
-Created version '1' of model 'isolation_forest_optimized_02_20250906_041317'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_02
-🏃 View run Optimized_Model_02 at: http://mlflow:5000/#/experiments/2/runs/aac1fa19bd764610b329d68c1c7c5a9c
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 4/30
-========================================
-
-🎯 Treinando Modelo 3
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 170.79s | Anomaly Rate: 10.25%
-2025/09/06 04:16:12 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_03_20250906_041612'.
-2025/09/06 04:16:15 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_03_20250906_041612, version 1
-Created version '1' of model 'isolation_forest_optimized_03_20250906_041612'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_03
-🏃 View run Optimized_Model_03 at: http://mlflow:5000/#/experiments/2/runs/e0e6c4a893c54488b2ae81a06c6ed5a0
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 5/30
-========================================
-
-🎯 Treinando Modelo 4
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 275.66s | Anomaly Rate: 10.29%
-2025/09/06 04:20:51 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_04_20250906_042051'.
-2025/09/06 04:20:54 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_04_20250906_042051, version 1
-Created version '1' of model 'isolation_forest_optimized_04_20250906_042051'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_04
-🏃 View run Optimized_Model_04 at: http://mlflow:5000/#/experiments/2/runs/c2dd359f0e5147708c93687c719f941c
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 2/7
-
-========================================
-Modelo 6/30
-========================================
-
-🎯 Treinando Modelo 5
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 111.50s | Anomaly Rate: 9.96%
-2025/09/06 04:22:51 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_05_20250906_042251'.
-2025/09/06 04:22:54 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_05_20250906_042251, version 1
-Created version '1' of model 'isolation_forest_optimized_05_20250906_042251'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_05
-🏃 View run Optimized_Model_05 at: http://mlflow:5000/#/experiments/2/runs/ba55b2c2f588418bb14ba246f6422815
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 7/30
-========================================
-
-🎯 Treinando Modelo 6
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 172.73s | Anomaly Rate: 10.16%
-2025/09/06 04:25:47 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_06_20250906_042547'.
-2025/09/06 04:25:50 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_06_20250906_042547, version 1
-Created version '1' of model 'isolation_forest_optimized_06_20250906_042547'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_06
-🏃 View run Optimized_Model_06 at: http://mlflow:5000/#/experiments/2/runs/3902cfceb03c4796afeb376a425484ca
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 8/30
-========================================
-
-🎯 Treinando Modelo 7
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 275.98s | Anomaly Rate: 10.05%
-2025/09/06 04:30:27 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_07_20250906_043027'.
-2025/09/06 04:30:30 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_07_20250906_043027, version 1
-Created version '1' of model 'isolation_forest_optimized_07_20250906_043027'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_07
-🏃 View run Optimized_Model_07 at: http://mlflow:5000/#/experiments/2/runs/c4ce19bf549d45c89b60eb97a2783acc
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 9/30
-========================================
-
-🎯 Treinando Modelo 8
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 112.83s | Anomaly Rate: 10.26%
-2025/09/06 04:32:23 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_08_20250906_043223'.
-2025/09/06 04:32:26 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_08_20250906_043223, version 1
-Created version '1' of model 'isolation_forest_optimized_08_20250906_043223'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_08
-🏃 View run Optimized_Model_08 at: http://mlflow:5000/#/experiments/2/runs/c0def5901f7e4f46bd2ccc79c4ebda89
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 10/30
-========================================
-
-🎯 Treinando Modelo 9
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 169.11s | Anomaly Rate: 10.13%
-2025/09/06 04:35:16 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_09_20250906_043516'.
-2025/09/06 04:35:19 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_09_20250906_043516, version 1
-Created version '1' of model 'isolation_forest_optimized_09_20250906_043516'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_09
-🏃 View run Optimized_Model_09 at: http://mlflow:5000/#/experiments/2/runs/305dea103b6f4ca280c6a2f6af7eb2e5
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 3/7
-
-========================================
-Modelo 11/30
-========================================
-
-🎯 Treinando Modelo 10
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 273.16s | Anomaly Rate: 10.25%
-2025/09/06 04:39:57 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_10_20250906_043957'.
-2025/09/06 04:40:00 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_10_20250906_043957, version 1
-Created version '1' of model 'isolation_forest_optimized_10_20250906_043957'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_10
-🏃 View run Optimized_Model_10 at: http://mlflow:5000/#/experiments/2/runs/d9fca18d1a0848bf8c005205cddc699e
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 12/30
-========================================
-
-🎯 Treinando Modelo 11
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 113.10s | Anomaly Rate: 10.16%
-2025/09/06 04:41:54 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_11_20250906_044154'.
-2025/09/06 04:41:57 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_11_20250906_044154, version 1
-Created version '1' of model 'isolation_forest_optimized_11_20250906_044154'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_11
-🏃 View run Optimized_Model_11 at: http://mlflow:5000/#/experiments/2/runs/e7a923bd0c474f12a681437400041570
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 13/30
-========================================
-
-🎯 Treinando Modelo 12
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 167.11s | Anomaly Rate: 10.06%
-2025/09/06 04:44:45 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_12_20250906_044445'.
-2025/09/06 04:44:48 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_12_20250906_044445, version 1
-Created version '1' of model 'isolation_forest_optimized_12_20250906_044445'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_12
-🏃 View run Optimized_Model_12 at: http://mlflow:5000/#/experiments/2/runs/0a60e8c7361b47d0bd51a5ec5732e41b
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 14/30
-========================================
-
-🎯 Treinando Modelo 13
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 273.50s | Anomaly Rate: 10.14%
-2025/09/06 04:49:22 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_13_20250906_044922'.
-2025/09/06 04:49:25 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_13_20250906_044922, version 1
-Created version '1' of model 'isolation_forest_optimized_13_20250906_044922'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_13
-🏃 View run Optimized_Model_13 at: http://mlflow:5000/#/experiments/2/runs/302d810d6b6e4a98822ac7113413dd6b
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 15/30
-========================================
-
-🎯 Treinando Modelo 14
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 111.68s | Anomaly Rate: 10.22%
-2025/09/06 04:51:17 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_14_20250906_045117'.
-2025/09/06 04:51:20 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_14_20250906_045117, version 1
-Created version '1' of model 'isolation_forest_optimized_14_20250906_045117'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_14
-🏃 View run Optimized_Model_14 at: http://mlflow:5000/#/experiments/2/runs/702aabcce54844dc8a5369d806f3be3a
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 4/7
-
-========================================
-Modelo 16/30
-========================================
-
-🎯 Treinando Modelo 15
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 171.44s | Anomaly Rate: 10.08%
-2025/09/06 04:54:17 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_15_20250906_045417'.
-2025/09/06 04:54:20 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_15_20250906_045417, version 1
-Created version '1' of model 'isolation_forest_optimized_15_20250906_045417'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_15
-🏃 View run Optimized_Model_15 at: http://mlflow:5000/#/experiments/2/runs/ce4a41a55d5346eabae9854c2a4ac7ae
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 17/30
-========================================
-
-🎯 Treinando Modelo 16
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 273.83s | Anomaly Rate: 10.33%
-2025/09/06 04:58:54 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_16_20250906_045854'.
-2025/09/06 04:58:57 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_16_20250906_045854, version 1
-Created version '1' of model 'isolation_forest_optimized_16_20250906_045854'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_16
-🏃 View run Optimized_Model_16 at: http://mlflow:5000/#/experiments/2/runs/999a83e9d999473d805efe1d844e7cb4
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 18/30
-========================================
-
-🎯 Treinando Modelo 17
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 114.36s | Anomaly Rate: 10.02%
-2025/09/06 05:00:52 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_17_20250906_050052'.
-2025/09/06 05:00:55 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_17_20250906_050052, version 1
-Created version '1' of model 'isolation_forest_optimized_17_20250906_050052'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_17
-🏃 View run Optimized_Model_17 at: http://mlflow:5000/#/experiments/2/runs/7de90b5c5b024f6fa696421caa2ede97
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 19/30
-========================================
-
-🎯 Treinando Modelo 18
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 169.26s | Anomaly Rate: 9.94%
-2025/09/06 05:03:45 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_18_20250906_050345'.
-2025/09/06 05:03:48 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_18_20250906_050345, version 1
-Created version '1' of model 'isolation_forest_optimized_18_20250906_050345'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_18
-🏃 View run Optimized_Model_18 at: http://mlflow:5000/#/experiments/2/runs/a33f1fc3d3ad46128f47c019040b5073
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 20/30
-========================================
-
-🎯 Treinando Modelo 19
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 272.18s | Anomaly Rate: 10.15%
-2025/09/06 05:08:21 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_19_20250906_050821'.
-2025/09/06 05:08:24 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_19_20250906_050821, version 1
-Created version '1' of model 'isolation_forest_optimized_19_20250906_050821'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_19
-🏃 View run Optimized_Model_19 at: http://mlflow:5000/#/experiments/2/runs/67fb0182fbb74da68680cca041e4da94
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 5/7
-
-========================================
-Modelo 21/30
-========================================
-
-🎯 Treinando Modelo 20
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 112.02s | Anomaly Rate: 10.07%
-2025/09/06 05:10:22 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_20_20250906_051022'.
-2025/09/06 05:10:25 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_20_20250906_051022, version 1
-Created version '1' of model 'isolation_forest_optimized_20_20250906_051022'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_20
-🏃 View run Optimized_Model_20 at: http://mlflow:5000/#/experiments/2/runs/97aaf838430043cfb3456590ed238858
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 22/30
-========================================
-
-🎯 Treinando Modelo 21
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 167.13s | Anomaly Rate: 10.16%
-2025/09/06 05:13:13 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_21_20250906_051313'.
-2025/09/06 05:13:16 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_21_20250906_051313, version 1
-Created version '1' of model 'isolation_forest_optimized_21_20250906_051313'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_21
-🏃 View run Optimized_Model_21 at: http://mlflow:5000/#/experiments/2/runs/de975a34cfb34d1ab8c2c3a5fa3170d5
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 23/30
-========================================
-
-🎯 Treinando Modelo 22
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 274.24s | Anomaly Rate: 10.38%
-2025/09/06 05:17:51 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_22_20250906_051751'.
-2025/09/06 05:17:53 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_22_20250906_051751, version 1
-Created version '1' of model 'isolation_forest_optimized_22_20250906_051751'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_22
-🏃 View run Optimized_Model_22 at: http://mlflow:5000/#/experiments/2/runs/41bbbf2e7e3448d497205a8ec84b0330
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 24/30
-========================================
-
-🎯 Treinando Modelo 23
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 111.95s | Anomaly Rate: 10.16%
-2025/09/06 05:19:46 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_23_20250906_051946'.
-2025/09/06 05:19:49 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_23_20250906_051946, version 1
-Created version '1' of model 'isolation_forest_optimized_23_20250906_051946'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_23
-🏃 View run Optimized_Model_23 at: http://mlflow:5000/#/experiments/2/runs/a1512c6158904cd7b172e3bae3e1571f
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 25/30
-========================================
-
-🎯 Treinando Modelo 24
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 167.85s | Anomaly Rate: 10.00%
-2025/09/06 05:22:37 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_24_20250906_052237'.
-2025/09/06 05:22:40 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_24_20250906_052237, version 1
-Created version '1' of model 'isolation_forest_optimized_24_20250906_052237'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_24
-🏃 View run Optimized_Model_24 at: http://mlflow:5000/#/experiments/2/runs/fff04f1773db47d5892e0641676d4771
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-⏸️  Pausa de 5 segundos para resfriar CPU...
-
-📦 Batch 6/7
-
-========================================
-Modelo 26/30
-========================================
-
-🎯 Treinando Modelo 25
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 276.45s | Anomaly Rate: 10.30%
-2025/09/06 05:27:22 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_25_20250906_052722'.
-2025/09/06 05:27:25 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_25_20250906_052722, version 1
-Created version '1' of model 'isolation_forest_optimized_25_20250906_052722'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_25
-🏃 View run Optimized_Model_25 at: http://mlflow:5000/#/experiments/2/runs/628dd21a5e984254a439ccdb90213ba2
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 27/30
-========================================
-
-🎯 Treinando Modelo 26
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 114.79s | Anomaly Rate: 10.32%
-2025/09/06 05:29:20 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_26_20250906_052920'.
-2025/09/06 05:29:23 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_26_20250906_052920, version 1
-Created version '1' of model 'isolation_forest_optimized_26_20250906_052920'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_26
-🏃 View run Optimized_Model_26 at: http://mlflow:5000/#/experiments/2/runs/e9e1ae3c189e40a28fee4cbd6f57d99c
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 28/30
-========================================
-
-🎯 Treinando Modelo 27
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 168.02s | Anomaly Rate: 10.12%
-2025/09/06 05:32:12 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_27_20250906_053212'.
-2025/09/06 05:32:15 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_27_20250906_053212, version 1
-Created version '1' of model 'isolation_forest_optimized_27_20250906_053212'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_27
-🏃 View run Optimized_Model_27 at: http://mlflow:5000/#/experiments/2/runs/9c49cf6fdb3947d3a359cb841e0d2cda
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 29/30
-========================================
-
-🎯 Treinando Modelo 28
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 270.05s | Anomaly Rate: 9.95%
-2025/09/06 05:36:46 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_28_20250906_053646'.
-2025/09/06 05:36:48 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_28_20250906_053646, version 1
-Created version '1' of model 'isolation_forest_optimized_28_20250906_053646'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_28
-🏃 View run Optimized_Model_28 at: http://mlflow:5000/#/experiments/2/runs/3e41e2c61a714c108cc88ed0206f206c
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-========================================
-Modelo 30/30
-========================================
-
-🎯 Treinando Modelo 29
-   📉 Subsampling: 11310027 → 50000 amostras
-   ✅ Concluído em 110.53s | Anomaly Rate: 10.18%
-2025/09/06 05:38:40 WARNING mlflow.models.model: `artifact_path` is deprecated. Please use `name` instead.
-Successfully registered model 'isolation_forest_optimized_29_20250906_053840'.
-2025/09/06 05:38:42 INFO mlflow.store.model_registry.abstract_store: Waiting up to 300 seconds for model version to finish creation. Model name: isolation_forest_optimized_29_20250906_053840, version 1
-Created version '1' of model 'isolation_forest_optimized_29_20250906_053840'.
-   ✅ Modelo e métricas salvos no MLflow para a run: Optimized_Model_29
-🏃 View run Optimized_Model_29 at: http://mlflow:5000/#/experiments/2/runs/234cd89a5d054c9fa1ec77273bc1ace1
-🧪 View experiment at: http://mlflow:5000/#/experiments/2
-
-============================================================
-📊 RELATÓRIO FINAL DE OTIMIZAÇÃO
-============================================================
-
-📈 Estatísticas de Treinamento:
-   • Total de modelos: 30
-   • Tempo total: 5699.22 segundos (95.0 minutos)
-   • Tempo médio por modelo: 185.55s
-   • Tempo mínimo: 110.53s
-   • Tempo máximo: 276.45s
-
-🎯 Estatísticas de Performance:
-   • Anomaly Rate médio: 10.15%
-   • Desvio padrão: 0.12%
-   • Melhor modelo: 9.94%
-   • Pior modelo: 10.38%
-
-💾 Uso de Recursos:
-   • CPU médio: 30.7%
-   • RAM usada: 56.9%
-   • Temperatura CPU: N/A°C
-
-
-🚀 COMPARAÇÃO COM MODELO ORIGINAL:
-   • Tempo original (1 modelo): 4 horas
-   • Tempo otimizado (1 modelo): 185.55s
-   • Speedup: 76.0x mais rápido!
-   • Economia total: 118.7 horas
-
-
-✅ RECOMENDAÇÕES:
-   1. Melhor modelo para produção: Modelo 24
-      • Anomaly Rate: 10.00%
-      • Tempo de treino: 167.85s
-
-   2. Para melhorar ainda mais:
-      • Instale Numba: pip install numba (2-3x speedup adicional)
-      • Use SSD NVMe se possível (I/O 2x mais rápido)
-      • Considere upgrade para i5/i7 (4-8 cores físicos)
-      • Ou use Google Colab Pro (GPU grátis)
-
-
-============================================================
-✅ OTIMIZAÇÃO CONCLUÍDA COM SUCESSO!
-============================================================
-
-    💡 Próximos passos:
-       1. Teste o modelo otimizado na API
-       2. Compare métricas no MLflow
-       3. Faça deploy do melhor modelo
-
-    📊 Para visualizar no MLflow:
-       mlflow ui --host 0.0.0.0
-
-    🚀 Para usar na API:
-       export MODEL_PATH='outputs/models/isolation_forest_optimized_00_*.joblib'
-       uvicorn src.api.main:app --reload
-
-DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api /app/docker/entrypoint.sh python -m src.models.evaluate_models
-usage: evaluate_models.py [-h] --data DATA --models MODELS [MODELS ...] [--types TYPES [TYPES ...]] [--config CONFIG]
-evaluate_models.py: error: the following arguments are required: --data, --models
-make: *** [Makefile:116: eval] Erro 2
-(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$
+(rapids-25.08) douglas@douglas-IdeaPad-3-15ITL6:~/PycharmProjects/TrustShield$ docker logs 60097b75812d
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+2025-09-18 12:15:31,900 - [TrustShield-API] - INFO - Iniciando configuração do MLflow e carregamento do modelo...
+MLflow setup complete. Tracking URI: http://mlflow:5000, Experiment: TrustShield_API
+2025-09-18 12:15:32,006 - [TrustShield-API] - INFO - MLflow configurado com sucesso. Tracking URI: http://mlflow:5000
+🏃 View run api_startup at: http://mlflow:5000/#/experiments/1/runs/2dc6b9ead5d9496c8a8ec8e169c5e99d
+🧪 View experiment at: http://mlflow:5000/#/experiments/1
+2025-09-18 12:15:32,242 - [TrustShield-API] - INFO - Run de inicialização no MLflow registrado com sucesso.
+2025-09-18 12:15:32,781 - [TrustShield-API] - INFO - Modelo 'default_model.joblib' carregado com sucesso.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:60256 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     172.18.0.1:44408 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     172.18.0.1:44410 - "GET /status HTTP/1.1" 200 OK
+2025-09-18 12:15:50,169 - [TrustShield-API] - ERROR - Erro durante a predição: 'features'
+Traceback (most recent call last):
+  File "/app/src/api/main.py", line 238, in predict
+    model_features = model_artifact["features"]
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^
+KeyError: 'features'
+INFO:     172.18.0.1:46242 - "POST /predict HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:40794 - "GET /healthz HTTP/1.1" 200 OK
+2025-09-18 12:15:53,910 - [TrustShield-API] - ERROR - Erro durante a predição: 'features'
+Traceback (most recent call last):
+  File "/app/src/api/main.py", line 238, in predict
+    model_features = model_artifact["features"]
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^
+KeyError: 'features'
+INFO:     172.18.0.1:46252 - "POST /predict HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:34162 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36948 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58750 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44962 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48750 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50360 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53600 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42776 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55416 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49986 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48068 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41752 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35488 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45628 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37174 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59202 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37300 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39372 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47492 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47946 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55084 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57474 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41558 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53140 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51614 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49476 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39736 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     172.18.0.1:44542 - "GET /status HTTP/1.1" 200 OK
+2025-09-18 12:22:48,050 - [TrustShield-API] - ERROR - Erro durante a predição: 'features'
+Traceback (most recent call last):
+  File "/app/src/api/main.py", line 238, in predict
+    model_features = model_artifact["features"]
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^
+KeyError: 'features'
+INFO:     172.18.0.1:51928 - "POST /predict HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:56460 - "GET /healthz HTTP/1.1" 200 OK
+2025-09-18 12:22:58,992 - [TrustShield-API] - ERROR - Erro durante a predição: 'features'
+Traceback (most recent call last):
+  File "/app/src/api/main.py", line 238, in predict
+    model_features = model_artifact["features"]
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^
+KeyError: 'features'
+INFO:     172.18.0.1:34568 - "POST /predict HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:43668 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52924 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37002 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51268 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53958 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36852 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44042 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34428 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41512 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40092 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44610 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41454 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53000 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40756 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55634 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35538 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50648 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58654 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51116 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36922 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48308 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38022 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60636 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41634 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48106 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33702 - "GET /healthz HTTP/1.1" 200 OK
+2025-09-18 12:29:33,388 - [TrustShield-API] - INFO - Requisição para validação do modelo recebida.
+INFO:     172.18.0.1:42906 - "POST /validate HTTP/1.1" 200 OK
+2025-09-18 12:29:33,389 - [TrustShield-API] - INFO - Iniciando tarefa de validação em background...
+INFO:     127.0.0.1:50080 - "GET /healthz HTTP/1.1" 200 OK
+2025-09-18 12:29:47,134 - [TrustShield-API] - ERROR - Erro na tarefa de validação em background: "Attempt to overwrite 'exc_info' in LogRecord"
+Traceback (most recent call last):
+  File "/app/src/models/validation.py", line 403, in run_validation
+    validation_result = strategy.validate(specific_data, self.config)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/models/validation.py", line 278, in validate
+    raise ImportError("Evidently AI library is not installed.")
+ImportError: Evidently AI library is not installed.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/src/api/main.py", line 174, in run_validation_task
+    validator.run_validation(
+  File "/usr/local/lib/python3.11/site-packages/circuitbreaker.py", line 146, in wrapper
+    return self.call(function, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/circuitbreaker.py", line 188, in call
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/models/validation.py", line 427, in run_validation
+    self.logger.log(logging.ERROR, f"Erro na validação: {e}", exc_info=True)
+  File "/app/src/models/validation.py", line 124, in log
+    self.logger.log(
+  File "/usr/local/lib/python3.11/logging/__init__.py", line 1559, in log
+    self._log(level, msg, args, **kwargs)
+  File "/usr/local/lib/python3.11/logging/__init__.py", line 1632, in _log
+    record = self.makeRecord(self.name, level, fn, lno, msg, args,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/logging/__init__.py", line 1606, in makeRecord
+    raise KeyError("Attempt to overwrite %r in LogRecord" % key)
+KeyError: "Attempt to overwrite 'exc_info' in LogRecord"
+INFO:     127.0.0.1:33126 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58072 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37706 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36694 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39616 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59446 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58240 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39920 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48628 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45346 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44962 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45840 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     172.18.0.1:49718 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56490 - "GET /healthz HTTP/1.1" 200 OK
+2025-09-18 12:32:56,395 - [TrustShield-API] - ERROR - Erro durante a predição: 'features'
+Traceback (most recent call last):
+  File "/app/src/api/main.py", line 238, in predict
+    model_features = model_artifact["features"]
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^
+KeyError: 'features'
+INFO:     172.18.0.1:49722 - "POST /predict HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:42938 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     172.18.0.1:33676 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59360 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54876 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44928 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34904 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33614 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34034 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37962 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59824 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48222 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41588 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40824 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47068 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44438 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59414 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60566 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33914 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50002 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48584 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36790 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48708 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35496 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34068 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55014 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48794 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51456 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49578 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58498 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36954 - "GET /healthz HTTP/1.1" 200 OK

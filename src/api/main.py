@@ -12,7 +12,6 @@ import os
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
- 
 
 import joblib
 import pandas as pd
@@ -30,7 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 # =============================================================================
 # Estado da Aplicação e Carregamento do Modelo
 # =============================================================================
@@ -39,7 +37,7 @@ class AppState:
 
     def __init__(self):
         self.model = None
-        self.model_path = os.getenv("MODEL_PATH", "outputs/models/default_model.joblib")
+        self.model_path = os.getenv("MODEL_PATH", "outputs/models/isolation_forest_optimized_29_20250815_054217.joblib")
         self.mlflow_client = None
 
 
@@ -173,7 +171,7 @@ async def validate_model_endpoint(background_tasks: BackgroundTasks):
             validator = ResilientTrustShieldValidator(config_path="config/config.yaml")
             validator.run_validation(
                 data_path="data/features/featured_dataset.parquet",
-                model_path="outputs/models/default_model.joblib",
+                model_path="outputs/models/isolation_forest_optimized_29_20250815_054217.joblib",
                 reference_data_path="data/features/featured_dataset.parquet",  # Usando o mesmo dataset como referência por agora
                 validation_types=["drift_detection"],
             )
@@ -219,7 +217,6 @@ def get_status():
         "model_type": model_name,
         "mlflow_connected": app_state.mlflow_client is not None,
     }
-
 
 
 @app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
