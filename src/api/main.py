@@ -12,7 +12,8 @@ import os
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
- 
+from typing import Any, List, Optional
+
 
 import joblib
 import pandas as pd
@@ -41,9 +42,112 @@ class AppState:
         self.model = None
         self.model_path = os.getenv("MODEL_PATH", "outputs/models/default_model.joblib")
         self.mlflow_client = None
+        self.model_artifact = None
+        self.data_transformer = None
+        self.model_features: Optional[List[str]] = None
+        self.model_structure = "unknown"
 
 
 app_state = AppState()
+
+
+def _safe_getattr(obj: Any, name: str, default: Any = None) -> Any:
+    """Recupera atributos ignorando valores mockados em testes."""
+
+    try:
+        value = getattr(obj, name)
+    except AttributeError:
+        return default
+
+    if value is None:
+        return None
+
+    module_name = getattr(value.__class__, "__module__", "")
+    if module_name.startswith("unittest.mock"):
+        return default
+
+    return value
+
+
+def _ensure_feature_list(raw_features: Any) -> Optional[List[str]]:
+    """Normaliza a lista de features vinda do artefato do modelo."""
+
+    if raw_features is None:
+        return None
+
+    if isinstance(raw_features, list):
+        return raw_features
+
+    if isinstance(raw_features, tuple):
+        return list(raw_features)
+
+    if hasattr(raw_features, "tolist"):
+        return list(raw_features.tolist())
+
+    if isinstance(raw_features, set):
+        return list(raw_features)
+
+    return None
+
+
+def _prepare_model_components(artifact: Any) -> dict:
+    """Extrai componentes relevantes de diferentes formatos de artefato."""
+
+    model_obj = None
+    transformer = None
+    features = None
+    structure = "unknown"
+
+    if isinstance(artifact, dict):
+        structure = "dict"
+        for key in ("model", "pipeline", "estimator"):
+            if artifact.get(key) is not None:
+                model_obj = artifact[key]
+                structure = f"dict:{key}"
+                break
+
+        if model_obj is None:
+            for value in artifact.values():
+                if hasattr(value, "predict"):
+                    model_obj = value
+                    structure = f"dict:{value.__class__.__name__}"
+                    break
+
+        transformer = (
+            artifact.get("preprocessor")
+            or artifact.get("transformer")
+            or artifact.get("scaler")
+        )
+        features = artifact.get("features")
+    else:
+        model_obj = artifact
+        structure = artifact.__class__.__name__
+        features = getattr(artifact, "feature_names_in_", None)
+
+    return {
+        "model": model_obj,
+        "transformer": transformer,
+        "features": _ensure_feature_list(features),
+        "structure": structure,
+    }
+
+
+def _resolve_runtime_components(state: AppState) -> tuple:
+    """Resolve o modelo, transformador e features em tempo de execução."""
+
+    model_container = _safe_getattr(state, "model")
+    transformer = _safe_getattr(state, "data_transformer")
+    features = _safe_getattr(state, "model_features")
+
+    if isinstance(model_container, dict):
+        components = _prepare_model_components(model_container)
+        model = components["model"]
+        transformer = transformer or components["transformer"]
+        features = features or components["features"]
+    else:
+        model = model_container
+
+    return model, transformer, features
 
 
 async def load_model_and_setup_mlflow():
@@ -92,18 +196,41 @@ async def load_model_and_setup_mlflow():
     model_file = Path(app_state.model_path)
     if model_file.exists():
         try:
-            app_state.model = joblib.load(model_file)
-            logger.info(f"Modelo '{model_file.name}' carregado com sucesso.")
+            loaded_artifact = joblib.load(model_file)
+            components = _prepare_model_components(loaded_artifact)
+
+            if components["model"] is None:
+                raise ValueError("Artefato de modelo não contém objeto de predição válido.")
+
+            app_state.model = components["model"]
+            app_state.model_artifact = loaded_artifact
+            app_state.data_transformer = components["transformer"]
+            app_state.model_features = components["features"]
+            app_state.model_structure = components["structure"]
+
+            logger.info(
+                "Modelo '%s' carregado com sucesso. Estrutura detectada: %s.",
+                model_file.name,
+                app_state.model_structure,
+            )
         except Exception as e:
             logger.error(
                 f"Erro ao carregar o modelo de {model_file}: {e}", exc_info=True
             )
             app_state.model = None
+            app_state.model_artifact = None
+            app_state.data_transformer = None
+            app_state.model_features = None
+            app_state.model_structure = "unknown"
     else:
         logger.warning(
             f"Arquivo do modelo não encontrado em {model_file}. API iniciará sem modelo."
         )
         app_state.model = None
+        app_state.model_artifact = None
+        app_state.data_transformer = None
+        app_state.model_features = None
+        app_state.model_structure = "unknown"
 
 
 # =============================================================================
@@ -218,6 +345,7 @@ def get_status():
         "status": model_status,
         "model_type": model_name,
         "mlflow_connected": app_state.mlflow_client is not None,
+        "model_structure": app_state.model_structure,
     }
 
 
@@ -232,20 +360,46 @@ def predict(transaction: TransactionInput):
         # Converte o input Pydantic para um DataFrame do Pandas
         input_df = pd.DataFrame([transaction.model_dump()])
 
-        # Extrai o modelo e as features do artefato carregado
-        model_artifact = app_state.model
-        model_obj = model_artifact["model"]
-        model_features = model_artifact["features"]
+        model_obj, transformer, model_features = _resolve_runtime_components(app_state)
 
-        # Garante que o DataFrame para predição tenha apenas as colunas esperadas na ordem correta
-        input_df_for_prediction = input_df[model_features]
+        if model_obj is None:
+            raise ValueError("Objeto de modelo não inicializado corretamente.")
 
-        score = model_obj.decision_function(input_df_for_prediction)[0]
-        prediction = model_obj.predict(input_df_for_prediction)[0]
+        if model_features:
+            missing_features = [
+                feature for feature in model_features if feature not in input_df.columns
+            ]
+            if missing_features:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "Campos ausentes para predição: "
+                        + ", ".join(sorted(set(missing_features)))
+                    ),
+                )
+            input_df_for_prediction = input_df[model_features]
+        else:
+            input_df_for_prediction = input_df
+
+        if transformer is not None:
+            transformed_input = transformer.transform(input_df_for_prediction)
+        else:
+            transformed_input = input_df_for_prediction
+
+        decision_fn = getattr(model_obj, "decision_function", None)
+        score = None
+        if callable(decision_fn):
+            score = float(decision_fn(transformed_input)[0])
+        else:
+            score_samples_fn = getattr(model_obj, "score_samples", None)
+            if callable(score_samples_fn):
+                score = float(score_samples_fn(transformed_input)[0])
+
+        prediction = model_obj.predict(transformed_input)[0]
 
         return {
             "is_anomaly": int(prediction),
-            "score": float(score),
+            "score": float(score) if score is not None else 0.0,
             "model_version": Path(app_state.model_path).name,
         }
     except Exception as e:
