@@ -22,7 +22,9 @@ def get_logger(name: str) -> logging.Logger:
     logger.setLevel(logging.INFO)
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter('%(asctime)s - [TrustShield] - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - [TrustShield] - %(levelname)s - %(message)s"
+        )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
     return logger
@@ -35,15 +37,15 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Iniciando limpeza de dados...")
 
     def clean_money(column):
-        return pd.to_numeric(column.astype(str).str.replace('$', ''), errors='coerce')
+        return pd.to_numeric(column.astype(str).str.replace("$", ""), errors="coerce")
 
-    money_columns = ['amount', 'per_capita_income', 'yearly_income', 'total_debt']
+    money_columns = ["amount", "per_capita_income", "yearly_income", "total_debt"]
     for col in money_columns:
         if col in df.columns:
             df[col] = clean_money(df[col])
 
-    if 'date' in df.columns:
-        df['date'] = pd.to_datetime(df['date'])
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
 
     logger.info("Limpeza de dados concluída.")
     return df
@@ -54,14 +56,16 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
     logger = get_logger(__name__)
     logger.info("Iniciando engenharia de features...")
 
-    df['transaction_hour'] = df['date'].dt.hour
-    df['day_of_week'] = df['date'].dt.dayofweek
-    df['month'] = df['date'].dt.month
-    df['is_weekend'] = df['day_of_week'].isin([5, 6])
-    df['is_night_transaction'] = (df['transaction_hour'] <= 6) | (df['transaction_hour'] >= 22)
+    df["transaction_hour"] = df["date"].dt.hour
+    df["day_of_week"] = df["date"].dt.dayofweek
+    df["month"] = df["date"].dt.month
+    df["is_weekend"] = df["day_of_week"].isin([5, 6])
+    df["is_night_transaction"] = (df["transaction_hour"] <= 6) | (
+        df["transaction_hour"] >= 22
+    )
 
-    avg_amount_per_user = df.groupby('client_id')['amount'].transform('mean')
-    df['amount_vs_avg'] = df['amount'] / (avg_amount_per_user + 1)
+    avg_amount_per_user = df.groupby("client_id")["amount"].transform("mean")
+    df["amount_vs_avg"] = df["amount"] / (avg_amount_per_user + 1)
 
     logger.info("Engenharia de features concluída.")
     return df
@@ -98,7 +102,9 @@ def main():
 
         logger.info("✅ Pipeline de engenharia de features concluído com sucesso.")
     except FileNotFoundError:
-        logger.error(f"Erro: Ficheiro de entrada não encontrado em {input_file}. Execute 'make_dataset.py' primeiro.")
+        logger.error(
+            f"Erro: Ficheiro de entrada não encontrado em {input_file}. Execute 'make_dataset.py' primeiro."
+        )
         sys.exit(1)
     except Exception as e:
         logger.error(f"Um erro inesperado ocorreu: {e}", exc_info=True)
