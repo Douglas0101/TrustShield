@@ -71,6 +71,29 @@ make smoke
 # ==============================================================================
 # Sequência Detalhada com DOCKER COMPOSE (Referência Avançada)
 # ==============================================================================
+# NOTA IMPORTANTE: Use 'docker compose' (com espaço), não 'docker-compose' (com hífen).
+# O comando com espaço é a versão 2, mais moderna e integrada ao Docker.
+# O comando com hífen é a versão 1, mais antiga, e pode apresentar erros em
+# sistemas com Python 3.12+ (como o erro 'distutils not found').
+
+# ------------------------------------------------------------------------------
+# Comandos Essenciais (Versão 2)
+# ------------------------------------------------------------------------------
+
+# Para parar e remover os containers:
+# Explicação: Este comando para e remove os containers, redes e volumes associados ao projeto.
+# É uma forma limpa de encerrar todos os serviços.
+docker compose -f docker/docker-compose.yml -p trustshield down
+
+# Para construir as imagens e iniciar todos os serviços em background:
+# Explicação: Este comando constrói as imagens Docker (se necessário) e inicia todos os serviços
+# definidos no docker-compose.yml em modo detached (-d), ou seja, em segundo plano.
+# O build --build garante que as imagens sejam reconstruídas.
+docker compose -f docker/docker-compose.yml -p trustshield up --build -d
+
+# ------------------------------------------------------------------------------
+# Passo a Passo (Referência)
+# ------------------------------------------------------------------------------
 # Nota: A porta da API no host agora é 8080 por padrão (definido no Makefile).
 # Para usar outra porta, exporte a variável de ambiente:
 # export API_HOST_PORT=8001
@@ -78,7 +101,7 @@ make smoke
 # 1) Subir a stack
 # O comando 'make up' encapsula esta lógica.
 DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 \
-docker compose -p trustshield -f docker/docker-compose.yml up -d --build
+	docker compose -p trustshield -f docker/docker-compose.yml up -d --build
 
 # 2) Aguardar a API ficar saudável
 # O comando 'make wait' faz isso automaticamente.
@@ -118,3 +141,5 @@ curl -s -X POST http://localhost:8080/predict \
 # 7) Parar e limpar a stack
 # Use 'make down' ou 'make clean'.
 docker compose -p trustshield -f docker/docker-compose.yml down --remove-orphans
+
+streamlit run src/dashboard/app.py

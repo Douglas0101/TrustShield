@@ -59,7 +59,7 @@ st.caption(
 # --- CORREÇÃO APLICADA AQUI ---
 # A URL da API agora usa o nome do serviço Docker 'trustshield-api' como padrão,
 # permitindo a comunicação entre contêineres. Pode ser sobrescrita pela variável de ambiente.
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+API_URL = os.environ.get("API_URL", "http://trustshield-api:8000")
 PARQUET_PATH = "data/features/featured_dataset.parquet"
 
 MAX_FEED_ROWS = 2000  # máximo de linhas no feed em memória
