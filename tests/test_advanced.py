@@ -28,10 +28,17 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime
 from typing import Dict, Any
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 import joblib
 import numpy as np
 import pandas as pd
 import pytest
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from ipaddress import ip_network
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
@@ -45,6 +52,11 @@ from src.models.train_fraud_model import (
 from src.models.optimization import DataValidator
 
 from src.api.main import app as fastapi_app
+from src.api.security import (
+    IPAccessControl,
+    enforce_ip_whitelist,
+    reset_ip_access_control_cache,
+)
 from enum import Enum
 
 
@@ -240,6 +252,62 @@ class TestUtils:
         # Chama a função e verifica
         setup_mlflow()
         mock_set_tracking_uri.assert_called_once_with("http://test-mlflow:5000")
+
+
+@pytest.mark.security
+class TestIPAllowList:
+    def test_ip_access_control_accepts_loopback_entries(self):
+        control = IPAccessControl(
+            allows_all=False,
+            hosts={"127.0.0.1", "::1", "localhost"},
+            networks=[],
+        )
+
+        assert control.is_allowed("127.0.0.1")
+        assert control.is_allowed("::1")
+        assert control.is_allowed("localhost")
+        assert not control.is_allowed("192.168.10.20")
+
+    def test_ip_access_control_supports_network_ranges(self):
+        control = IPAccessControl(
+            allows_all=False,
+            hosts=set(),
+            networks=[ip_network("192.168.0.0/24")],
+        )
+
+        assert control.is_allowed("192.168.0.10")
+        assert not control.is_allowed("10.0.0.1")
+
+    @pytest.mark.skipif(not FASTAPI_AVAILABLE, reason="FastAPI não está instalado.")
+    def test_middleware_blocks_disallowed_ip(self, monkeypatch):
+        reset_ip_access_control_cache()
+        monkeypatch.setenv("TRUSTSHIELD_ALLOWED_IPS", "203.0.113.0/24")
+
+        app = FastAPI()
+
+        @app.middleware("http")
+        async def guard(request: Request, call_next):
+            try:
+                await enforce_ip_whitelist(request)
+            except HTTPException as exc:
+                return JSONResponse(
+                    status_code=exc.status_code, content={"detail": exc.detail}
+                )
+            return await call_next(request)
+
+        @app.get("/ping")
+        def ping():
+            return {"status": "ok"}
+
+        with TestClient(app) as client:
+            allowed = client.get("/ping", headers={"X-Forwarded-For": "203.0.113.5"})
+            assert allowed.status_code == 200
+
+            denied = client.get("/ping", headers={"X-Forwarded-For": "198.51.100.1"})
+            assert denied.status_code == 403
+
+        monkeypatch.delenv("TRUSTSHIELD_ALLOWED_IPS", raising=False)
+        reset_ip_access_control_cache()
 
 
 @pytest.mark.api
