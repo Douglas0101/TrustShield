@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 import joblib
+import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -363,21 +364,28 @@ def predict(transaction: TransactionInput):
         if model_obj is None:
             raise ValueError("Objeto de modelo não inicializado corretamente.")
 
+        # --- CORREÇÃO PARA ERRO DE TIPO ---
+        # Garante que apenas colunas numéricas sejam passadas para o transformador.
+        # O transformador (ex: StandardScaler) falha se receber strings.
+        numeric_input_df = input_df.select_dtypes(include=np.number)
+
         if model_features:
             missing_features = [
-                feature for feature in model_features if feature not in input_df.columns
+                feature for feature in model_features if feature not in numeric_input_df.columns
             ]
             if missing_features:
                 raise HTTPException(
                     status_code=422,
                     detail=(
-                        "Campos ausentes para predição: "
+                        "Campos numéricos ausentes para predição: "
                         + ", ".join(sorted(set(missing_features)))
                     ),
                 )
-            input_df_for_prediction = input_df[model_features]
+            # Usa as features do modelo, mas a partir do DF já filtrado por tipo numérico
+            input_df_for_prediction = numeric_input_df[model_features]
         else:
-            input_df_for_prediction = input_df
+            # Se não há features explícitas, usa todas as colunas numéricas que foram encontradas
+            input_df_for_prediction = numeric_input_df
 
         if transformer is not None:
             transformed_input = transformer.transform(input_df_for_prediction)

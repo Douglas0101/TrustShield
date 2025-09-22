@@ -57,10 +57,12 @@ st.caption(
 # Config e limites
 # -----------------------------------------------------------------------------
 # --- CORREÇÃO APLICADA AQUI ---
-# A URL da API agora usa o nome do serviço Docker 'trustshield-api' como padrão,
-# permitindo a comunicação entre contêineres. Pode ser sobrescrita pela variável de ambiente.
+# Constrói o caminho absoluto para o arquivo Parquet a partir do local do script
+# para evitar problemas com o diretório de trabalho atual.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 API_URL = os.environ.get("API_URL", "http://trustshield-api:8000")
-PARQUET_PATH = "data/features/featured_dataset.parquet"
+PARQUET_PATH = os.path.join(PROJECT_ROOT, "data/features/featured_dataset.parquet")
 
 MAX_FEED_ROWS = 2000  # máximo de linhas no feed em memória
 MAX_MAP_POINTS = 500  # máximo de pontos no mapa
