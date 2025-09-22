@@ -18,12 +18,14 @@ from typing import Any, List, Optional
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 # --- CORREÇÃO ESTRUTURAL ---
 # Importa a função de setup diretamente do seu utilitário.
 from src.utils.mlflow_setup import setup_mlflow
+from src.api.security import enforce_ip_whitelist
 
 # Configuração do Logger (mantida da sua versão original)
 logging.basicConfig(
@@ -245,6 +247,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.middleware("http")
+async def ip_allowlist_middleware(request: Request, call_next):
+    """Block requests from IPs that are not present in the allow list."""
+
+    try:
+        await enforce_ip_whitelist(request)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+    return await call_next(request)
 
 
 # =============================================================================
