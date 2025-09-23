@@ -29,9 +29,22 @@ logger = logging.getLogger("trustshield.api.security")
 _ALLOWED_IPS_ENV = "TRUSTSHIELD_ALLOWED_IPS"
 _DISABLE_ENV = "TRUSTSHIELD_DISABLE_IP_WHITELIST"
 
-# Default set of loopback identifiers that should be trusted when the
-# environment does not provide an explicit allow list.
-_DEFAULT_ALLOWED_IDENTIFIERS = ("127.0.0.1", "::1", "localhost")
+# Default identifiers that should be trusted when the environment does not
+# provide an explicit allow list. Besides loopback addresses we also trust the
+# common private network ranges used by Docker (172.16.0.0/12) and home/office
+# LANs (10.0.0.0/8 and 192.168.0.0/16), as well as the special hostname
+# ``host.docker.internal`` exposed by Docker Desktop. This makes the API usable
+# out of the box in local development environments while still requiring an
+# explicit allow list for public networks.
+_DEFAULT_ALLOWED_IDENTIFIERS = (
+    "127.0.0.1",
+    "::1",
+    "localhost",
+    "host.docker.internal",
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+)
 
 # Cache for the parsed configuration so we do not parse strings on every
 # request. The cache is invalidated whenever the underlying environment
