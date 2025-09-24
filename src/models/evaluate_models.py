@@ -37,6 +37,7 @@ import pandas as pd
 import yaml
 from sklearn.base import BaseEstimator
 from sklearn.ensemble import IsolationForest
+from pandas.api.types import is_datetime64_any_dtype, is_timedelta64_dtype
 
 # Dependências opcionais de Engenharia de IA (tratadas de forma segura)
 try:
@@ -463,12 +464,55 @@ class ResilientModelEvaluator(Subject):
                 logging.WARNING,
                 "Coluna 'is_anomaly' não encontrada. Gerando labels sintéticos com IsolationForest.",
             )
+            sanitized_data = self._prepare_numeric_features(data)
+            if sanitized_data.empty:
+                raise ValueError(
+                    "Nenhuma coluna numérica disponível para gerar labels sintéticos."
+                )
+
             iso = IsolationForest(contamination=0.1, random_state=42)
-            y_pred = iso.fit_predict(data)
+            y_pred = iso.fit_predict(sanitized_data)
             X = data
             y = pd.Series(np.where(y_pred == -1, 1, 0), name="is_anomaly")
 
         return X, y
+
+    @staticmethod
+    def _prepare_numeric_features(data: pd.DataFrame) -> pd.DataFrame:
+        """Extrai apenas colunas numéricas, convertendo datetimes/timedeltas para valores escalares."""
+
+        numeric_df = data.select_dtypes(include=[np.number, "bool"]).copy()
+
+        for column in numeric_df.select_dtypes(include="bool").columns:
+            numeric_df[column] = numeric_df[column].astype("int8")
+
+        datetime_columns = [
+            column
+            for column in data.columns
+            if is_datetime64_any_dtype(data[column])
+        ]
+
+        for column in datetime_columns:
+            series = data[column]
+            if hasattr(series.dt, "tz") and series.dt.tz is not None:
+                series = series.dt.tz_convert(None)
+            numeric_series = series.view("int64").astype(float)
+            if series.isna().any():
+                numeric_series[series.isna()] = np.nan
+            numeric_df[f"{column}_timestamp"] = numeric_series
+
+        timedelta_columns = [
+            column for column in data.columns if is_timedelta64_dtype(data[column])
+        ]
+
+        for column in timedelta_columns:
+            series = data[column]
+            numeric_series = series.view("int64").astype(float)
+            if series.isna().any():
+                numeric_series[series.isna()] = np.nan
+            numeric_df[f"{column}_timedelta"] = numeric_series
+
+        return numeric_df
 
     def _load_models(self) -> Dict[str, Tuple[BaseEstimator, str]]:
         """Carrega os artefatos de modelo a partir dos caminhos fornecidos."""
