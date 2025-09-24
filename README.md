@@ -111,6 +111,9 @@ TrustShield/
 2.  **Prepare os dados brutos:**
     Certifique-se de que os ficheiros de dados (`cards_data.csv`, `users_data.csv`, etc.) estão localizados no diretório `data/raw/`.
 
+3.  **Acesso local à API:**
+    A aplicação aplica uma _whitelist_ de IPs por padrão. O `docker-compose` já exporta `TRUSTSHIELD_DISABLE_IP_WHITELIST=true` para desativar esse bloqueio no ambiente local. Caso execute a API fora do Compose, defina essa variável ou configure `TRUSTSHIELD_ALLOWED_IPS` com os IPs autorizados para evitar respostas HTTP 403.
+
 ### **Executando o Pipeline Completo**
 
 O `Makefile` simplifica a execução do projeto com os seguintes comandos:

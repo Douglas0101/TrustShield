@@ -130,6 +130,7 @@ services:
       - AWS_ACCESS_KEY_ID_FILE=/run/secrets/minio_root_user
       - AWS_SECRET_ACCESS_KEY_FILE=/run/secrets/minio_root_password
       - PYTHONUNBUFFERED=1
+      - TRUSTSHIELD_DISABLE_IP_WHITELIST=true
     volumes:
       - ../:/app
     secrets:
