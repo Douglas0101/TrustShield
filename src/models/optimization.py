@@ -171,6 +171,7 @@ class ConfigManager:
         try:
             raw_config = self.settings.as_dict()  # type: ignore[union-attr]
             config = self._normalize_keys(raw_config)
+            config = self.settings.as_dict()  # type: ignore[union-attr]
             self.logger.log(
                 logging.INFO,
                 f"Config loaded from dynaconf with keys: {list(config.keys())}",
@@ -213,7 +214,7 @@ class ConfigManager:
             hyper_cfg["early_stopping"] = True
         elif env == "staging":
             hyper_cfg["n_trials"] = max(int(hyper_cfg.get("n_trials", 50)), 50)
-
+            
     def _normalize_keys(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         normalized: Dict[str, Any] = {}
         for key, value in payload.items():
@@ -223,7 +224,6 @@ class ConfigManager:
             else:
                 normalized[normalized_key] = value
         return normalized
-
 
 class ResourceMonitor:
     def __init__(self, logger: AdvancedLogger):
