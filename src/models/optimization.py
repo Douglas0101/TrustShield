@@ -169,6 +169,8 @@ class ConfigManager:
 
     def _load_from_dynaconf(self) -> Dict[str, Any]:
         try:
+            raw_config = self.settings.as_dict()  # type: ignore[union-attr]
+            config = self._normalize_keys(raw_config)
             config = self.settings.as_dict()  # type: ignore[union-attr]
             self.logger.log(
                 logging.INFO,
@@ -212,7 +214,16 @@ class ConfigManager:
             hyper_cfg["early_stopping"] = True
         elif env == "staging":
             hyper_cfg["n_trials"] = max(int(hyper_cfg.get("n_trials", 50)), 50)
-
+            
+    def _normalize_keys(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        normalized: Dict[str, Any] = {}
+        for key, value in payload.items():
+            normalized_key = key.lower() if isinstance(key, str) else key
+            if isinstance(value, dict):
+                normalized[normalized_key] = self._normalize_keys(value)
+            else:
+                normalized[normalized_key] = value
+        return normalized
 
 class ResourceMonitor:
     def __init__(self, logger: AdvancedLogger):
@@ -489,8 +500,9 @@ class MLflowObserver(OptimizationObserver):
             mlflow.set_tag("metrics_timestamp", metrics.timestamp.isoformat())
         elif event == OptimizationEvent.BEST_MODEL_SAVED:
             if model_path := data.get("model_path"):
-                if Path(model_path).exists():
-                    mlflow.log_artifact(str(model_path))
+                model_artifact = Path(model_path)
+                if model_artifact.is_file():
+                    mlflow.log_artifact(str(model_artifact))
         elif event == OptimizationEvent.SENSITIVITY_ANALYSIS_COMPLETE:
             if sensitivity_path := data.get("sensitivity_path"):
                 if Path(sensitivity_path).exists():
@@ -756,7 +768,7 @@ class ResilientHyperparameterOptimizer(Subject):
                     OptimizationEvent.OPTIMIZATION_METHOD_COMPLETE,
                     {"method": method, "metrics": optimization_results["metrics"]},
                 )
-                if model_path.exists():
+                if model_path.is_file():
                     self.notify(
                         OptimizationEvent.BEST_MODEL_SAVED, {"model_path": model_path}
                     )
@@ -806,8 +818,51 @@ class ResilientHyperparameterOptimizer(Subject):
         validation_success, _ = self.data_validator.validate(data)
         if not validation_success:
             raise ValueError("Validação de dados falhou.")
+        features = data.copy()
+        target_column = (
+            self.config.get("training", {}).get("target_column") or "is_anomaly"
+        )
+        target = None
+        if target_column in features.columns:
+            target = features[target_column]
+            features = features.drop(columns=[target_column])
+
+        datetime_cols = [
+            col
+            for col in features.columns
+            if pd.api.types.is_datetime64_any_dtype(features[col])
+        ]
+        for col in datetime_cols:
+            converted = pd.to_datetime(features[col], utc=True, errors="coerce")
+            features[col] = converted.map(
+                lambda x: x.timestamp() if not pd.isna(x) else np.nan
+            )
+
+        non_numeric_cols = features.select_dtypes(exclude=[np.number]).columns
+        if non_numeric_cols.any():
+            removed_cols = list(non_numeric_cols)
+            self.logger.log(
+                logging.WARNING,
+                f"Removendo colunas não numéricas antes da otimização: {removed_cols}",
+            )
+            features = features.drop(columns=removed_cols)
+
+        if features.empty:
+            raise ValueError(
+                "Nenhuma coluna numérica disponível para otimização após pré-processamento."
+            )
+
+        features = features.fillna(features.mean(numeric_only=True))
+
+        stratify_target = None
+        if target is not None:
+            if target.nunique(dropna=True) > 1:
+                non_null_target = target.dropna()
+                replacement = non_null_target.mode().iloc[0] if not non_null_target.empty else 0
+                stratify_target = target.fillna(replacement)
+
         X_train, X_val = train_test_split(
-            data, test_size=0.2, random_state=42, stratify=data.get("is_anomaly")
+            features, test_size=0.2, random_state=42, stratify=stratify_target
         )
         numeric_cols = X_train.select_dtypes(include=np.number).columns
         scaler = StandardScaler()
