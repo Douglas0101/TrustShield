@@ -28,7 +28,7 @@ import time
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Protocol, runtime_checkable
+from typing import Any, Dict, List, Optional, Tuple, Protocol, runtime_checkable
 from enum import Enum
 from dataclasses import dataclass, field, asdict
 
@@ -120,19 +120,37 @@ class AdvancedLogger:
             self.logger.addHandler(handler)
 
     def log(self, level: int, message: str, **kwargs):
-        self.logger.log(
-            level, message, extra={"timestamp": datetime.now().isoformat(), **kwargs}
-        )
+        reserved_keys = {"exc_info", "stack_info", "stacklevel"}
+        log_kwargs: Dict[str, Any] = {}
+        for key in reserved_keys:
+            if key in kwargs:
+                log_kwargs[key] = kwargs.pop(key)
+
+        extra_payload = kwargs.pop("extra", {}) or {}
+        if not isinstance(extra_payload, dict):
+            extra_payload = dict(extra_payload)
+
+        extra_payload = {"timestamp": datetime.now().isoformat(), **extra_payload, **kwargs}
+        log_kwargs["extra"] = extra_payload
+
+        self.logger.log(level, message, **log_kwargs)
 
 
 class ConfigManager:
-    def __init__(self, project_root: Path, logger: AdvancedLogger):
+    def __init__(
+        self, project_root: Path, logger: AdvancedLogger, config_path: Optional[Path] = None
+    ):
         self.project_root = project_root
         self.logger = logger
+        self.config_path = (
+            config_path
+            if config_path and config_path.is_absolute()
+            else project_root / (config_path or Path("config/config.yaml"))
+        )
         if DYNACONF_AVAILABLE and Dynaconf:
             self.settings = Dynaconf(
-                settings_files=[str(project_root / "config" / "config.yaml")],
-                environments=True,
+                settings_files=[str(self.config_path)],
+                environments=False,
                 env_switcher="ENV_FOR_DYNACONF",
                 load_dotenv=True,
             )
@@ -140,20 +158,78 @@ class ConfigManager:
             self.settings = None
 
     def get_config(self) -> Dict[str, Any]:
+        config: Dict[str, Any] = {}
         if DYNACONF_AVAILABLE and self.settings:
-            config = self.settings.to_dict()
-            self.logger.log(logging.INFO, f"Config loaded from dynaconf: {config}")
-            env = os.getenv("ENV", "development")
-            if env == "production":
-                config["hyper_optimization"]["n_trials"] = 100
-                config["hyper_optimization"]["early_stopping"] = True
-            elif env == "staging":
-                config["hyper_optimization"]["n_trials"] = 50
+            config = self._load_from_dynaconf()
+
+        if config and not self._is_valid_config(config):
+            self.logger.log(
+                logging.WARNING,
+                "Configuração via Dynaconf incompleta - aplicando fallback para YAML.",
+            )
+
+        if not self._is_valid_config(config):
+            config = self._load_from_yaml()
+
+        self._apply_environment_overrides(config)
+        return config
+
+    def _load_from_dynaconf(self) -> Dict[str, Any]:
+        try:
+            raw_config = self.settings.as_dict()  # type: ignore[union-attr]
+            config = self._normalize_keys(raw_config)
+            self.logger.log(
+                logging.INFO,
+                f"Config loaded from dynaconf with keys: {list(config.keys())}",
+            )
             return config
-        else:
-            config_path = self.project_root / "config" / "config.yaml"
-            with open(config_path, "r") as f:
-                return yaml.safe_load(f)
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            self.logger.log(
+                logging.WARNING,
+                f"Falha ao carregar configuração via Dynaconf: {exc}",
+                exc_info=True,
+            )
+            return {}
+
+    def _load_from_yaml(self) -> Dict[str, Any]:
+        with open(self.config_path, "r") as config_file:
+            config = yaml.safe_load(config_file) or {}
+        self.logger.log(
+            logging.INFO,
+            f"Config loaded from YAML: {self.config_path.relative_to(self.project_root)}",
+        )
+        return config
+
+    @staticmethod
+    def _is_valid_config(config: Dict[str, Any]) -> bool:
+        return bool(
+            isinstance(config, dict)
+            and isinstance(config.get("hyper_optimization"), dict)
+            and config["hyper_optimization"].get("space")
+        )
+
+    def _apply_environment_overrides(self, config: Dict[str, Any]):
+        if "hyper_optimization" not in config:
+            config["hyper_optimization"] = {}
+
+        env = os.getenv("ENV", "development").lower()
+        hyper_cfg = config["hyper_optimization"]
+
+        if env == "production":
+            hyper_cfg["n_trials"] = 100
+            hyper_cfg["early_stopping"] = True
+        elif env == "staging":
+            hyper_cfg["n_trials"] = max(int(hyper_cfg.get("n_trials", 50)), 50)
+
+    def _normalize_keys(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        normalized: Dict[str, Any] = {}
+        for key, value in payload.items():
+            normalized_key = key.lower() if isinstance(key, str) else key
+            if isinstance(value, dict):
+                normalized[normalized_key] = self._normalize_keys(value)
+            else:
+                normalized[normalized_key] = value
+        return normalized
 
 
 class ResourceMonitor:
@@ -163,14 +239,34 @@ class ResourceMonitor:
         self.start_time = time.time()
         self.peak_memory = 0
         self.trial_times: List[float] = []
+        self.memory_history: List[float] = []
 
     def update_peak_memory(self):
         current_memory = self.process.memory_info().rss / (1024**3)
+        self.memory_history.append(current_memory)
         if current_memory > self.peak_memory:
             self.peak_memory = current_memory
 
     def record_trial_time(self, trial_time: float):
         self.trial_times.append(trial_time)
+
+    @property
+    def average_trial_time(self) -> float:
+        return float(np.mean(self.trial_times)) if self.trial_times else 0.0
+
+    @property
+    def max_trial_time(self) -> float:
+        return float(max(self.trial_times)) if self.trial_times else 0.0
+
+    @property
+    def latest_memory_gb(self) -> float:
+        return self.memory_history[-1] if self.memory_history else 0.0
+
+    def reset(self):
+        self.start_time = time.time()
+        self.peak_memory = 0
+        self.trial_times.clear()
+        self.memory_history.clear()
 
 
 class DataValidator:
@@ -281,10 +377,30 @@ class OptimizationMetrics:
     n_successful_trials: int
     peak_memory_gb: float
     cpu_usage_percent: float = 0.0
+    avg_trial_time: float = 0.0
+    max_trial_time: float = 0.0
+    latest_memory_gb: float = 0.0
     timestamp: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["method"] = self.method.value
+        data["timestamp"] = self.timestamp.isoformat()
+        return data
+
+    def to_numeric_metrics(self) -> Dict[str, float]:
+        numeric_fields = {
+            "total_time": self.total_time,
+            "best_score": self.best_score,
+            "n_trials": float(self.n_trials),
+            "n_successful_trials": float(self.n_successful_trials),
+            "peak_memory_gb": self.peak_memory_gb,
+            "cpu_usage_percent": self.cpu_usage_percent,
+            "avg_trial_time": self.avg_trial_time,
+            "max_trial_time": self.max_trial_time,
+            "latest_memory_gb": self.latest_memory_gb,
+        }
+        return {key: float(value) for key, value in numeric_fields.items()}
 
 
 # =====================================================================================
@@ -348,11 +464,17 @@ class ConsoleLogObserver(OptimizationObserver):
     def update(self, event: OptimizationEvent, data: Dict[str, Any]):
         method = data.get("method")
         method_val = method.value if isinstance(method, Enum) else "N/A"
+        resource_usage = data.get("resource_usage", {})
         messages = {
             OptimizationEvent.OPTIMIZATION_START: "🚀 === INICIANDO OTIMIZAÇÃO DE HIPERPARÂMETROS ===",
             OptimizationEvent.OPTIMIZATION_METHOD_START: f"🎯 EXECUTANDO MÉTODO: {method_val.upper()}",
             OptimizationEvent.BEST_MODEL_SAVED: f"💾 Melhor modelo salvo: {data.get('model_path', 'N/A')}",
-            OptimizationEvent.OPTIMIZATION_COMPLETE: f"🎉 OTIMIZAÇÃO CONCLUÍDA em {data.get('total_time', 0):.2f}s",
+            OptimizationEvent.OPTIMIZATION_COMPLETE: (
+                "🎉 OTIMIZAÇÃO CONCLUÍDA em "
+                f"{data.get('total_time', 0):.2f}s | Pico RAM: "
+                f"{resource_usage.get('peak_memory_gb', 0):.2f}GB | Média trial: "
+                f"{resource_usage.get('avg_trial_time', 0):.2f}s"
+            ),
             OptimizationEvent.OPTIMIZATION_FAILED: f"❌ ERRO CRÍTICO NA OTIMIZAÇÃO: {data.get('error', 'Desconhecido')}",
         }
         if message := messages.get(event):
@@ -379,12 +501,15 @@ class MLflowObserver(OptimizationObserver):
             )
             mlflow.log_params(data.get("config", {}).get("hyper_optimization", {}))
         elif event == OptimizationEvent.OPTIMIZATION_METHOD_COMPLETE:
-            mlflow.log_metrics(data["metrics"].to_dict())
-            mlflow.set_tag("optimization_method", data["metrics"].method.value)
+            metrics: OptimizationMetrics = data["metrics"]
+            mlflow.log_metrics(metrics.to_numeric_metrics())
+            mlflow.set_tag("optimization_method", metrics.method.value)
+            mlflow.set_tag("metrics_timestamp", metrics.timestamp.isoformat())
         elif event == OptimizationEvent.BEST_MODEL_SAVED:
             if model_path := data.get("model_path"):
-                if Path(model_path).exists():
-                    mlflow.log_artifact(str(model_path))
+                model_artifact = Path(model_path)
+                if model_artifact.is_file():
+                    mlflow.log_artifact(str(model_artifact))
         elif event == OptimizationEvent.SENSITIVITY_ANALYSIS_COMPLETE:
             if sensitivity_path := data.get("sensitivity_path"):
                 if Path(sensitivity_path).exists():
@@ -416,10 +541,16 @@ class BaseOptimizationStrategy:
     def _objective_function(
         self, params: Dict[str, Any], X_train: pd.DataFrame, X_val: pd.DataFrame
     ) -> float:
+        trial_start = time.time()
+        self.monitor.update_peak_memory()
         try:
-            model = IsolationForest(**params, random_state=42)
+            model_params = dict(params)
+            model_params.setdefault("random_state", 42)
+            model = IsolationForest(**model_params)
             model.fit(X_train)
+            self.monitor.update_peak_memory()
             scores = -model.decision_function(X_val)
+            self.monitor.update_peak_memory()
             objective_value = float(np.var(scores))
             if objective_value > self._best_score:
                 self._best_score = objective_value
@@ -429,6 +560,9 @@ class BaseOptimizationStrategy:
         except Exception as e:
             self.logger.log(logging.WARNING, f"Erro na avaliação de parâmetros: {e}")
             return -np.inf
+        finally:
+            self.monitor.record_trial_time(time.time() - trial_start)
+            self.monitor.update_peak_memory()
 
     def save_best_model(
         self, model: Any, params: Dict[str, Any], score: float, path: str
@@ -504,7 +638,6 @@ class OptunaOptimizer(BaseOptimizationStrategy, OptimizationStrategy):
                     "contamination", *search_space.get("contamination", [0.01, 0.5])
                 ),
                 "n_jobs": -1,
-                "random_state": 42,
             }
             return self._objective_function(params, X_train, X_val)
 
@@ -521,6 +654,9 @@ class OptunaOptimizer(BaseOptimizationStrategy, OptimizationStrategy):
             n_successful_trials=successful_trials,
             peak_memory_gb=self.monitor.peak_memory,
             cpu_usage_percent=psutil.cpu_percent(interval=0.1),
+            avg_trial_time=self.monitor.average_trial_time,
+            max_trial_time=self.monitor.max_trial_time,
+            latest_memory_gb=self.monitor.latest_memory_gb,
         )
         self.logger.log(
             logging.INFO,
@@ -573,10 +709,15 @@ class ResilientHyperparameterOptimizer(Subject):
         super().__init__()
         self.project_root = Path(__file__).resolve().parents[2]
         self.data_path = Path(data_path)
-        self.config_path = config_path
+        config_path_obj = Path(config_path)
+        if not config_path_obj.is_absolute():
+            config_path_obj = self.project_root / config_path_obj
+        self.config_path = config_path_obj
         self.logger = AdvancedLogger("TrustShield-Optimizer")
         self.monitor = ResourceMonitor(self.logger)
-        self.config_manager = ConfigManager(self.project_root, self.logger)
+        self.config_manager = ConfigManager(
+            self.project_root, self.logger, config_path_obj
+        )
         self.config = self.config_manager.get_config()
         self.data_validator = DataValidator(self.config, self.logger)
         self.attach(ConsoleLogObserver(self.logger))
@@ -589,6 +730,7 @@ class ResilientHyperparameterOptimizer(Subject):
 
     @circuit(failure_threshold=3, recovery_timeout=30)
     def run_optimization(self, methods: List[str] = None):
+        self.monitor.reset()
         start_time = time.time()
         try:
             self.notify(
@@ -638,7 +780,7 @@ class ResilientHyperparameterOptimizer(Subject):
                     OptimizationEvent.OPTIMIZATION_METHOD_COMPLETE,
                     {"method": method, "metrics": optimization_results["metrics"]},
                 )
-                if model_path.exists():
+                if model_path.is_file():
                     self.notify(
                         OptimizationEvent.BEST_MODEL_SAVED, {"model_path": model_path}
                     )
@@ -655,6 +797,12 @@ class ResilientHyperparameterOptimizer(Subject):
                     "best_overall_score": max(
                         r["best_score"] for r in results.values()
                     ),
+                    "resource_usage": {
+                        "peak_memory_gb": self.monitor.peak_memory,
+                        "avg_trial_time": self.monitor.average_trial_time,
+                        "max_trial_time": self.monitor.max_trial_time,
+                        "latest_memory_gb": self.monitor.latest_memory_gb,
+                    },
                 },
             )
         except Exception as e:
@@ -682,13 +830,83 @@ class ResilientHyperparameterOptimizer(Subject):
         validation_success, _ = self.data_validator.validate(data)
         if not validation_success:
             raise ValueError("Validação de dados falhou.")
+        features = data.copy()
+        target_column = (
+            self.config.get("training", {}).get("target_column") or "is_anomaly"
+        )
+        target = None
+        if target_column in features.columns:
+            target = features[target_column]
+            features = features.drop(columns=[target_column])
+
+        max_rows = int(
+            self.config.get("hyper_optimization", {}).get("max_dataset_rows", 500_000)
+        )
+        if max_rows > 0 and len(features) > max_rows:
+            seed = int(self.config.get("project", {}).get("random_state", 42))
+            sampled_features = features.sample(n=max_rows, random_state=seed)
+            sample_indices = sampled_features.index
+            features = sampled_features.reset_index(drop=True)
+            if target is not None:
+                target = target.loc[sample_indices].reset_index(drop=True)
+            self.logger.log(
+                logging.INFO,
+                "Reduzindo dataset para otimização",
+                original_rows=len(data),
+                sampled_rows=max_rows,
+            )
+        else:
+            if target is not None:
+                target = target.reset_index(drop=True)
+            features = features.reset_index(drop=True)
+
+        del data
+
+        datetime_cols = [
+            col
+            for col in features.columns
+            if pd.api.types.is_datetime64_any_dtype(features[col])
+        ]
+        for col in datetime_cols:
+            converted = pd.to_datetime(features[col], utc=True, errors="coerce")
+            features[col] = converted.map(
+                lambda x: x.timestamp() if not pd.isna(x) else np.nan
+            )
+
+        non_numeric_cols = features.select_dtypes(exclude=[np.number]).columns
+        if non_numeric_cols.any():
+            removed_cols = list(non_numeric_cols)
+            self.logger.log(
+                logging.WARNING,
+                f"Removendo colunas não numéricas antes da otimização: {removed_cols}",
+            )
+            features = features.drop(columns=removed_cols)
+
+        if features.empty:
+            raise ValueError(
+                "Nenhuma coluna numérica disponível para otimização após pré-processamento."
+            )
+
+        features = features.fillna(features.mean(numeric_only=True))
+        numeric_feature_cols = features.select_dtypes(include=[np.number]).columns
+        features[numeric_feature_cols] = features[numeric_feature_cols].astype(np.float32)
+
+        stratify_target = None
+        if target is not None:
+            if target.nunique(dropna=True) > 1:
+                non_null_target = target.dropna()
+                replacement = non_null_target.mode().iloc[0] if not non_null_target.empty else 0
+                stratify_target = target.fillna(replacement)
+
         X_train, X_val = train_test_split(
-            data, test_size=0.2, random_state=42, stratify=data.get("is_anomaly")
+            features, test_size=0.2, random_state=42, stratify=stratify_target
         )
         numeric_cols = X_train.select_dtypes(include=np.number).columns
         scaler = StandardScaler()
-        X_train[numeric_cols] = scaler.fit_transform(X_train[numeric_cols])
-        X_val[numeric_cols] = scaler.transform(X_val[numeric_cols])
+        X_train_scaled = scaler.fit_transform(X_train[numeric_cols])
+        X_val_scaled = scaler.transform(X_val[numeric_cols])
+        X_train[numeric_cols] = X_train_scaled.astype(np.float32)
+        X_val[numeric_cols] = X_val_scaled.astype(np.float32)
         self.logger.log(
             logging.INFO,
             f"Dados preparados: {len(X_train)} treino, {len(X_val)} validação",
