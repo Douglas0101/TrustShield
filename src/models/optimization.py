@@ -36,9 +36,17 @@ from dataclasses import dataclass, field, asdict
 # O comentário '# noqa: F401' instrui o linter a ignorar o falso positivo de "import não utilizado",
 # pois estas bibliotecas são usadas dinamicamente pelas classes de Estratégia e Observer.
 import joblib  # noqa: F401
-import mlflow  # noqa: F401
+try:  # pragma: no cover - dependência opcional em ambientes de CI
+    import mlflow  # type: ignore
+except ImportError:  # pragma: no cover - fallback seguro
+    mlflow = None  # type: ignore
 import numpy as np  # noqa: F401
-import optuna  # noqa: F401
+try:  # pragma: no cover - optuna é opcional para alguns fluxos
+    import optuna  # type: ignore
+    OPTUNA_AVAILABLE = True
+except ImportError:  # pragma: no cover - fallback seguro
+    optuna = None  # type: ignore
+    OPTUNA_AVAILABLE = False
 import pandas as pd
 import yaml
 from sklearn.ensemble import IsolationForest  # noqa: F401
@@ -354,8 +362,16 @@ class ConsoleLogObserver(OptimizationObserver):
 class MLflowObserver(OptimizationObserver):
     def __init__(self, experiment_name: str, project_root: Path):
         self.experiment_name, self.project_root = experiment_name, project_root
+        self.enabled = mlflow is not None
+        if not self.enabled:
+            logging.getLogger("TrustShield-Optimizer").warning(
+                "MLflow não disponível - Observer desativado."
+            )
 
     def update(self, event: OptimizationEvent, data: Dict[str, Any]):
+        if not self.enabled or mlflow is None:
+            return
+
         if event == OptimizationEvent.OPTIMIZATION_START:
             mlflow.set_experiment(self.experiment_name)
             mlflow.start_run(
@@ -463,6 +479,11 @@ class OptunaOptimizer(BaseOptimizationStrategy, OptimizationStrategy):
     ) -> Dict[str, Any]:
         start_time = time.time()
         self.logger.log(logging.INFO, "Iniciando otimização com Optuna...")
+        if not OPTUNA_AVAILABLE or optuna is None:
+            raise RuntimeError(
+                "Optuna não está disponível neste ambiente. Instale 'optuna' para executar a otimização."
+            )
+
         study = optuna.create_study(
             direction="maximize", sampler=optuna.samplers.TPESampler(seed=42)
         )
