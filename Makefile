@@ -273,7 +273,7 @@ interpret: ## Gera interpretações do modelo (SHAP)
 
 .PHONY: promote
 promote: ## Promove o modelo otimizado mais recente para default_model.joblib
-	$(RUN_API) python -c "from pathlib import Path; import shutil, sys; p=Path('$(OPT_MODELS_DIR)'); models=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); if not models: sys.exit('Nenhum modelo otimizado encontrado.'); target = models[0]; shutil.copy2(target, p / 'default_model.joblib'); print(f'Promovido: {target.name}')"
+	$(RUN_API) python -c "from pathlib import Path; import shutil, sys; p=Path('$(OPT_MODELS_DIR)'); models=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); (models and (shutil.copy2(models[0], p / 'default_model.joblib'), print(f'Promovido: {models[0].name}'))) or sys.exit('Nenhum modelo otimizado encontrado.')"
 
 .PHONY: reload
 reload: ## Reinicia o serviço da API para carregar novo modelo
