@@ -1,9 +1,103 @@
 from __future__ import annotations
-import os, json, time, yaml
-from contextlib import contextmanager
+
+import json
+import os
+import sys
+import time
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
-import mlflow
+from types import ModuleType, SimpleNamespace
+
+import yaml
+
+try:  # pragma: no cover - dependência opcional
+    import boto3  # type: ignore
+except ImportError:  # pragma: no cover
+    boto3 = None  # type: ignore
+
+try:  # pragma: no cover - dependência opcional
+    import mlflow  # type: ignore
+    MLFLOW_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    mlflow = None  # type: ignore
+    MLFLOW_AVAILABLE = False
+
+
+class _NoOpMlflow:
+    """Implementa uma API mínima do MLflow para ambientes sem a dependência."""
+
+    def __init__(self):
+        self._tracking_uri = "noop://mlflow"
+        self.tracking = SimpleNamespace(MlflowClient=lambda *args, **kwargs: None)
+        self.sklearn = SimpleNamespace(log_model=self._noop, autolog=self._noop)
+
+    def _noop(self, *args, **kwargs):  # pragma: no cover - sem efeitos colaterais
+        return None
+
+    def set_tracking_uri(self, uri: str) -> None:
+        self._tracking_uri = uri
+
+    def get_tracking_uri(self) -> str:
+        return self._tracking_uri
+
+    def set_experiment(self, *args, **kwargs) -> None:
+        pass
+
+    def start_run(self, *args, **kwargs):
+        return nullcontext()
+
+    def log_params(self, *args, **kwargs) -> None:
+        pass
+
+    def log_metrics(self, *args, **kwargs) -> None:
+        pass
+
+    def set_tag(self, *args, **kwargs) -> None:
+        pass
+
+    def set_tags(self, *args, **kwargs) -> None:
+        pass
+
+    def end_run(self, *args, **kwargs) -> None:
+        pass
+
+    def log_artifact(self, *args, **kwargs) -> None:
+        pass
+
+    def active_run(self):
+        return None
+
+
+if not MLFLOW_AVAILABLE:
+    _mlflow_impl = _NoOpMlflow()
+
+    def _wrap(name):
+        def _inner(*args, **kwargs):
+            return getattr(_mlflow_impl, name)(*args, **kwargs)
+
+        return _inner
+
+    _mlflow_module = ModuleType("mlflow")
+    for attr_name in [
+        "set_tracking_uri",
+        "get_tracking_uri",
+        "set_experiment",
+        "start_run",
+        "log_params",
+        "log_metrics",
+        "set_tag",
+        "set_tags",
+        "end_run",
+        "log_artifact",
+        "active_run",
+    ]:
+        setattr(_mlflow_module, attr_name, _wrap(attr_name))
+
+    _mlflow_module.tracking = _mlflow_impl.tracking
+    _mlflow_module.sklearn = _mlflow_impl.sklearn
+    sys.modules.setdefault("mlflow", _mlflow_module)
+    mlflow = _mlflow_module  # type: ignore
 
 _DEF_S3_DOCKER = "http://trustshield_minio:9000"
 _DEF_S3_HOST = "http://localhost:9000"
@@ -48,6 +142,11 @@ def setup_mlflow(
     3. Valor de `mlflow.tracking_uri` no `config.yaml`.
     4. Fallback para localhost se nada for encontrado.
     """
+    if not MLFLOW_AVAILABLE:
+        print(
+            "⚠️  MLflow não está instalado. Será utilizado um stub sem efeitos colaterais."
+        )
+
     config = _load_config()
     mlflow_config = config.get("mlflow", {})
 
@@ -84,7 +183,7 @@ def setup_mlflow(
     )
     mlflow.set_experiment(final_experiment_name)
 
-    if ensure_bucket:
+    if ensure_bucket and boto3 is not None:
         _ensure_minio_bucket(bucket_name, final_s3_endpoint)
 
     print(
@@ -118,11 +217,17 @@ def _ensure_minio_bucket(bucket_name: str, endpoint_url: str) -> None:
 
 def enable_sklearn_autolog(log_models: bool = True) -> None:
     try:
-        import mlflow.sklearn  # noqa
+        from mlflow import sklearn as mlflow_sklearn  # type: ignore
 
-        mlflow.sklearn.autolog(log_models=log_models)
+        mlflow_sklearn.autolog(log_models=log_models)
     except Exception:
-        pass
+        if hasattr(mlflow, "sklearn"):
+            try:
+                mlflow.sklearn.autolog(log_models=log_models)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        else:
+            pass
 
 
 def log_params_flat(
