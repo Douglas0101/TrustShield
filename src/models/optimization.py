@@ -365,7 +365,24 @@ class OptimizationMetrics:
     timestamp: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["method"] = self.method.value
+        data["timestamp"] = self.timestamp.isoformat()
+        return data
+
+    def to_numeric_metrics(self) -> Dict[str, float]:
+        numeric_fields = {
+            "total_time": self.total_time,
+            "best_score": self.best_score,
+            "n_trials": float(self.n_trials),
+            "n_successful_trials": float(self.n_successful_trials),
+            "peak_memory_gb": self.peak_memory_gb,
+            "cpu_usage_percent": self.cpu_usage_percent,
+            "avg_trial_time": self.avg_trial_time,
+            "max_trial_time": self.max_trial_time,
+            "latest_memory_gb": self.latest_memory_gb,
+        }
+        return {key: float(value) for key, value in numeric_fields.items()}
 
 
 # =====================================================================================
@@ -466,8 +483,10 @@ class MLflowObserver(OptimizationObserver):
             )
             mlflow.log_params(data.get("config", {}).get("hyper_optimization", {}))
         elif event == OptimizationEvent.OPTIMIZATION_METHOD_COMPLETE:
-            mlflow.log_metrics(data["metrics"].to_dict())
-            mlflow.set_tag("optimization_method", data["metrics"].method.value)
+            metrics: OptimizationMetrics = data["metrics"]
+            mlflow.log_metrics(metrics.to_numeric_metrics())
+            mlflow.set_tag("optimization_method", metrics.method.value)
+            mlflow.set_tag("metrics_timestamp", metrics.timestamp.isoformat())
         elif event == OptimizationEvent.BEST_MODEL_SAVED:
             if model_path := data.get("model_path"):
                 if Path(model_path).exists():
@@ -506,7 +525,9 @@ class BaseOptimizationStrategy:
         trial_start = time.time()
         self.monitor.update_peak_memory()
         try:
-            model = IsolationForest(**params, random_state=42)
+            model_params = dict(params)
+            model_params.setdefault("random_state", 42)
+            model = IsolationForest(**model_params)
             model.fit(X_train)
             self.monitor.update_peak_memory()
             scores = -model.decision_function(X_val)
@@ -598,7 +619,6 @@ class OptunaOptimizer(BaseOptimizationStrategy, OptimizationStrategy):
                     "contamination", *search_space.get("contamination", [0.01, 0.5])
                 ),
                 "n_jobs": -1,
-                "random_state": 42,
             }
             return self._objective_function(params, X_train, X_val)
 
