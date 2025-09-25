@@ -19,7 +19,8 @@ from pathlib import Path
 from datetime import datetime
 from multiprocessing import cpu_count
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Callable
+from contextlib import nullcontext
 import psutil
 import pickle
 
@@ -36,7 +37,10 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-import mlflow
+try:  # pragma: no cover - import opcional depende do ambiente
+    import mlflow  # type: ignore
+except ImportError:  # pragma: no cover - fallback para ambientes sem MLflow
+    mlflow = None  # type: ignore
 
 # Tentativa de imports otimizados
 try:
@@ -81,6 +85,72 @@ class IntelI3Optimizer:
         self.n_jobs_optimal = 2  # Usar cores físicos, não threads
         self.use_memory_cache = True  # Aproveitar os 20GB de RAM
         self.compression_level = 1  # Compressão leve para I/O rápido
+        self.mlflow_enabled = False
+
+    def _safe_mlflow_call(self, func: Callable, *args, **kwargs) -> bool:
+        """Executa chamadas ao MLflow de forma resiliente.
+
+        Caso o servidor não esteja disponível, marcamos ``mlflow_enabled`` como
+        ``False`` e continuamos a execução sem interromper o treinamento.
+        """
+
+        if not self.mlflow_enabled:
+            return False
+
+        try:
+            func(*args, **kwargs)
+            return True
+        except Exception as exc:  # pragma: no cover - apenas para logs informativos
+            print(
+                "⚠️  Falha ao comunicar com o MLflow ({}). Prosseguindo sem logging.".format(
+                    exc
+                )
+            )
+            self.mlflow_enabled = False
+            return False
+
+    def _configure_mlflow(self, experiment_name: str) -> None:
+        """Tenta configurar a conexão com o MLflow utilizando o utilitário do projeto.
+
+        Se a configuração falhar (por indisponibilidade do servidor ou ausência
+        de infraestrutura), o treinamento continua normalmente apenas registrando
+        os artefatos locais.
+        """
+
+        if self.mlflow_enabled:
+            return
+
+        if mlflow is None:
+            print(
+                "⚠️  MLflow não está instalado. Prosseguindo sem integração com tracking."
+            )
+            self.mlflow_enabled = False
+            return
+
+        try:
+            from src.utils.mlflow_setup import setup_mlflow
+
+            setup_mlflow(experiment=experiment_name, ensure_bucket=False)
+            self.mlflow_enabled = True
+        except Exception as exc:  # pragma: no cover - comportamento depende do ambiente
+            print(
+                "⚠️  Não foi possível configurar o MLflow automaticamente: {}".format(
+                    exc
+                )
+            )
+            if mlflow is None:
+                return
+            try:
+                mlflow.set_tracking_uri("http://localhost:5000")
+                mlflow.set_experiment(experiment_name)
+                self.mlflow_enabled = True
+            except Exception as inner_exc:
+                print(
+                    "⚠️  MLflow indisponível ({}). Execução continuará sem logging externo.".format(
+                        inner_exc
+                    )
+                )
+                self.mlflow_enabled = False
 
     def optimize_data_loading(self, data_path: str) -> pd.DataFrame:
         """
@@ -368,11 +438,16 @@ class IntelI3Optimizer:
         best_config = {"n_estimators": 100, "max_features": 1.0, "contamination": 0.1}
         print(f"\n🏆 Usando configuração de hiperparâmetros padrão: {best_config}")
 
-        # MLflow setup
-        mlflow.set_tracking_uri("http://mlflow:5000")
+        # MLflow setup resiliente
         experiment_name = "TrustShield Fraud Detection"
-        mlflow.set_experiment(experiment_name)
-        print(f"\n📦 MLflow experiment '{experiment_name}' configurado.")
+        self._configure_mlflow(experiment_name)
+        if self.mlflow_enabled:
+            print(f"\n📦 MLflow experiment '{experiment_name}' configurado.")
+        else:
+            print(
+                "\n⚠️  MLflow não configurado. O treinamento continuará e os modelos serão"
+                " armazenados localmente."
+            )
 
         print("\n" + "=" * 60)
         print("📦 RE-TREINANDO 30 MODELOS COM PIPELINES")
@@ -385,7 +460,22 @@ class IntelI3Optimizer:
         total_start = time.time()
 
         for model_idx in range(30):
-            with mlflow.start_run(run_name=f"Pipeline_Model_{model_idx:02d}"):
+            run_context = nullcontext()
+            if self.mlflow_enabled:
+                try:
+                    run_context = mlflow.start_run(
+                        run_name=f"Pipeline_Model_{model_idx:02d}"
+                    )
+                except Exception as exc:  # pragma: no cover - depende do servidor MLflow
+                    print(
+                        "⚠️  Falha ao iniciar run no MLflow ({}). Prosseguindo sem tracking.".format(
+                            exc
+                        )
+                    )
+                    self.mlflow_enabled = False
+                    run_context = nullcontext()
+
+            with run_context:
                 print(f"\n{'=' * 40}\nModelo {model_idx + 1}/30\n{'=' * 40}")
 
                 start_time = time.time()
@@ -427,20 +517,27 @@ class IntelI3Optimizer:
                     f"   ✅ Concluído em {train_time:.2f}s | Anomaly Rate: {anomaly_rate_test:.2%}"
                 )
 
-                mlflow.log_params(config)
-                mlflow.log_metrics(
-                    {"train_time": train_time, "anomaly_rate_test": anomaly_rate_test}
-                )
-                mlflow.set_tag("architecture", "pipeline")
+                if self.mlflow_enabled and mlflow is not None:
+                    self._safe_mlflow_call(mlflow.log_params, config)
+                    self._safe_mlflow_call(
+                        mlflow.log_metrics,
+                        {
+                            "train_time": train_time,
+                            "anomaly_rate_test": anomaly_rate_test,
+                        },
+                    )
+                    self._safe_mlflow_call(mlflow.set_tag, "architecture", "pipeline")
 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 model_name = f"isolation_forest_pipeline_{model_idx:02d}_{timestamp}"
-                mlflow.sklearn.log_model(
-                    sk_model=pipeline,
-                    artifact_path="model_pipeline",
-                    registered_model_name=model_name,
-                    input_example=input_example,
-                )
+                if self.mlflow_enabled and mlflow is not None:
+                    self._safe_mlflow_call(
+                        mlflow.sklearn.log_model,
+                        sk_model=pipeline,
+                        artifact_path="model_pipeline",
+                        registered_model_name=model_name,
+                        input_example=input_example,
+                    )
 
                 # Salvar pipeline localmente para a API
                 local_model_path = (

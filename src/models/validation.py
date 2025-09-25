@@ -35,7 +35,12 @@ from dataclasses import dataclass, field, asdict
 
 # Imports essenciais para o funcionamento dinâmico do módulo.
 import joblib  # noqa: F401
-import mlflow  # noqa: F401
+try:  # pragma: no cover - dependência opcional
+    import mlflow  # type: ignore
+    MLFLOW_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    mlflow = None  # type: ignore
+    MLFLOW_AVAILABLE = False
 import numpy as np  # noqa: F401
 import pandas as pd  # noqa: F401
 import yaml  # noqa: F401
