@@ -22,13 +22,15 @@ Data: 2025-08-13
 import argparse
 import logging
 import os
+
+import config_path
 import psutil
 import sys
 import time
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Protocol, runtime_checkable
+from typing import Any, Dict, List, Optional, Tuple, Protocol, runtime_checkable
 from enum import Enum
 from dataclasses import dataclass, field, asdict
 
@@ -137,12 +139,19 @@ class AdvancedLogger:
 
 
 class ConfigManager:
-    def __init__(self, project_root: Path, logger: AdvancedLogger):
+    def __init__(
+        self, project_root: Path, logger: AdvancedLogger, config_path: Optional[Path] = None
+    ):
         self.project_root = project_root
         self.logger = logger
+        self.config_path = (
+            config_path
+            if config_path and config_path.is_absolute()
+            else project_root / (config_path or Path("config/config.yaml"))
+        )
         if DYNACONF_AVAILABLE and Dynaconf:
             self.settings = Dynaconf(
-                settings_files=[str(project_root / "config" / "config.yaml")],
+                settings_files=[str(self.config_path)],
                 environments=False,
                 env_switcher="ENV_FOR_DYNACONF",
                 load_dotenv=True,
@@ -186,7 +195,12 @@ class ConfigManager:
             return {}
 
     def _load_from_yaml(self) -> Dict[str, Any]:
-        config_path = self.project_root / "config" / "config.yaml"
+        with open(self.config_path, "r") as config_file:
+            config = yaml.safe_load(config_file) or {}
+        self.logger.log(
+            logging.INFO,
+            f"Config loaded from YAML: {self.config_path.relative_to(self.project_root)}",
+        config_path = self.project_root / "config" / "config.yaml")
         with open(config_path, "r") as config_file:
             config = yaml.safe_load(config_file) or {}
         self.logger.log(
@@ -214,7 +228,7 @@ class ConfigManager:
             hyper_cfg["early_stopping"] = True
         elif env == "staging":
             hyper_cfg["n_trials"] = max(int(hyper_cfg.get("n_trials", 50)), 50)
-            
+
     def _normalize_keys(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         normalized: Dict[str, Any] = {}
         for key, value in payload.items():
@@ -225,6 +239,28 @@ class ConfigManager:
                 normalized[normalized_key] = value
         return normalized
 
+    def _apply_environment_overrides(self, config: Dict[str, Any]):
+        if "hyper_optimization" not in config:
+            config["hyper_optimization"] = {}
+
+        env = os.getenv("ENV", "development").lower()
+        hyper_cfg = config["hyper_optimization"]
+
+        if env == "production":
+            hyper_cfg["n_trials"] = 100
+            hyper_cfg["early_stopping"] = True
+        elif env == "staging":
+            hyper_cfg["n_trials"] = max(int(hyper_cfg.get("n_trials", 50)), 50)
+
+    def _normalize_keys(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        normalized: Dict[str, Any] = {}
+        for key, value in payload.items():
+            normalized_key = key.lower() if isinstance(key, str) else key
+            if isinstance(value, dict):
+                normalized[normalized_key] = self._normalize_keys(value)
+            else:
+                normalized[normalized_key] = value
+        return normalized
 class ResourceMonitor:
     def __init__(self, logger: AdvancedLogger):
         self.logger = logger
@@ -702,10 +738,15 @@ class ResilientHyperparameterOptimizer(Subject):
         super().__init__()
         self.project_root = Path(__file__).resolve().parents[2]
         self.data_path = Path(data_path)
-        self.config_path = config_path
+        config_path_obj = Path(config_path)
+        if not config_path_obj.is_absolute():
+            config_path_obj = self.project_root / config_path_obj
+        self.config_path = config_path_obj
         self.logger = AdvancedLogger("TrustShield-Optimizer")
         self.monitor = ResourceMonitor(self.logger)
-        self.config_manager = ConfigManager(self.project_root, self.logger)
+        self.config_manager = ConfigManager(
+            self.project_root, self.logger, config_path_obj
+        )
         self.config = self.config_manager.get_config()
         self.data_validator = DataValidator(self.config, self.logger)
         self.attach(ConsoleLogObserver(self.logger))
@@ -827,6 +868,29 @@ class ResilientHyperparameterOptimizer(Subject):
             target = features[target_column]
             features = features.drop(columns=[target_column])
 
+        max_rows = int(
+            self.config.get("hyper_optimization", {}).get("max_dataset_rows", 500_000)
+        )
+        if max_rows > 0 and len(features) > max_rows:
+            seed = int(self.config.get("project", {}).get("random_state", 42))
+            sampled_features = features.sample(n=max_rows, random_state=seed)
+            sample_indices = sampled_features.index
+            features = sampled_features.reset_index(drop=True)
+            if target is not None:
+                target = target.loc[sample_indices].reset_index(drop=True)
+            self.logger.log(
+                logging.INFO,
+                "Reduzindo dataset para otimização",
+                original_rows=len(data),
+                sampled_rows=max_rows,
+            )
+        else:
+            if target is not None:
+                target = target.reset_index(drop=True)
+            features = features.reset_index(drop=True)
+
+        del data
+
         datetime_cols = [
             col
             for col in features.columns
@@ -853,6 +917,8 @@ class ResilientHyperparameterOptimizer(Subject):
             )
 
         features = features.fillna(features.mean(numeric_only=True))
+        numeric_feature_cols = features.select_dtypes(include=[np.number]).columns
+        features[numeric_feature_cols] = features[numeric_feature_cols].astype(np.float32)
 
         stratify_target = None
         if target is not None:
@@ -866,8 +932,10 @@ class ResilientHyperparameterOptimizer(Subject):
         )
         numeric_cols = X_train.select_dtypes(include=np.number).columns
         scaler = StandardScaler()
-        X_train[numeric_cols] = scaler.fit_transform(X_train[numeric_cols])
-        X_val[numeric_cols] = scaler.transform(X_val[numeric_cols])
+        X_train_scaled = scaler.fit_transform(X_train[numeric_cols])
+        X_val_scaled = scaler.transform(X_val[numeric_cols])
+        X_train[numeric_cols] = X_train_scaled.astype(np.float32)
+        X_val[numeric_cols] = X_val_scaled.astype(np.float32)
         self.logger.log(
             logging.INFO,
             f"Dados preparados: {len(X_train)} treino, {len(X_val)} validação",
