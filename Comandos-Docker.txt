@@ -1,145 +1,119 @@
 # ==============================================================================
-# TrustShield — Guia de Comandos Docker & Make
+# TrustShield — Guia de Comandos Docker & Make (v3.0)
 #
-# PRIORIZE O USO DOS COMANDOS `make`.
-# Eles são atalhos mais simples e seguros para as operações do dia a dia.
-# A seção de `docker compose` puro é mantida como referência avançada.
+# PRIORIZE O USO DOS COMANDOS `make` (atalhos seguros/automatizados).
+# A seção de `docker compose` puro fica como referência avançada.
 # ==============================================================================
 
 # ==============================================================================
-# Guia Rápido com MAKE (Método Recomendado)
+# 0) Portas & URLs (padrões)
 # ==============================================================================
-# Observação: Execute os comandos 'make' da raiz do projeto.
-
-# ------------------------------------------------------------------------------
-# 1) Ciclo Completo (do zero à API pronta)
-# ------------------------------------------------------------------------------
-# Limpa a stack, sobe os containers, executa o pipeline de dados/treino,
-# promove o melhor modelo e reinicia a API.
-make quick
-
-# ------------------------------------------------------------------------------
-# 2) Subir e Parar a Stack
-# ------------------------------------------------------------------------------
-# Sobe todos os serviços (API, Dashboard, MLflow, etc.) e aguarda a API
-# ficar pronta para uso.
-make up
-
-# Para a stack e remove os containers.
-make down
-
-# Reinicia a stack (equivale a 'make down && make up').
-make restart
-
-# ------------------------------------------------------------------------------
-# 3) Executar o Pipeline passo a passo
-# ------------------------------------------------------------------------------
-# Cada comando executa uma etapa dentro do container da API.
-make data       # Gera o dataset inicial
-make features   # Constrói as features para o modelo
-make train      # Treina o modelo
-make eval       # Avalia o modelo treinado
-make optimize   # Otimiza os hiperparâmetros do modelo
-make promote    # Promove o melhor modelo para produção
-make reload     # Reinicia a API para carregar o novo modelo
-make wait       # Aguarda a API ficar saudável após o reinício
-
-# ------------------------------------------------------------------------------
-# 4) Comandos Úteis
-# ------------------------------------------------------------------------------
-# Forçar o rebuild das imagens Docker sem usar o cache.
-make rebuild
-
-# Ver os logs de todos os containers em tempo real.
-make logs
-
-# Ver os logs apenas do container da API.
-make api-logs
-
-# Verificar o status dos containers.
-make ps
-
-# Acessar o shell dentro do container da API para depuração.
-make api-shell
-
-# Limpar completamente a stack, incluindo volumes Docker.
-make clean
-
-# Teste rápido para verificar se a API está online e pronta.
-make smoke
+# API.............: http://localhost:8000
+# Dashboard.......: http://localhost:8501
+# MLflow..........: http://localhost:5000
+# MinIO...........: http://localhost:9000
+# MinIO Console...: http://localhost:9001
+# (Para alterar portas: export API_HOST_PORT=XXXX etc.)
 
 # ==============================================================================
-# Sequência Detalhada com DOCKER COMPOSE (Referência Avançada)
+# 1) Guia rápido com MAKE (recomendado)
 # ==============================================================================
-# NOTA IMPORTANTE: Use 'docker compose' (com espaço), não 'docker-compose' (com hífen).
-# O comando com espaço é a versão 2, mais moderna e integrada ao Docker.
-# O comando com hífen é a versão 1, mais antiga, e pode apresentar erros em
-# sistemas com Python 3.12+ (como o erro 'distutils not found').
+# Execute sempre da raiz do projeto.
 
-# ------------------------------------------------------------------------------
-# Comandos Essenciais (Versão 2)
-# ------------------------------------------------------------------------------
+# ---- Ciclos completos --------------------------------------------------------
+make quick       # Limpa ambiente e executa ciclo completo do zero
+make cycle       # Executa o pipeline completo ponta-a-ponta (sem limpar tudo)
 
-# Para parar e remover os containers:
-# Explicação: Este comando para e remove os containers, redes e volumes associados ao projeto.
-# É uma forma limpa de encerrar todos os serviços.
-docker compose -f docker/docker-compose.yml -p trustshield down
+# ---- Subir/derrubar stack ----------------------------------------------------
+make check       # Verifica pré-requisitos (docker/compose/arquivos)
+make build       # Constrói imagens
+make up          # Sobe os serviços e aguarda a API ficar healthy
+make down        # Derruba os serviços (mantém volumes)
+make restart     # Reinicia toda a stack
+make rebuild     # Recria imagens sem cache e reinicia
+make wait        # Aguarda a API ficar healthy
+make status      # Mostra URLs úteis
+make env         # Mostra variáveis de ambiente/portas
 
-# Para construir as imagens e iniciar todos os serviços em background:
-# Explicação: Este comando constrói as imagens Docker (se necessário) e inicia todos os serviços
-# definidos no docker-compose.yml em modo detached (-d), ou seja, em segundo plano.
-# O build --build garante que as imagens sejam reconstruídas.
-docker compose -f docker/docker-compose.yml -p trustshield up --build -d
+# ---- Observabilidade e acessos -----------------------------------------------
+make logs        # Logs de todos os serviços
+make api-logs    # Logs da API
+make dash-logs   # Logs do dashboard
+make ps          # Status/containers
+make top         # Processos/recursos
+make api-shell   # Shell no container da API
+make dash-shell  # Shell no container do dashboard
 
-# ------------------------------------------------------------------------------
-# Passo a Passo (Referência)
-# ------------------------------------------------------------------------------
-# Nota: A porta da API no host agora é 8080 por padrão (definido no Makefile).
-# Para usar outra porta, exporte a variável de ambiente:
-# export API_HOST_PORT=8001
+# ---- Pipeline (dentro dos containers) ----------------------------------------
+make data        # Ingestão/limpeza de dados (src.data.make_dataset)
+make features    # Engenharia de features (src.features.build_features)
+make train       # Treino otimizado (varredura/ensemble conforme pipeline)
+make eval        # Avaliação de modelos
+make optimize    # Otimização de hiperparâmetros
+make validate    # Checks de qualidade (dados/modelo)
+make interpret   # Interpretação/explicabilidade
+make promote     # Promove o melhor modelo -> outputs/models/default_model.joblib
+make reload      # Reinicia a API para carregar o novo modelo
+make smoke       # Health-check /healthz e /status
 
-# 1) Subir a stack
-# O comando 'make up' encapsula esta lógica.
+# ---- Local (sem Docker) ------------------------------------------------------
+make venv             # Cria .venv
+make deps             # Instala dependências na .venv
+make train-local      # Treino otimizado local
+make optimize-local   # Otimização local
+make validate-local   # Validação local
+make interpret-local  # Interpretação local
+
+# ---- Limpeza -----------------------------------------------------------------
+make clean       # Remove containers + volumes nomeados do projeto
+make cache-clean # Limpa caches locais do projeto
+
+# ==============================================================================
+# 2) Referência com DOCKER COMPOSE (avançado)
+# ==============================================================================
+# Use sempre `docker compose` (com espaço) — a v1 `docker-compose` é legada.
+
+# Parar/remover serviços do projeto:
+docker compose -f docker/docker-compose.yml -p trustshield down --remove-orphans
+
+# Construir e subir em background (com build):
 DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 \
-	docker compose -p trustshield -f docker/docker-compose.yml up -d --build
+  docker compose -f docker/docker-compose.yml -p trustshield up -d --build
 
-# 2) Aguardar a API ficar saudável
-# O comando 'make wait' faz isso automaticamente.
+# Aguardar a API ficar saudável (equivalente ao make wait):
 echo "Aguardando a API ficar saudável..."
-while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8080/healthz)" != "200" ]]; do
-    printf '.'
-    sleep 2
+for i in $(seq 1 60); do
+  code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/healthz)
+  [ "$code" = "200" ] && break
+  printf '.'; sleep 2
 done
 echo " API está pronta!"
 
-# 3) Executar pipeline de dados e treino
-# Use 'make data', 'make features', 'make train', etc.
-docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.data.make_dataset
-docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.features.build_features
-docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.models.train_fraud_model
-docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.models.evaluate_models
-docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -m src.models.optimization
+# Executar etapas do pipeline dentro da API:
+docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
+  python -m src.data.make_dataset
+docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
+  python -m src.features.build_features
+docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
+  python -m src.models.train_fraud_model
+docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
+  python -m src.models.evaluate_models
+docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
+  python -m src.models.optimization
 
-# 4) Promover o melhor modelo
-# Use 'make promote'.
-docker compose -p trustshield -f docker/docker-compose.yml exec trustshield-api python -c "from pathlib import Path; import shutil,sys; p=Path('outputs/models'); c=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); sys.exit(0) if not c else (shutil.copy2(c[0], p/'default_model.joblib') or print('Promovido:', c[0].name))"
+# Promover o melhor modelo para produção (equivale a make promote):
+docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
+  python -c "from pathlib import Path; import shutil, sys; p=Path('outputs/models'); c=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); sys.exit(0) if not c else (shutil.copy2(c[0], p/'default_model.joblib') or print('Promovido:', c[0].name))"
 
-# 5) Reiniciar a API para carregar o novo modelo
-# Use 'make reload'.
-docker compose -p trustshield -f docker/docker-compose.yml restart trustshield-api
+# Reiniciar a API para carregar o novo modelo:
+docker compose -f docker/docker-compose.yml -p trustshield restart trustshield-api
 
-# 6) Testar a predição (exemplo de payload)
-# Note a porta :8080
-curl -s -X POST http://localhost:8080/predict \
-  -H "Content-Type: application/json" \
-  -d '{"amount":250,"use_chip":"Chip","current_age":40,"retirement_age":65,
+# Teste de predição (exemplo) — note a porta :8000
+curl -s -X POST http://localhost:8000/predict   -H "Content-Type: application/json"   -d '{"amount":250,"use_chip":"Chip","current_age":40,"retirement_age":65,
        "birth_year":1984,"gender":"M","latitude":-20.31,"longitude":-40.29,
        "yearly_income":75000,"total_debt":15000,"credit_score":720,
        "num_credit_cards":4,"transaction_hour":15,"day_of_week":3,
        "is_weekend":false,"is_night_transaction":false,"amount_vs_avg":2.5}' | jq .
 
-# 7) Parar e limpar a stack
-# Use 'make down' ou 'make clean'.
-docker compose -p trustshield -f docker/docker-compose.yml down --remove-orphans
-
+# Abrir o dashboard local (se quiser rodar fora do Docker):
 streamlit run src/dashboard/app.py
