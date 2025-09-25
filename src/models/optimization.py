@@ -150,6 +150,7 @@ class ConfigManager:
         if DYNACONF_AVAILABLE and Dynaconf:
             self.settings = Dynaconf(
                 settings_files=[str(self.config_path)],
+                settings_files=[str(project_root / "config" / "config.yaml")],
                 environments=False,
                 env_switcher="ENV_FOR_DYNACONF",
                 load_dotenv=True,
@@ -178,6 +179,7 @@ class ConfigManager:
         try:
             raw_config = self.settings.as_dict()  # type: ignore[union-attr]
             config = self._normalize_keys(raw_config)
+            config = self.settings.as_dict()  # type: ignore[union-attr]
             self.logger.log(
                 logging.INFO,
                 f"Config loaded from dynaconf with keys: {list(config.keys())}",
@@ -197,6 +199,11 @@ class ConfigManager:
         self.logger.log(
             logging.INFO,
             f"Config loaded from YAML: {self.config_path.relative_to(self.project_root)}",
+        config_path = self.project_root / "config" / "config.yaml"
+        with open(config_path, "r") as config_file:
+            config = yaml.safe_load(config_file) or {}
+        self.logger.log(
+            logging.INFO, f"Config loaded from YAML: {config_path.relative_to(self.project_root)}"
         )
         return config
 
@@ -231,7 +238,28 @@ class ConfigManager:
                 normalized[normalized_key] = value
         return normalized
 
+    def _apply_environment_overrides(self, config: Dict[str, Any]):
+        if "hyper_optimization" not in config:
+            config["hyper_optimization"] = {}
 
+        env = os.getenv("ENV", "development").lower()
+        hyper_cfg = config["hyper_optimization"]
+
+        if env == "production":
+            hyper_cfg["n_trials"] = 100
+            hyper_cfg["early_stopping"] = True
+        elif env == "staging":
+            hyper_cfg["n_trials"] = max(int(hyper_cfg.get("n_trials", 50)), 50)
+            
+    def _normalize_keys(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        normalized: Dict[str, Any] = {}
+        for key, value in payload.items():
+            normalized_key = key.lower() if isinstance(key, str) else key
+            if isinstance(value, dict):
+                normalized[normalized_key] = self._normalize_keys(value)
+            else:
+                normalized[normalized_key] = value
+        return normalized
 class ResourceMonitor:
     def __init__(self, logger: AdvancedLogger):
         self.logger = logger
