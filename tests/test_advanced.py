@@ -54,6 +54,7 @@ from src.models.optimization import DataValidator
 from src.api.main import app as fastapi_app
 from src.api.security import (
     IPAccessControl,
+    build_ip_access_control,
     enforce_ip_whitelist,
     reset_ip_access_control_cache,
 )
@@ -277,6 +278,20 @@ class TestIPAllowList:
 
         assert control.is_allowed("192.168.0.10")
         assert not control.is_allowed("10.0.0.1")
+
+    def test_default_allow_list_accepts_private_networks(self, monkeypatch):
+        reset_ip_access_control_cache()
+        monkeypatch.delenv("TRUSTSHIELD_ALLOWED_IPS", raising=False)
+        monkeypatch.delenv("TRUSTSHIELD_DISABLE_IP_WHITELIST", raising=False)
+
+        control = build_ip_access_control()
+
+        assert control.is_allowed("172.18.0.1")
+        assert control.is_allowed("192.168.1.5")
+        assert control.is_allowed("10.0.5.10")
+        assert control.is_allowed("host.docker.internal")
+
+        reset_ip_access_control_cache()
 
     @pytest.mark.skipif(not FASTAPI_AVAILABLE, reason="FastAPI não está instalado.")
     def test_middleware_blocks_disallowed_ip(self, monkeypatch):
