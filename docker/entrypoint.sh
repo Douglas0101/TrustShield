@@ -19,6 +19,18 @@ if [ -n "$AWS_SECRET_ACCESS_KEY_FILE" ]; then
     export AWS_SECRET_ACCESS_KEY=$(cat "$AWS_SECRET_ACCESS_KEY_FILE")
 fi
 
+# Garante que os serviços internos conheçam a raiz do projeto.
+if [ -z "$TRUSTSHIELD_PROJECT_ROOT" ]; then
+    export TRUSTSHIELD_PROJECT_ROOT="/app"
+fi
+
+# Mantém o diretório ``src`` disponível no PYTHONPATH, mesmo quando o
+# repositório é movido para outro caminho no host.
+case ":$PYTHONPATH:" in
+    *:"$TRUSTSHIELD_PROJECT_ROOT/src":*) ;;
+    *) export PYTHONPATH="$TRUSTSHIELD_PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" ;;
+esac
+
 # Agora, execute o comando principal que foi passado para o container
 # (por exemplo, 'uvicorn', 'python -m ...', etc.).
 # O `exec "$@"` garante que este script substitua seu próprio processo
