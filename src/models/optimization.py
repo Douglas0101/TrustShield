@@ -195,16 +195,11 @@ class ConfigManager:
             return {}
 
     def _load_from_yaml(self) -> Dict[str, Any]:
-        with open(self.config_path, "r") as config_file:
+        with open(self.config_path, "r", encoding="utf-8") as config_file:
             config = yaml.safe_load(config_file) or {}
         self.logger.log(
             logging.INFO,
             f"Config loaded from YAML: {self.config_path.relative_to(self.project_root)}",
-        config_path = self.project_root / "config" / "config.yaml")
-        with open(config_path, "r") as config_file:
-            config = yaml.safe_load(config_file) or {}
-        self.logger.log(
-            logging.INFO, f"Config loaded from YAML: {config_path.relative_to(self.project_root)}"
         )
         return config
 
@@ -215,29 +210,6 @@ class ConfigManager:
             and isinstance(config.get("hyper_optimization"), dict)
             and config["hyper_optimization"].get("space")
         )
-
-    def _apply_environment_overrides(self, config: Dict[str, Any]):
-        if "hyper_optimization" not in config:
-            config["hyper_optimization"] = {}
-
-        env = os.getenv("ENV", "development").lower()
-        hyper_cfg = config["hyper_optimization"]
-
-        if env == "production":
-            hyper_cfg["n_trials"] = 100
-            hyper_cfg["early_stopping"] = True
-        elif env == "staging":
-            hyper_cfg["n_trials"] = max(int(hyper_cfg.get("n_trials", 50)), 50)
-
-    def _normalize_keys(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        normalized: Dict[str, Any] = {}
-        for key, value in payload.items():
-            normalized_key = key.lower() if isinstance(key, str) else key
-            if isinstance(value, dict):
-                normalized[normalized_key] = self._normalize_keys(value)
-            else:
-                normalized[normalized_key] = value
-        return normalized
 
     def _apply_environment_overrides(self, config: Dict[str, Any]):
         if "hyper_optimization" not in config:
@@ -736,7 +708,7 @@ class OptimizationStrategyFactory:
 class ResilientHyperparameterOptimizer(Subject):
     def __init__(self, data_path: str, config_path: str = "config/config.yaml"):
         super().__init__()
-        self.project_root = Path(__file__).resolve().parents[2]
+        self.project_root = config_path.PROJECT_ROOT
         self.data_path = Path(data_path)
         config_path_obj = Path(config_path)
         if not config_path_obj.is_absolute():
