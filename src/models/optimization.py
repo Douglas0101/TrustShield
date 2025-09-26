@@ -23,7 +23,7 @@ import argparse
 import logging
 import os
 
-import config_path
+import config_path as config_paths
 import psutil
 import sys
 import time
@@ -708,6 +708,7 @@ class OptimizationStrategyFactory:
 class ResilientHyperparameterOptimizer(Subject):
     def __init__(self, data_path: str, config_path: str = "config/config.yaml"):
         super().__init__()
+        self.project_root = config_paths.PROJECT_ROOT
         self.project_root = config_path.PROJECT_ROOT
         self.data_path = Path(data_path)
         config_path_obj = Path(config_path)
