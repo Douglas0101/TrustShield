@@ -42,6 +42,7 @@ import plotly.graph_objects as go
 import streamlit.components.v1 as components
 import pyarrow.dataset as ds
 
+import config_path  # noqa: F401  # garante que src esteja no sys.path em execuções locais
 from src.common.paths import repo_root
 
 # -----------------------------------------------------------------------------
