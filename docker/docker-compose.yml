@@ -54,9 +54,9 @@ services:
         condition: service_healthy
     entrypoint: >-
       /bin/sh -c "
-      /usr/bin/mc config host add minio http://minio:9000 $$(cat /run/secrets/minio_root_user) $$(cat /run/secrets/minio_root_password);
-      /usr/bin/mc mb minio/mlflow;
-      /usr/bin/mc policy set public minio/mlflow;
+      /usr/bin/mc alias set minio http://minio:9000 $$(cat /run/secrets/minio_root_user) $$(cat /run/secrets/minio_root_password);
+      /usr/bin/mc mb --ignore-existing minio/mlflow;
+      /usr/bin/mc policy set download minio/mlflow;
       exit 0;
       "
     secrets:
@@ -65,6 +65,7 @@ services:
     networks:
       - trustshield-net
 
+  # --- Servidor de MLOps para Rastreamento e Versionamento ---
   mlflow:
     build:
       context: ..
@@ -162,10 +163,7 @@ services:
       - TRUSTSHIELD_API_KEY_HEADER=X-API-Key
       - RUN_IN_DOCKER=true
     volumes:
-      - ../src:/app/src
-      - ../data:/app/data
-      - ../outputs:/app/outputs
-      - ../config:/app/config
+      - ../:/app
     networks:
       - trustshield-net
     depends_on:
