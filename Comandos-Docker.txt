@@ -1,5 +1,5 @@
 # ==============================================================================
-# TrustShield — Guia de Comandos Docker & Make (v3.0)
+# TrustShield — Guia de Comandos Docker & Make (v3.1 - Otimizado)
 #
 # PRIORIZE O USO DOS COMANDOS `make` (atalhos seguros/automatizados).
 # A seção de `docker compose` puro fica como referência avançada.
@@ -21,8 +21,8 @@
 # Execute sempre da raiz do projeto.
 
 # ---- Ciclos completos --------------------------------------------------------
-make quick       # Limpa ambiente e executa ciclo completo do zero
-make cycle       # Executa o pipeline completo ponta-a-ponta (sem limpar tudo)
+make quick       # Limpa ambiente e executa ciclo completo do zero (otimizado com Optuna)
+make cycle       # Executa o pipeline completo: data -> features -> optimize -> promote -> ...
 
 # ---- Subir/derrubar stack ----------------------------------------------------
 make check       # Verifica pré-requisitos (docker/compose/arquivos)
@@ -47,20 +47,20 @@ make dash-shell  # Shell no container do dashboard
 # ---- Pipeline (dentro dos containers) ----------------------------------------
 make data        # Ingestão/limpeza de dados (src.data.make_dataset)
 make features    # Engenharia de features (src.features.build_features)
-make train       # Treino otimizado (varredura/ensemble conforme pipeline)
+make optimize    # [Principal] Executa otimização de hiperparâmetros com Optuna
+make promote     # Promove o melhor modelo do 'optimize' -> outputs/models/default_model.joblib
 make eval        # Avaliação de modelos
-make optimize    # Otimização de hiperparâmetros
 make validate    # Checks de qualidade (dados/modelo)
 make interpret   # Interpretação/explicabilidade
-make promote     # Promove o melhor modelo -> outputs/models/default_model.joblib
 make reload      # Reinicia a API para carregar o novo modelo
 make smoke       # Health-check /healthz e /status
+make train       # [Alternativo] Treina uma suíte de modelos (não usado no 'cycle' padrão)
 
 # ---- Local (sem Docker) ------------------------------------------------------
 make venv             # Cria .venv
 make deps             # Instala dependências na .venv
-make train-local      # Treino otimizado local
-make optimize-local   # Otimização local
+make optimize-local   # Otimização local com Optuna
+make train-local      # Treino alternativo local
 make validate-local   # Validação local
 make interpret-local  # Interpretação local
 
@@ -95,21 +95,19 @@ docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api 
 docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
   python -m src.features.build_features
 docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
-  python -m src.models.train_fraud_model
-docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
-  python -m src.models.evaluate_models
-docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
-  python -m src.models.optimization
+  python -m src.models.optimization --data data/features/featured_dataset.parquet
 
 # Promover o melhor modelo para produção (equivale a make promote):
 docker compose -f docker/docker-compose.yml -p trustshield exec trustshield-api \
-  python -c "from pathlib import Path; import shutil, sys; p=Path('outputs/models'); c=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); sys.exit(0) if not c else (shutil.copy2(c[0], p/'default_model.joblib') or print('Promovido:', c[0].name))"
+  python -c "from pathlib import Path; import shutil, sys; p_opt=Path('outputs/optimization/optuna'); p_out=Path('outputs/models'); models=sorted(p_opt.glob('best_model_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); (models and (shutil.copy2(models[0], p_out / 'default_model.joblib'), print(f'Promovido: {models[0].name}'))) or sys.exit('Nenhum modelo otimizado encontrado.')"
 
 # Reiniciar a API para carregar o novo modelo:
 docker compose -f docker/docker-compose.yml -p trustshield restart trustshield-api
 
 # Teste de predição (exemplo) — note a porta :8000
-curl -s -X POST http://localhost:8000/predict   -H "Content-Type: application/json"   -d '{"amount":250,"use_chip":"Chip","current_age":40,"retirement_age":65,
+curl -s -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"amount":250,"use_chip":"Chip","current_age":40,"retirement_age":65,
        "birth_year":1984,"gender":"M","latitude":-20.31,"longitude":-40.29,
        "yearly_income":75000,"total_debt":15000,"credit_score":720,
        "num_credit_cards":4,"transaction_hour":15,"day_of_week":3,

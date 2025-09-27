@@ -125,7 +125,7 @@ logs: ## Segue logs de todos os serviços
 
 .PHONY: api-logs
 api-logs: ## Logs apenas da API
-        $(DC) logs -f $(API_SERVICE)
+	$(DC) logs -f $(API_SERVICE)
 
 .PHONY: logs-api
 logs-api: ## Alias para seguir logs do serviço trustshield-api
@@ -277,7 +277,7 @@ interpret: ## Gera interpretações do modelo (SHAP)
 
 .PHONY: promote
 promote: ## Promove o modelo otimizado mais recente para default_model.joblib
-	$(RUN_API) python -c "from pathlib import Path; import shutil, sys; p=Path('$(OPT_MODELS_DIR)'); models=sorted(p.glob('isolation_forest_optimized_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); (models and (shutil.copy2(models[0], p / 'default_model.joblib'), print(f'Promovido: {models[0].name}'))) or sys.exit('Nenhum modelo otimizado encontrado.')"
+	$(RUN_API) python -c "from pathlib import Path; import shutil, sys; p_opt=Path('outputs/optimization/optuna'); p_out=Path('$(OPT_MODELS_DIR)'); models=sorted(p_opt.glob('best_model_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); (models and (shutil.copy2(models[0], p_out / 'default_model.joblib'), print(f'Promovido: {models[0].name}'))) or sys.exit('Nenhum modelo otimizado encontrado.')"
 
 .PHONY: reload
 reload: ## Reinicia o serviço da API para carregar novo modelo
@@ -292,10 +292,9 @@ smoke: ## Health-check /status da API hospedada
 cycle: ## Executa o pipeline completo de ponta a ponta
 	$(MAKE) data
 	$(MAKE) features
-	$(MAKE) train
+	$(MAKE) optimize
 	$(MAKE) promote
 	$(MAKE) eval
-	$(MAKE) optimize
 	$(MAKE) validate
 	$(MAKE) interpret
 	$(MAKE) reload
