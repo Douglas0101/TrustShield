@@ -18,8 +18,9 @@ import joblib
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Setup do MLflow (utilitário do seu projeto)
 from src.utils.mlflow_setup import setup_mlflow
@@ -183,10 +184,22 @@ async def load_model_and_setup_mlflow():
             app_state.model_features = components["features"]
             app_state.model_structure = components["structure"]
 
+            feature_list = app_state.model_features or []
+            transformer_name = (
+                type(app_state.data_transformer).__name__
+                if app_state.data_transformer is not None
+                else "nenhum"
+            )
+            preview = ", ".join(feature_list[:10])
+            if len(feature_list) > 10:
+                preview += ", ..."
             logger.info(
-                "Modelo '%s' carregado. Estrutura: %s.",
+                "Modelo '%s' carregado. Estrutura: %s. Transformador: %s. Features (%d): %s",
                 model_file.name,
                 app_state.model_structure,
+                transformer_name,
+                len(feature_list),
+                preview or "não especificado",
             )
         except Exception as e:
             logger.error(f"Erro ao carregar o modelo de {model_file}: {e}", exc_info=True)
@@ -214,6 +227,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://trustshield-dashboard:8501"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.middleware("http")
 async def ip_allowlist_middleware(request: Request, call_next):
@@ -229,27 +251,92 @@ async def ip_allowlist_middleware(request: Request, call_next):
 # =============================================================================
 # DTOs (Data Transfer Objects)
 # =============================================================================
-class TransactionInput(BaseModel):
-    """
-    Estrutura dos dados de entrada para uma predição.
-    Contrato de API estrito para uma única transação.
-    """
-    client_id: int = Field(..., example=12345)
-    amount: float = Field(..., example=123.45)
-    current_age: int = Field(..., example=35)
-    per_capita_income: float = Field(..., example=50000.0)
-    yearly_income: float = Field(..., example=100000.0)
-    total_debt: float = Field(..., example=25000.0)
-    date: str = Field(..., example="2024-01-15T14:30:00")
-    use_chip: str = Field(..., example="Swipe Transaction")
-    gender: str = Field(..., example="F")
+class PredictRequest(BaseModel):
+    """Contrato de entrada para o endpoint ``/predict``."""
+
+    amount: float = Field(
+        ..., gt=0, description="Valor da transação em dólares.", example=120.5
+    )
+    gender: str = Field(
+        ..., description="Sexo do titular do cartão (Male/Female).", example="Male"
+    )
+    use_chip: str = Field(
+        ...,
+        description="Modo de utilização do cartão.",
+        example="Swipe Transaction",
+    )
+    credit_score: int = Field(
+        ..., ge=300, le=900, description="Pontuação de crédito do cliente.", example=720
+    )
+    num_credit_cards: int = Field(
+        ..., ge=0, description="Número de cartões ativos do cliente.", example=3
+    )
+    per_capita_income: float = Field(
+        ..., ge=0, description="Rendimento per capita anual.", example=23679
+    )
+    yearly_income: float = Field(
+        ..., ge=0, description="Rendimento anual declarado.", example=48277
+    )
+    total_debt: float = Field(
+        ..., ge=0, description="Dívida total estimada.", example=110153
+    )
 
     class Config:
-        extra = "forbid"  # bloqueia campos extras
+        extra = "forbid"
+
+    @field_validator("gender")
+    @classmethod
+    def normalise_gender(cls, value: str) -> str:
+        mapping = {
+            "male": "Male",
+            "m": "Male",
+            "masculino": "Male",
+            "female": "Female",
+            "f": "Female",
+            "feminino": "Female",
+        }
+        normalised = value.strip().lower()
+        if normalised not in mapping:
+            raise ValueError("gender deve ser 'Male' ou 'Female'.")
+        return mapping[normalised]
+
+    @field_validator("use_chip")
+    @classmethod
+    def normalise_use_chip(cls, value: str) -> str:
+        allowed = {
+            "swipe transaction": "Swipe Transaction",
+            "chip transaction": "Chip Transaction",
+            "online transaction": "Online Transaction",
+            "contactless transaction": "Contactless Transaction",
+        }
+        normalised = value.strip().lower()
+        if normalised not in allowed:
+            raise ValueError(
+                "use_chip deve ser Swipe Transaction, Chip Transaction, Online Transaction ou Contactless Transaction."
+            )
+        return allowed[normalised]
+
+    def to_model_dict(self) -> dict[str, Any]:
+        data = self.model_dump()
+        data.update(
+            {
+                "amount": float(data["amount"]),
+                "per_capita_income": float(data["per_capita_income"]),
+                "yearly_income": float(data["yearly_income"]),
+                "total_debt": float(data["total_debt"]),
+                "credit_score": int(data["credit_score"]),
+                "num_credit_cards": int(data["num_credit_cards"]),
+            }
+        )
+        return data
+
 
 class PredictionOutput(BaseModel):
     """Estrutura da resposta da predição."""
-    is_anomaly: int = Field(..., example=1, description="-1 = anomalia (fraude), 1 = normal.")
+
+    is_anomaly: bool = Field(
+        ..., example=False, description="True indica possível anomalia."
+    )
     score: float = Field(..., example=-0.2345)
     model_version: str
 
@@ -310,43 +397,66 @@ def get_status():
     }
 
 @app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
-def predict(transaction: TransactionInput):
-    """
-    Predição de anomalia (IsolationForest).
-    - Seleciona somente colunas numéricas para o transformador.
-    - Respeita a ordem de `model_features` quando disponível.
-    """
+def predict(request: PredictRequest):
+    """Executa a inferência com validação explícita e mensagens claras."""
+
     if app_state.model is None:
         raise HTTPException(status_code=503, detail="Modelo não está disponível.")
 
     try:
-        input_df = pd.DataFrame([transaction.model_dump()])
-        model_obj, transformer, model_features = _resolve_runtime_components(app_state)
+        payload = request.to_model_dict()
+    except ValueError as exc:
+        logger.warning("Entrada inválida em /predict: %s", exc)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        if model_obj is None:
-            raise ValueError("Objeto de modelo não inicializado corretamente.")
+    model_obj, transformer, model_features = _resolve_runtime_components(app_state)
 
-        # Apenas colunas numéricas para o transformador/estimador
-        numeric_input_df = input_df.select_dtypes(include=np.number)
+    if model_obj is None:
+        logger.error("Objeto de modelo não inicializado corretamente.")
+        raise HTTPException(status_code=503, detail="Modelo não está disponível.")
 
-        if model_features:
-            missing_features = [f for f in model_features if f not in numeric_input_df.columns]
-            if missing_features:
+    input_df = pd.DataFrame([payload])
+
+    expected_columns: List[str] = []
+    if model_features:
+        expected_columns = list(model_features)
+    elif transformer is not None and hasattr(transformer, "feature_names_in_"):
+        expected_columns = list(getattr(transformer, "feature_names_in_"))
+
+    if expected_columns:
+        missing_columns = [col for col in expected_columns if col not in input_df.columns]
+        if missing_columns:
+            message = (
+                "Campos obrigatórios em falta para predição: "
+                + ", ".join(sorted(missing_columns))
+            )
+            logger.warning(message)
+            raise HTTPException(status_code=422, detail=message)
+        input_for_model = input_df.reindex(columns=expected_columns)
+    else:
+        input_for_model = input_df
+
+    try:
+        if transformer is not None:
+            transformed_input = transformer.transform(input_for_model)
+        else:
+            numeric_only = input_for_model.select_dtypes(include=np.number)
+            if numeric_only.empty:
                 raise HTTPException(
                     status_code=422,
-                    detail="Campos numéricos ausentes para predição: " + ", ".join(sorted(set(missing_features))),
+                    detail="Dados insuficientes: forneça campos numéricos para a predição.",
                 )
-            input_df_for_prediction = numeric_input_df[model_features]
-        else:
-            # Sem schema salvo — usa todas numéricas disponíveis
-            input_df_for_prediction = numeric_input_df
+            transformed_input = numeric_only
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Erro ao transformar dados de entrada: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=422,
+            detail="Erro ao transformar dados para predição. Verifique os valores informados.",
+        ) from exc
 
-        if transformer is not None:
-            transformed_input = transformer.transform(input_df_for_prediction)
-        else:
-            transformed_input = input_df_for_prediction
-
-        # Score (se disponível)
+    try:
         score = None
         decision_fn = getattr(model_obj, "decision_function", None)
         if callable(decision_fn):
@@ -356,17 +466,26 @@ def predict(transaction: TransactionInput):
             if callable(score_samples_fn):
                 score = float(score_samples_fn(transformed_input)[0])
 
-        prediction = int(model_obj.predict(transformed_input)[0])
-        return {
-            "is_anomaly": prediction,
-            "score": float(score) if score is not None else 0.0,
-            "model_version": Path(app_state.model_path).name,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Erro durante a predição: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Erro interno no servidor: {e}")
+        raw_prediction = model_obj.predict(transformed_input)[0]
+    except Exception as exc:
+        logger.error("Erro durante a predição: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Erro interno, consultar logs."
+        ) from exc
+
+    is_anomaly = bool(raw_prediction == -1 or raw_prediction is True)
+    response = {
+        "is_anomaly": is_anomaly,
+        "score": float(score) if score is not None else 0.0,
+        "model_version": Path(app_state.model_path).name,
+    }
+    logger.info(
+        "Predição concluída | anomalia=%s | score=%.4f | modelo=%s",
+        is_anomaly,
+        response["score"],
+        response["model_version"],
+    )
+    return response
 
 @app.post("/reload", tags=["Admin"])
 async def reload_model(background_tasks: BackgroundTasks):

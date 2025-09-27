@@ -29,14 +29,20 @@ for _v in [
 # -----------------------------------------------------------------------------
 # Imports
 # -----------------------------------------------------------------------------
+import json
 import os
+from pathlib import Path
+
 import requests
+import yaml
 import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit.components.v1 as components
 import pyarrow.dataset as ds
+
+from src.common.paths import repo_root
 
 # -----------------------------------------------------------------------------
 # Configurações básicas
@@ -56,13 +62,51 @@ st.caption(
 # -----------------------------------------------------------------------------
 # Config e limites
 # -----------------------------------------------------------------------------
-# --- CORREÇÃO APLICADA AQUI ---
-# Constrói o caminho absoluto para o arquivo Parquet a partir do local do script
-# para evitar problemas com o diretório de trabalho atual.
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
-API_URL = os.environ.get("API_URL", "http://trustshield-api:8000")
-PARQUET_PATH = os.path.join(PROJECT_ROOT, "data/features/featured_dataset.parquet")
+ROOT = repo_root()
+CONFIG_PATH = ROOT / "config" / "config.yaml"
+
+CONFIG: dict = {}
+try:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as fh:
+        CONFIG = yaml.safe_load(fh) or {}
+except FileNotFoundError:
+    st.warning(
+        "Ficheiro de configuração não encontrado; a usar caminhos padrão por defeito."
+    )
+
+PATHS_SECTION = CONFIG.get("paths", {}) if isinstance(CONFIG, dict) else {}
+DATA_PATHS = PATHS_SECTION.get("data", {})
+FEATURED_DATASET_REL = DATA_PATHS.get(
+    "featured_dataset", "data/features/featured_dataset.parquet"
+)
+FEATURED_DATASET_PATH = ROOT / FEATURED_DATASET_REL
+
+OUTPUT_PATHS = PATHS_SECTION.get("outputs", {})
+VALIDATION_PATHS = OUTPUT_PATHS.get("validation", {}) if isinstance(OUTPUT_PATHS, dict) else {}
+DRIFT_REPORT_REL = (
+    VALIDATION_PATHS.get("drift_detection")
+    if isinstance(VALIDATION_PATHS, dict)
+    else None
+)
+if not DRIFT_REPORT_REL:
+    DRIFT_REPORT_REL = "outputs/validation/drift_detection"
+DRIFT_REPORT_DIR = ROOT / DRIFT_REPORT_REL
+
+API_URL = os.getenv("TRUSTSHIELD_API_URL")
+if not API_URL:
+    run_in_docker = os.getenv("RUN_IN_DOCKER", "").lower() in {"1", "true", "yes"}
+    API_URL = "http://trustshield-api:8000" if run_in_docker else "http://localhost:8000"
+
+SAMPLE_PREDICTION_PAYLOAD = {
+    "amount": 120.5,
+    "gender": "Male",
+    "use_chip": "Swipe Transaction",
+    "credit_score": 720,
+    "num_credit_cards": 3,
+    "per_capita_income": 23679,
+    "yearly_income": 48277,
+    "total_debt": 110153,
+}
 
 MAX_FEED_ROWS = 2000  # máximo de linhas no feed em memória
 MAX_MAP_POINTS = 500  # máximo de pontos no mapa
@@ -92,11 +136,58 @@ def get_api_status():
 
 def predict_transaction(transaction_data: dict):
     try:
-        r = requests.post(f"{API_URL}/predict", json=transaction_data, timeout=10)
-        r.raise_for_status()
-        return r.json()
-    except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)}
+        response = requests.post(
+            f"{API_URL}/predict", json=transaction_data, timeout=10
+        )
+    except requests.exceptions.RequestException as exc:
+        return {
+            "success": False,
+            "status_code": None,
+            "error": f"Não foi possível contactar a API: {exc}",
+        }
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {"detail": response.text}
+
+    if response.status_code == 200:
+        is_anomaly_raw = payload.get("is_anomaly")
+        is_anomaly = bool(is_anomaly_raw)
+        if isinstance(is_anomaly_raw, (int, float)):
+            is_anomaly = int(is_anomaly_raw) == -1
+        elif isinstance(is_anomaly_raw, str):
+            is_anomaly = is_anomaly_raw.strip().lower() in {"-1", "true", "anomaly"}
+
+        label = "ANOMALIA" if is_anomaly else "NORMAL"
+        return {
+            "success": True,
+            "status_code": response.status_code,
+            "data": payload,
+            "prediction_label": label,
+            "is_anomaly": is_anomaly,
+            "confidence_score": payload.get("score"),
+            "model_version": payload.get("model_version"),
+        }
+
+    detail = payload.get("detail", "Resposta inesperada da API.")
+    if isinstance(detail, list):
+        formatted = []
+        for item in detail:
+            if isinstance(item, dict):
+                formatted.append(item.get("msg") or item.get("detail") or str(item))
+            else:
+                formatted.append(str(item))
+        detail = "; ".join(formatted)
+    elif isinstance(detail, dict):
+        detail = detail.get("msg") or detail.get("error") or str(detail)
+
+    return {
+        "success": False,
+        "status_code": response.status_code,
+        "error": detail,
+        "detail": payload,
+    }
 
 
 def explain_transaction(transaction_data: dict):
@@ -138,11 +229,22 @@ def validate_model():
 # Dados: leitura paginada via pyarrow.dataset
 # -----------------------------------------------------------------------------
 def fetch_filtered_data_streaming(
-    parquet_path: str, amount_range, income_range, page_num=1, page_size=PAGE_SIZE
+    parquet_path: Path | str,
+    amount_range,
+    income_range,
+    page_num: int = 1,
+    page_size: int = PAGE_SIZE,
 ):
     """Leitura realmente paginada via pyarrow.dataset: filtra no leitor e só traz a página pedida."""
+    parquet_path = Path(parquet_path)
+    if not parquet_path.exists():
+        st.warning(
+            "Dataset de features não encontrado. Gere-o através do pipeline antes de continuar."
+        )
+        return pd.DataFrame(), 0
+
     try:
-        dataset = ds.dataset(parquet_path, format="parquet")
+        dataset = ds.dataset(str(parquet_path), format="parquet")
     except Exception as e:
         st.error(f"Falha ao abrir dataset Parquet: {e}")
         return pd.DataFrame(), 0
@@ -225,7 +327,7 @@ def create_waterfall_plot(explanation: dict):
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.header("Status da API")
-    st.write(f"Conectando à API em: {API_URL}")  # LINHA DE DEBUG
+    st.caption(f"Endpoint configurado: {API_URL}")
     if st.button("Atualizar Status", use_container_width=True):
         st.session_state.api_status = get_api_status()
 
@@ -241,32 +343,26 @@ with st.sidebar:
         st.caption(api_status.get("error", "API indisponível."))
 
     st.header("Ações")
+    st.write("Utilize a amostra abaixo para validar rapidamente o endpoint /predict.")
+    st.code(
+        json.dumps(SAMPLE_PREDICTION_PAYLOAD, indent=2, ensure_ascii=False),
+        language="json",
+    )
     if st.button("Testar Predição com Amostra", use_container_width=True):
-        sample_data = {
-            "client_id": 12345,
-            "amount": 250.0,
-            "current_age": 40,
-            "per_capita_income": 50000.0,
-            "yearly_income": 75000.0,
-            "total_debt": 15000.0,
-            "date": "2024-01-15T14:30:00",
-            "use_chip": "Chip Transaction",
-            "gender": "M",
-        }
+        sample_data = dict(SAMPLE_PREDICTION_PAYLOAD)
         st.session_state.last_prediction_input = sample_data
         prediction = predict_transaction(sample_data)
         st.session_state.last_prediction_result = prediction
         st.session_state.last_explanation = None
 
-        if (
-            prediction.get("success")
-            and prediction.get("prediction_label") == "ANOMALIA"
-        ):
+        if prediction.get("success") and prediction.get("is_anomaly"):
             new_entry = pd.DataFrame(
                 [
                     {
                         "Timestamp": pd.to_datetime(
-                            prediction.get("timestamp", pd.Timestamp.utcnow())
+                            prediction.get("data", {}).get(
+                                "timestamp", pd.Timestamp.utcnow()
+                            )
                         ),
                         "Label": prediction.get("prediction_label"),
                         "Score": prediction.get("confidence_score"),
@@ -279,7 +375,6 @@ with st.sidebar:
             st.session_state.anomaly_feed = pd.concat(
                 [new_entry, st.session_state.anomaly_feed], ignore_index=True
             )
-            # cap o tamanho do feed
             if len(st.session_state.anomaly_feed) > MAX_FEED_ROWS:
                 st.session_state.anomaly_feed = st.session_state.anomaly_feed.head(
                     MAX_FEED_ROWS
@@ -360,6 +455,9 @@ with tab1:
             c1, c2 = st.columns(2)
             with c1:
                 st.success(f"**Resultado:** {result.get('prediction_label', 'N/A')}")
+                st.caption(
+                    f"Score: {result.get('confidence_score', 'N/A')} | Modelo: {result.get('model_version', 'N/A')}"
+                )
                 if st.button("Explicar Predição (SHAP)"):
                     with st.spinner("Iniciando análise de explicação..."):
                         explanation_job = explain_transaction(
@@ -413,7 +511,23 @@ with tab1:
                 else:
                     st.error(f"Falha ao gerar explicação: {exp.get('error')}")
         else:
-            st.error(result.get("error", "Falha desconhecida na predição."))
+            error_message = result.get("error", "Falha desconhecida na predição.")
+            if result.get("status_code") in {400, 422}:
+                st.warning(
+                    "Entrada inválida: "
+                    + error_message
+                    + " — valide os campos obrigatórios ou utilize 'Testar Predição com Amostra'."
+                )
+            else:
+                st.error(
+                    "Não foi possível concluir a predição: "
+                    + error_message
+                )
+            with st.expander("Payload enviado", expanded=False):
+                st.json(st.session_state.last_prediction_input, expanded=False)
+            st.caption(
+                "Sugestão: na barra lateral clique em 'Testar Predição com Amostra' para um exemplo válido."
+            )
     else:
         st.info("Clique em 'Testar Predição com Amostra' para ver os detalhes.")
 
@@ -425,7 +539,11 @@ with tab2:
 
     st.subheader("Explorador de Dados (paginado)")
     filtered_data, total_records = fetch_filtered_data_streaming(
-        PARQUET_PATH, amount_range, income_range, st.session_state.page_num, PAGE_SIZE
+        FEATURED_DATASET_PATH,
+        amount_range,
+        income_range,
+        st.session_state.page_num,
+        PAGE_SIZE,
     )
 
     if not filtered_data.empty:
@@ -485,20 +603,16 @@ with tab3:
     st.markdown("---")
     st.subheader("Relatórios de Validação Disponíveis")
 
-    report_dir = "outputs/validation/drift_detection"
-    if os.path.exists(report_dir):
-        report_files = [f for f in os.listdir(report_dir) if f.endswith(".html")]
-        if report_files:
-            selected_report = st.selectbox(
-                "Selecione um relatório para visualizar", report_files
-            )
-            if selected_report:
-                with open(
-                    os.path.join(report_dir, selected_report), "r", encoding="utf-8"
-                ) as f:
-                    html_content = f.read()
-                components.html(html_content, height=600, scrolling=True)
-        else:
-            st.info("Nenhum relatório de drift encontrado.")
+    report_dir = DRIFT_REPORT_DIR
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_files = sorted(p.name for p in report_dir.glob("*.html"))
+    if report_files:
+        selected_report = st.selectbox(
+            "Selecione um relatório para visualizar", report_files
+        )
+        if selected_report:
+            with open(report_dir / selected_report, "r", encoding="utf-8") as f:
+                html_content = f.read()
+            components.html(html_content, height=600, scrolling=True)
     else:
-        st.warning(f"Diretório de relatórios não encontrado: {report_dir}")
+        st.info("Sem relatórios gerados ainda.")

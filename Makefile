@@ -125,7 +125,11 @@ logs: ## Segue logs de todos os serviços
 
 .PHONY: api-logs
 api-logs: ## Logs apenas da API
-	$(DC) logs -f $(API_SERVICE)
+        $(DC) logs -f $(API_SERVICE)
+
+.PHONY: logs-api
+logs-api: ## Alias para seguir logs do serviço trustshield-api
+        $(DC) logs -f $(API_SERVICE)
 
 .PHONY: dash-logs
 dash-logs: ## Logs do dashboard
