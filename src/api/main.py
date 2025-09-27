@@ -43,7 +43,7 @@ class AppState:
         self.model = None
         self.model_path = os.getenv(
             "MODEL_PATH",
-            "outputs/models/isolation_forest_optimized_29_20250815_054217.joblib",
+            "outputs/models/default_model.joblib",
         )
         self.mlflow_client = None
         self.model_artifact = None

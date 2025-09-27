@@ -49,4 +49,4 @@ USER appuser
 
 # Define o entrypoint e o comando padrão.
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
