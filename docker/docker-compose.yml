@@ -162,11 +162,18 @@ services:
     ports:
       - "8501:8501"
     environment:
-      - API_URL=http://trustshield-api:8000
+      - TRUSTSHIELD_API_URL=http://trustshield-api:8000
+      - RUN_IN_DOCKER=true
+    volumes:
+      - ../src:/app/src
+      - ../data:/app/data
+      - ../outputs:/app/outputs
+      - ../config:/app/config
     networks:
       - trustshield-net
     depends_on:
-      - trustshield-api
+      trustshield-api:
+        condition: service_healthy
 
 # --- Volumes Persistentes ---
 volumes:
