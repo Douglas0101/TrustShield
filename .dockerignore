@@ -1,35 +1,40 @@
-# Git
+# Global ignores --------------------------------------------------------------
 .git
 .gitignore
-
-# Docker
-Dockerfile
-docker-compose.yml
-
-# Python
-__pycache__/
-*.pyc
+__pycache__
+*.py[cod]
 *.pyo
-*.pyd
-.pytest_cache/
-.venv/
-venv/
-env/
+*.so
+*.dylib
+*.swp
+*.log
+*.tmp
+.env
+.env.*
+*.ipynb_checkpoints
 
-# Dados e Modelos
-data/
-mlruns/
-outputs/
-cache/
-models/
-
-# Notebooks
+# Large artefacts -------------------------------------------------------------
 notebooks/
+outputs/validation/
+**/__pycache__/
+**/.mypy_cache/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.ipynb_checkpoints/
 
-# IDE
+# Local tooling ---------------------------------------------------------------
+.vscode/
 .idea/
-*.iml
+*.DS_Store
 
-# Outros
-.DS_Store
-local_settings.py
+# Test artefacts --------------------------------------------------------------
+htmlcov/
+.coverage
+.mypy_cache/
+pytest.ini
+.pytest_cache/
+
+# Documentation assets -------------------------------------------------------
+*.pdf
+*.pptx
+*.docx
