@@ -91,14 +91,20 @@ check: ## Valida pré-requisitos locais (docker / compose / arquivos)
 build: check ## Constrói as imagens dos serviços
 	$(DC) build $(BUILD_ARGS)
 
-.PHONY: up
-up: build ## Sobe todos os serviços e aguarda API healthy
-	$(DC) up -d
+.PHONY: services-up
+services-up: build ## Sobe todos os serviços e aguarda API healthy
+	$(DC) up -d --remove-orphans
 	$(MAKE) wait
 
-.PHONY: down
-down: ## Derruba os serviços (mantém volumes)
+.PHONY: up
+up: services-up ## Alias para services-up
+
+.PHONY: services-down
+services-down: ## Derruba os serviços (mantém volumes)
 	$(DC) down --remove-orphans
+
+.PHONY: down
+down: services-down ## Alias para services-down
 
 .PHONY: restart
 restart: ## Reinicia todos os serviços
@@ -129,7 +135,7 @@ api-logs: ## Logs apenas da API
 
 .PHONY: logs-api
 logs-api: ## Alias para seguir logs do serviço trustshield-api
-        $(DC) logs -f $(API_SERVICE)
+	$(DC) logs -f $(API_SERVICE)
 
 .PHONY: dash-logs
 dash-logs: ## Logs do dashboard
