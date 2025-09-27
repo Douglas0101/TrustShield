@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field, field_validator
 
 # Setup do MLflow (utilitário do seu projeto)
 from src.utils.mlflow_setup import setup_mlflow
-from src.api.security import enforce_ip_whitelist
+from src.api.security import enforce_api_key, enforce_ip_whitelist
 
 # Configuração do Logger
 logging.basicConfig(
@@ -238,11 +238,12 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def ip_allowlist_middleware(request: Request, call_next):
-    """Block requests from IPs that are not present in the allow list."""
+async def security_middleware(request: Request, call_next):
+    """Apply IP allow list and API key authentication on every request."""
 
     try:
         await enforce_ip_whitelist(request)
+        await enforce_api_key(request)
     except HTTPException as exc:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
@@ -256,6 +257,9 @@ class PredictRequest(BaseModel):
 
     amount: float = Field(
         ..., gt=0, description="Valor da transação em dólares.", example=120.5
+    )
+    current_age: int = Field(
+        ..., ge=0, le=130, description="Idade atual do titular do cartão.", example=35
     )
     gender: str = Field(
         ..., description="Sexo do titular do cartão (Male/Female).", example="Male"
@@ -326,6 +330,7 @@ class PredictRequest(BaseModel):
                 "total_debt": float(data["total_debt"]),
                 "credit_score": int(data["credit_score"]),
                 "num_credit_cards": int(data["num_credit_cards"]),
+                "current_age": int(data["current_age"]),
             }
         )
         return data
@@ -334,8 +339,11 @@ class PredictRequest(BaseModel):
 class PredictionOutput(BaseModel):
     """Estrutura da resposta da predição."""
 
-    is_anomaly: bool = Field(
-        ..., example=False, description="True indica possível anomalia."
+    is_anomaly: int = Field(
+        ..., example=-1, description="-1 indica anomalia; 0 indica normalidade."
+    )
+    is_anomaly_flag: bool = Field(
+        ..., example=True, description="Indicador booleano auxiliar para consumo da UI."
     )
     score: float = Field(..., example=-0.2345)
     model_version: str
@@ -473,15 +481,16 @@ def predict(request: PredictRequest):
             status_code=500, detail="Erro interno, consultar logs."
         ) from exc
 
-    is_anomaly = bool(raw_prediction == -1 or raw_prediction is True)
+    is_anomaly_flag = bool(raw_prediction == -1 or raw_prediction is True)
     response = {
-        "is_anomaly": is_anomaly,
+        "is_anomaly": -1 if is_anomaly_flag else 0,
+        "is_anomaly_flag": is_anomaly_flag,
         "score": float(score) if score is not None else 0.0,
         "model_version": Path(app_state.model_path).name,
     }
     logger.info(
         "Predição concluída | anomalia=%s | score=%.4f | modelo=%s",
-        is_anomaly,
+        is_anomaly_flag,
         response["score"],
         response["model_version"],
     )
