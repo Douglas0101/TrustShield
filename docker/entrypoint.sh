@@ -1,38 +1,38 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# ====================================================================
-# SCRIPT DE ENTRADA INTELIGENTE PARA O TRUSTSHIELD API
-#
-# Função: Resolver segredos do Docker para variáveis de ambiente
-# que a aplicação (boto3/mlflow) espera.
-# ====================================================================
+# ============================================================================
+# Entry point for the TrustShield containers
+# ----------------------------------------------------------------------------
+# 1. Reads credentials provided as Docker secrets (``*_FILE`` variables).
+# 2. Ensures the project root and ``src`` directory are available in
+#    ``PYTHONPATH`` for any subprocess executed by the container.
+# 3. Finally, hands control to the command defined in the Dockerfile or the
+#    ``docker-compose`` service definition.
+# ============================================================================
 
-# Se a variável AWS_ACCESS_KEY_ID_FILE existir, leia o segredo do arquivo
-# e exporte-o para a variável AWS_ACCESS_KEY_ID.
-if [ -n "$AWS_ACCESS_KEY_ID_FILE" ]; then
-    export AWS_ACCESS_KEY_ID=$(cat "$AWS_ACCESS_KEY_ID_FILE")
-fi
+read_secret() {
+    local var_name="$1"
+    local file_var_name="${var_name}_FILE"
+    local file_path="${!file_var_name:-}"
 
-# Faça o mesmo para a Secret Key.
-if [ -n "$AWS_SECRET_ACCESS_KEY_FILE" ]; then
-    export AWS_SECRET_ACCESS_KEY=$(cat "$AWS_SECRET_ACCESS_KEY_FILE")
-fi
+    if [[ -n "${file_path}" && -f "${file_path}" ]]; then
+        export "${var_name}"="$(<"${file_path}")"
+    fi
+}
 
-# Garante que os serviços internos conheçam a raiz do projeto.
-if [ -z "$TRUSTSHIELD_PROJECT_ROOT" ]; then
+read_secret "AWS_ACCESS_KEY_ID"
+read_secret "AWS_SECRET_ACCESS_KEY"
+read_secret "TRUSTSHIELD_API_KEYS"
+read_secret "TRUSTSHIELD_ALLOWED_IPS"
+
+if [[ -z "${TRUSTSHIELD_PROJECT_ROOT:-}" ]]; then
     export TRUSTSHIELD_PROJECT_ROOT="/app"
 fi
 
-# Mantém o diretório ``src`` disponível no PYTHONPATH, mesmo quando o
-# repositório é movido para outro caminho no host.
-case ":$PYTHONPATH:" in
-    *:"$TRUSTSHIELD_PROJECT_ROOT/src":*) ;;
-    *) export PYTHONPATH="$TRUSTSHIELD_PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" ;;
+case ":${PYTHONPATH:-}:" in
+    *:"${TRUSTSHIELD_PROJECT_ROOT}/src":*) ;;
+    *) export PYTHONPATH="${TRUSTSHIELD_PROJECT_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}" ;;
 esac
 
-# Agora, execute o comando principal que foi passado para o container
-# (por exemplo, 'uvicorn', 'python -m ...', etc.).
-# O `exec "$@"` garante que este script substitua seu próprio processo
-# pelo processo da aplicação, o que é uma prática recomendada.
 exec "$@"
