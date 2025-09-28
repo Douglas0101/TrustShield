@@ -112,7 +112,13 @@ TrustShield/
     Certifique-se de que os ficheiros de dados (`cards_data.csv`, `users_data.csv`, etc.) estão localizados no diretório `data/raw/`.
 
 3.  **Acesso local à API:**
-    A aplicação aplica uma _whitelist_ de IPs por padrão. O `docker-compose` já exporta `TRUSTSHIELD_DISABLE_IP_WHITELIST=true` para desativar esse bloqueio no ambiente local. Caso execute a API fora do Compose, defina essa variável ou configure `TRUSTSHIELD_ALLOWED_IPS` com os IPs autorizados para evitar respostas HTTP 403.
+    A aplicação aplica uma _whitelist_ de IPs por padrão. O `docker-compose` já define `TRUSTSHIELD_ALLOWED_IPS` com a lista de redes privadas comuns (127.0.0.1, 10/8, 172.16/12, 192.168/16). Caso execute a API fora do Compose, ajuste esta variável para incluir os IPs autorizados ou defina `TRUSTSHIELD_DISABLE_IP_WHITELIST=true` para desativar a restrição durante o desenvolvimento.
+
+4.  **Configuração de API Key:**
+    Além da whitelist, os endpoints agora aceitam uma chave de API enviada no cabeçalho `X-API-Key` (ou no parâmetro `api_key`).
+    -   Configure a variável `TRUSTSHIELD_API_KEYS` com uma lista de chaves separadas por vírgula. É possível fornecer valores em texto simples ou no formato `sha256:<hash>`. Alternativamente, utilize `TRUSTSHIELD_API_KEYS_FILE` apontando para um ficheiro seguro.
+    -   O dashboard lê a chave a partir de `TRUSTSHIELD_API_KEY` (ou `TRUSTSHIELD_API_KEY_FILE`).
+    -   Em ambientes de desenvolvimento o `docker-compose` define automaticamente a chave `local-dev-key`. Para produção, gere uma chave forte e actualize ambas as variáveis.
 
 ### **Executando o Pipeline Completo**
 

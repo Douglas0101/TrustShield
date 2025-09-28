@@ -253,36 +253,44 @@ test-docker: ## Executa pytest dentro do container da API
 # ---------------------------------------------------------------------------
 # 🔁 Pipeline de dados e modelos (executado dentro do serviço da API)
 # ---------------------------------------------------------------------------
+.PHONY: ensure-api
+ensure-api: ## Garante que a API esteja em execução antes de executar comandos
+	@cid=$$($(DC) ps -q $(API_SERVICE)); \
+	if [ -z "$$cid" ]; then \
+		echo "API não está em execução; iniciando serviços com 'make up'..."; \
+		$(MAKE) up; \
+	fi
+
 .PHONY: data
-data: ## Executa ingestão/limpeza de dados (src.data.make_dataset)
+data: ensure-api ## Executa ingestão/limpeza de dados (src.data.make_dataset)
 	$(RUN_API) python -m src.data.make_dataset
 
 .PHONY: features
-features: ## Executa engenharia de features (src.features.build_features)
+features: ensure-api ## Executa engenharia de features (src.features.build_features)
 	$(RUN_API) python -m src.features.build_features
 
 .PHONY: train
-train: ## Treina a suíte completa de modelos otimizados
+train: ensure-api ## Treina a suíte completa de modelos otimizados
 	$(RUN_API) python -m src.models.train_fraud_model
 
 .PHONY: eval
-eval: ## Avalia modelos utilizando dados de features
+eval: ensure-api ## Avalia modelos utilizando dados de features
 	$(RUN_API) python -m src.models.evaluate_models --data $(FEATURED_DATASET) --models $(MODEL_ARTIFACT)
 
 .PHONY: optimize
-optimize: ## Executa otimização de hiperparâmetros (Optuna)
+optimize: ensure-api ## Executa otimização de hiperparâmetros (Optuna)
 	$(RUN_API) python -m src.models.optimization --data $(FEATURED_DATASET) --config $(CONFIG_FILE)
 
 .PHONY: validate
-validate: ## Roda validações de qualidade (dados/modelo)
+validate: ensure-api ## Roda validações de qualidade (dados/modelo)
 	$(RUN_API) python -m src.models.validation --data $(FEATURED_DATASET) --model $(MODEL_ARTIFACT) --reference $(PRIMARY_DATASET)
 
 .PHONY: interpret
-interpret: ## Gera interpretações do modelo (SHAP)
+interpret: ensure-api ## Gera interpretações do modelo (SHAP)
 	$(RUN_API) python -m src.models.interpretation --model $(MODEL_ARTIFACT) --data $(FEATURED_DATASET)
 
 .PHONY: promote
-promote: ## Promove o modelo otimizado mais recente para default_model.joblib
+promote: ensure-api ## Promove o modelo otimizado mais recente para default_model.joblib
 	$(RUN_API) python -c "from pathlib import Path; import shutil, sys; p_opt=Path('outputs/optimization/optuna'); p_out=Path('$(OPT_MODELS_DIR)'); models=sorted(p_opt.glob('best_model_*.joblib'), key=lambda x: x.stat().st_mtime, reverse=True); (models and (shutil.copy2(models[0], p_out / 'default_model.joblib'), print(f'Promovido: {models[0].name}'))) or sys.exit('Nenhum modelo otimizado encontrado.')"
 
 .PHONY: reload

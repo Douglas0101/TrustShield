@@ -56,6 +56,7 @@ from src.api.security import (
     IPAccessControl,
     build_ip_access_control,
     enforce_ip_whitelist,
+    reset_api_key_cache,
     reset_ip_access_control_cache,
 )
 from enum import Enum
@@ -332,8 +333,18 @@ class TestApiFunctionality:
     @pytest.fixture(scope="class")
     def client(self):
         """Fixture para criar um TestClient da API para a classe de testes."""
-        with TestClient(fastapi_app) as c:
-            yield c
+        previous_flag = os.getenv("TRUSTSHIELD_DISABLE_API_KEY")
+        os.environ["TRUSTSHIELD_DISABLE_API_KEY"] = "true"
+        reset_api_key_cache()
+        try:
+            with TestClient(fastapi_app) as c:
+                yield c
+        finally:
+            if previous_flag is None:
+                os.environ.pop("TRUSTSHIELD_DISABLE_API_KEY", None)
+            else:
+                os.environ["TRUSTSHIELD_DISABLE_API_KEY"] = previous_flag
+            reset_api_key_cache()
 
     def test_health_endpoint(self, client):
         response = client.get("/healthz")
@@ -377,13 +388,13 @@ class TestApiFunctionality:
         # The Pydantic model is now stricter.
         # We need to send a payload that is valid for both.
         valid_anomalous_payload = {
-            "client_id": 67890,
             "amount": 9500.0,
             "current_age": 68,
+            "credit_score": 450,
+            "num_credit_cards": 2,
             "per_capita_income": 30000,
             "yearly_income": 40000,
             "total_debt": 80000,
-            "date": "2024-01-20T03:00:00",
             "use_chip": "Online Transaction",
             "gender": "M",
         }

@@ -32,6 +32,7 @@ for _v in [
 import json
 import os
 from pathlib import Path
+import logging
 
 import requests
 import yaml
@@ -42,7 +43,16 @@ import plotly.graph_objects as go
 import streamlit.components.v1 as components
 import pyarrow.dataset as ds
 
-import config_path  # noqa: F401  # garante que src esteja no sys.path em execuções locais
+try:  # noqa: SIM105
+    import config_path  # noqa: F401  # garante que src esteja no sys.path em execuções locais
+except ModuleNotFoundError:  # pragma: no cover - fallback executado apenas dentro do contêiner
+    import sys
+
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    import config_path  # type: ignore[no-redef]  # pylint: disable=import-error
 from src.common.paths import repo_root
 
 # -----------------------------------------------------------------------------
@@ -93,13 +103,38 @@ if not DRIFT_REPORT_REL:
     DRIFT_REPORT_REL = "outputs/validation/drift_detection"
 DRIFT_REPORT_DIR = ROOT / DRIFT_REPORT_REL
 
+logger = logging.getLogger(__name__)
+
+
+def _load_api_key() -> str | None:
+    value = os.getenv("TRUSTSHIELD_API_KEY", "").strip()
+    if value:
+        return value
+
+    file_path = os.getenv("TRUSTSHIELD_API_KEY_FILE")
+    if not file_path:
+        return None
+
+    try:
+        return Path(file_path).read_text(encoding="utf-8").strip() or None
+    except OSError as exc:
+        logger.warning("Não foi possível ler o ficheiro do API key (%s): %s", file_path, exc)
+        return None
+
+
 API_URL = os.getenv("TRUSTSHIELD_API_URL")
 if not API_URL:
     run_in_docker = os.getenv("RUN_IN_DOCKER", "").lower() in {"1", "true", "yes"}
     API_URL = "http://trustshield-api:8000" if run_in_docker else "http://localhost:8000"
 
+API_KEY_HEADER = os.getenv("TRUSTSHIELD_API_KEY_HEADER", "X-API-Key")
+API_KEY_VALUE = _load_api_key()
+API_HEADERS = {API_KEY_HEADER: API_KEY_VALUE} if API_KEY_VALUE else {}
+REQUEST_HEADERS = API_HEADERS or None
+
 SAMPLE_PREDICTION_PAYLOAD = {
     "amount": 120.5,
+    "current_age": 37,
     "gender": "Male",
     "use_chip": "Swipe Transaction",
     "credit_score": 720,
@@ -128,7 +163,7 @@ if "page_num" not in st.session_state:
 # -----------------------------------------------------------------------------
 def get_api_status():
     try:
-        r = requests.get(f"{API_URL}/status", timeout=5)
+        r = requests.get(f"{API_URL}/status", timeout=5, headers=REQUEST_HEADERS)
         r.raise_for_status()
         return r.json()
     except requests.exceptions.RequestException as e:
@@ -138,7 +173,10 @@ def get_api_status():
 def predict_transaction(transaction_data: dict):
     try:
         response = requests.post(
-            f"{API_URL}/predict", json=transaction_data, timeout=10
+            f"{API_URL}/predict",
+            json=transaction_data,
+            timeout=10,
+            headers=REQUEST_HEADERS,
         )
     except requests.exceptions.RequestException as exc:
         return {
@@ -193,7 +231,12 @@ def predict_transaction(transaction_data: dict):
 
 def explain_transaction(transaction_data: dict):
     try:
-        r = requests.post(f"{API_URL}/explain", json=transaction_data, timeout=10)
+        r = requests.post(
+            f"{API_URL}/explain",
+            json=transaction_data,
+            timeout=10,
+            headers=REQUEST_HEADERS,
+        )
         if r.status_code == 202:
             return {"success": True, "explanation": r.json()}
         r.raise_for_status()
@@ -204,7 +247,11 @@ def explain_transaction(transaction_data: dict):
 
 def get_explanation_result(job_id: str):
     try:
-        r = requests.get(f"{API_URL}/explanation-result/{job_id}", timeout=5)
+        r = requests.get(
+            f"{API_URL}/explanation-result/{job_id}",
+            timeout=5,
+            headers=REQUEST_HEADERS,
+        )
         if r.status_code == 202:
             return {"success": False, "status_code": 202, "error": "Result not ready"}
         r.raise_for_status()
@@ -219,7 +266,11 @@ def get_explanation_result(job_id: str):
 
 def validate_model():
     try:
-        r = requests.post(f"{API_URL}/validate", timeout=10)
+        r = requests.post(
+            f"{API_URL}/validate",
+            timeout=10,
+            headers=REQUEST_HEADERS,
+        )
         r.raise_for_status()
         return {"success": True, "data": r.json()}
     except requests.exceptions.RequestException as e:
