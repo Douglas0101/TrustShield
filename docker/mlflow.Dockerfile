@@ -8,3 +8,4 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir prometheus-flask-exporter psycopg2-binary
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* && pip install prometheus-flask-exporter psycopg2-binary boto3

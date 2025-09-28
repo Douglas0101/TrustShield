@@ -15,7 +15,7 @@ SHELL := /bin/bash
 # ---------------------------------------------------------------------------
 PROJECT        ?= trustshield
 COMPOSE_FILE   ?= docker/docker-compose.yml
-DC             := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p $(PROJECT) -f $(COMPOSE_FILE)
+DC             := COMPOSE_DOCKER_CLI_BUILD=1 docker compose -p $(PROJECT) -f $(COMPOSE_FILE)
 
 API_SERVICE    ?= trustshield-api
 DASH_SERVICE   ?= trustshield-dashboard
@@ -84,7 +84,7 @@ check: ## Valida pré-requisitos locais (docker / compose / arquivos)
 	command -v docker >/dev/null 2>&1 || { echo "ERRO: docker não encontrado"; exit 1; }
 	docker compose version >/dev/null 2>&1 || { echo "ERRO: docker compose v2 não encontrado"; exit 1; }
 	[ -f $(COMPOSE_FILE) ] || { echo "ERRO: $(COMPOSE_FILE) não existe"; exit 1; }
-	$(DC) config >/dev/null || { echo "ERRO: 'docker compose config' falhou"; exit 1; }
+	$(DC) config || { echo "ERRO: 'docker compose config' falhou"; exit 1; }
 	@echo "OK: pré-checagens passaram."
 
 .PHONY: build
