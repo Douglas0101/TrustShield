@@ -62,19 +62,7 @@ USER appuser
 
 EXPOSE 8501
 
-CMD ["streamlit", \
-     "run", \
-     "src/dashboard/app.py", \
-     "--server.port=8501", \
-     "--server.address=0.0.0.0", \
-     "--server.headless=true", \
-     "--server.fileWatcherType=none"]
-CMD [
-    "streamlit",
-    "run",
-    "src/dashboard/app.py",
-    "--server.port=8501",
-    "--server.address=0.0.0.0",
-    "--server.headless=true",
-    "--server.fileWatcherType=none",
-]
+# Use uma única instrução CMD no formato JSON. A variante abaixo é compatível
+# com o Compose e evita erros de parsing no Dockerfile (as instruções
+# duplicadas com vírgula terminal quebravam o build).
+CMD ["streamlit", "run", "src/dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.fileWatcherType=none"]

@@ -64,3 +64,8 @@ hyper_optimization:
 mlflow:
   experiment_name: "TrustShield-Advanced"
   tracking_uri: "http://trustshield_mlflow:5000"
+
+# === VALIDATION ===
+validation:
+  drift_sample_size: 100000
+  evaluation_sample_size: 100000

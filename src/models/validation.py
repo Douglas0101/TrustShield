@@ -285,6 +285,25 @@ class DriftDetectionValidationStrategy(BaseValidationStrategy, ValidationStrateg
         start_time = time.time()
         reference_data, current_data = data
 
+        # Amostragem para reduzir o consumo de memória
+        validation_config = self.config.get("validation", {})
+        sample_size = validation_config.get("drift_sample_size", 100000)
+        random_state = self.config.get("project", {}).get("random_state", 42)
+
+        if len(reference_data) > sample_size:
+            self.logger.log(
+                logging.INFO,
+                f"Reduzindo dados de referência para {sample_size} amostras.",
+            )
+            reference_data = reference_data.sample(
+                n=sample_size, random_state=random_state
+            )
+        if len(current_data) > sample_size:
+            self.logger.log(
+                logging.INFO, f"Reduzindo dados atuais para {sample_size} amostras."
+            )
+            current_data = current_data.sample(n=sample_size, random_state=random_state)
+
         # Create a report
         report = Report(metrics=[DataDriftPreset()])
         report.run(reference_data=reference_data, current_data=current_data)

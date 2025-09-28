@@ -534,6 +534,7 @@ class BaseOptimizationStrategy:
         self._best_score: float = -np.inf
         self._best_params: Dict[str, Any] = {}
         self._best_model: Any = None
+        self._feature_names: Optional[List[str]] = None
 
     @property
     def best_model(self) -> Any:
@@ -542,6 +543,8 @@ class BaseOptimizationStrategy:
     def _objective_function(
         self, params: Dict[str, Any], X_train: pd.DataFrame, X_val: pd.DataFrame
     ) -> float:
+        if self._feature_names is None:
+            self._feature_names = X_train.columns.tolist()
         trial_start = time.time()
         self.monitor.update_peak_memory()
         try:
@@ -586,6 +589,7 @@ class BaseOptimizationStrategy:
                 "params": self._best_params,
                 "score": self._best_score,
                 "timestamp": timestamp,
+                "features": self._feature_names,
             }
             joblib.dump(artifact, model_path)
             self.logger.log(logging.INFO, f"Melhor modelo salvo: {model_path}")

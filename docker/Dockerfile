@@ -67,5 +67,7 @@ RUN chmod +x docker/entrypoint.sh \
 USER appuser
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
+# Mantemos um único comando default para evitar conflitos durante o build.
+# Para habilitar ``--reload`` em desenvolvimento, sobrescreva o comando via
+# docker compose (``command:``) ou ``docker run`` conforme necessário.
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

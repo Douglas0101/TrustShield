@@ -454,6 +454,19 @@ class ResilientModelEvaluator(Subject):
         )
         data = pd.read_parquet(full_path)
 
+        # Amostragem para reduzir o consumo de memória
+        validation_config = self.config.get("validation", {})
+        sample_size = validation_config.get("evaluation_sample_size", 0)
+        if sample_size > 0 and len(data) > sample_size:
+            self.logger.log(
+                logging.INFO,
+                f"Reduzindo dados de avaliação para {sample_size} amostras.",
+            )
+            data = data.sample(
+                n=sample_size,
+                random_state=self.config.get("project", {}).get("random_state", 42),
+            )
+
         if "is_anomaly" in data.columns:
             X = data.drop(columns=["is_anomaly"])
             y = data["is_anomaly"]
